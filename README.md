@@ -1,5 +1,7 @@
 # Cadencia
 
+![Cadencia — De intención a rutina](public/og.png)
+
 Cadencia is a small Spanish language routine compiler. You describe what you want to keep doing, choose the days and time that are actually available, and receive a weekly plan that can be inspected, adjusted, and downloaded.
 
 The product separates two jobs. The optional provider can propose the intent and session content; the deterministic engine checks the selected Monday week, allowed days, session duration, local time, and weekly cap. Values from the controls always win over details in the free text request. The local demo uses no model and carries the label `Demo local · sin modelo`; it must not be read as a successful AI response.
