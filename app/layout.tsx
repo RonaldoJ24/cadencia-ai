@@ -15,7 +15,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: 'Cadencia · Convierte intención en ritmo',
-  description: 'Un compilador local de rutinas para hacer espacio a lo que quieres sostener.',
+  description:
+    'Un compilador local de rutinas para hacer espacio a lo que quieres sostener.',
 };
 
 export default function RootLayout({
@@ -25,7 +26,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es">
-      <body className={`${geistSans.variable} ${geistMono.variable}`}>{children}</body>
+      <body className={`${geistSans.variable} ${geistMono.variable}`}>
+        {children}
+      </body>
     </html>
   );
 }
