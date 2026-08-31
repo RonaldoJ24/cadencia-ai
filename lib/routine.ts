@@ -510,8 +510,9 @@ export function replan(plan: RoutinePlan, missedId: string): RoutinePlan {
     .filter((session) => session.status !== 'missed')
     .reduce((total, session) => total + session.minutes, 0);
   const missedOffset = dayOffset(next.input.startDate, missed.date);
+  const budgetAllowsReplacement = activeMinutes + missed.minutes <= next.input.weeklyMinutes;
   let replacement: Session | undefined;
-  if (missedOffset >= 0 && missedOffset < 6 && activeMinutes + missed.minutes <= next.input.weeklyMinutes) {
+  if (missedOffset >= 0 && missedOffset < 6 && budgetAllowsReplacement) {
     for (let offset = missedOffset + 1; offset <= 6; offset += 1) {
       if (!next.input.days.includes(offset)) continue;
       const date = addDays(next.input.startDate, offset);
@@ -528,11 +529,14 @@ export function replan(plan: RoutinePlan, missedId: string): RoutinePlan {
   }
 
   const warnings = [...next.warnings];
+  const noSlotReason = budgetAllowsReplacement
+    ? 'No hay un día permitido y libre después de la sesión perdida dentro de esta semana; no se creó una sesión adicional.'
+    : 'El tope semanal no deja minutos para reprogramar la sesión perdida; no se creó una sesión adicional.';
   const explanation = replacement
     ? `${next.explanation} Se marcó la sesión del ${missed.date} como perdida y se reprogramó para el ${replacement.date}.`
-    : `${next.explanation} Se marcó la sesión del ${missed.date} como perdida, pero no hay un día permitido y libre posterior en esta semana.`;
+    : `${next.explanation} Se marcó la sesión del ${missed.date} como perdida, pero ${noSlotReason.toLowerCase()}`;
   if (!replacement) {
-    warnings.push('No hay un día permitido y libre después de la sesión perdida dentro de esta semana; no se creó una sesión adicional.');
+    warnings.push(noSlotReason);
   } else {
     next.sessions.push(replacement);
   }
@@ -572,7 +576,7 @@ export function toMarkdown(plan: RoutinePlan): string {
     `**Objetivo:** ${markdownText(current.intent.goal)}`,
     `**Modo:** ${mode}`,
     '',
-    current.explanation,
+    markdownText(current.explanation),
     '',
     '## Sesiones',
     '',
