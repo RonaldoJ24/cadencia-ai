@@ -2,6 +2,7 @@
 
 import {
   ArrowUpRight,
+  CalendarPlus,
   CalendarDays,
   Check,
   CheckCircle2,
@@ -10,6 +11,7 @@ import {
   Download,
   LoaderCircle,
   RotateCcw,
+  Share2,
   Sparkles,
   WandSparkles,
   X,
@@ -19,6 +21,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { googleCalendarUrl, routineShareText } from '@/lib/calendar';
+import { buildInsights } from '@/lib/insights';
 import {
   buildPlan,
   markDone,
@@ -281,6 +285,10 @@ function RoutinePreview({
   onReset,
   onDownloadMarkdown,
   onDownloadICS,
+  onAddToGoogle,
+  onShare,
+  onRefine,
+  shareStatus,
 }: {
   plan: RoutinePlan;
   stale: boolean;
@@ -292,6 +300,10 @@ function RoutinePreview({
   onReset: () => void;
   onDownloadMarkdown: () => void;
   onDownloadICS: () => void;
+  onAddToGoogle: (session: Session) => void;
+  onShare: () => void;
+  onRefine: () => void;
+  shareStatus: string | null;
 }) {
   const selectedSession =
     plan.sessions.find((session) => session.id === selectedSessionId) ??
@@ -308,6 +320,7 @@ function RoutinePreview({
   const noReplacementWarning = plan.warnings.some((warning) =>
     warning.startsWith('No hay un día permitido y libre después'),
   );
+  const insights = buildInsights(plan);
 
   return (
     <div className={`preview-card routine-card${stale ? ' is-stale' : ''}`}>
@@ -363,6 +376,51 @@ function RoutinePreview({
           </div>
         </output>
       ) : null}
+
+      <section className="insight-panel" aria-labelledby="insight-title">
+        <div className="insight-heading">
+          <div>
+            <span className="decision-label">Lectura avanzada</span>
+            <h3 id="insight-title">Lo que este ritmo permite</h3>
+          </div>
+          <span className="insight-horizon">4 semanas</span>
+        </div>
+        <div className="insight-metrics">
+          <p>{insights.capacity}</p>
+          <p>{insights.fourWeekProjection}</p>
+        </div>
+        <div className="insight-recommendation">
+          <strong>Siguiente decisión</strong>
+          <p>{insights.recommendation}</p>
+        </div>
+        <div className="insight-columns">
+          {insights.clarifyingQuestions.length > 0 ? (
+            <div>
+              <strong>Para afinar el plan</strong>
+              <ul>
+                {insights.clarifyingQuestions.map((question) => (
+                  <li key={question}>{question}</li>
+                ))}
+              </ul>
+              <button
+                className="refine-button"
+                type="button"
+                onClick={onRefine}
+              >
+                Responder en mi petición
+              </button>
+            </div>
+          ) : null}
+          <div>
+            <strong>Señales de avance</strong>
+            <ul>
+              {insights.successSignals.map((signal) => (
+                <li key={signal}>{signal}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
 
       <div className="plan-summary" aria-live="polite">
         <span>
@@ -461,18 +519,49 @@ function RoutinePreview({
         </div>
       </details>
 
-      <div className="export-row">
-        <span>Guardar una copia</span>
+      <div className="export-row integration-row">
+        <span>
+          Calendario y acompañamiento
+          <small>Copias puntuales; no sincronizan cambios.</small>
+        </span>
         <div className="export-actions">
-          <button type="button" onClick={onDownloadMarkdown} disabled={stale}>
-            <Download size={13} aria-hidden="true" />
-            .md
+          <button
+            type="button"
+            onClick={() => selectedSession && onAddToGoogle(selectedSession)}
+            title="Añadir la sesión seleccionada a Google Calendar"
+            disabled={
+              stale || !selectedSession || selectedSession.status === 'missed'
+            }
+          >
+            <CalendarPlus size={13} aria-hidden="true" />
+            Google · sesión
           </button>
-          <button type="button" onClick={onDownloadICS} disabled={stale}>
+          <button
+            type="button"
+            onClick={onDownloadMarkdown}
+            disabled={stale}
+            title="Descargar un resumen de la rutina"
+          >
             <Download size={13} aria-hidden="true" />
-            .ics
+            Resumen .md
+          </button>
+          <button
+            type="button"
+            onClick={onDownloadICS}
+            disabled={stale}
+            title="Descargar toda la rutina en formato ICS"
+          >
+            <Download size={13} aria-hidden="true" />
+            Apple / Outlook · rutina
+          </button>
+          <button type="button" onClick={onShare} disabled={stale}>
+            <Share2 size={13} aria-hidden="true" />
+            Compartir
           </button>
         </div>
+        {shareStatus ? (
+          <output className="share-status">{shareStatus}</output>
+        ) : null}
       </div>
     </div>
   );
@@ -558,6 +647,7 @@ export default function Home() {
   const [mode, setMode] = useState<'demo' | 'live'>('demo');
   const [liveAvailable, setLiveAvailable] = useState(false);
   const [availabilityKnown, setAvailabilityKnown] = useState(false);
+  const [shareStatus, setShareStatus] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -598,6 +688,7 @@ export default function Home() {
     setSelectedSessionId(null);
     setError(null);
     setRequestState('idle');
+    setShareStatus(null);
   };
 
   const resetSample = () => applyExample(EXAMPLES[0]);
@@ -629,6 +720,7 @@ export default function Home() {
       setPlan(nextPlan);
       setSelectedSessionId(nextPlan.sessions[0]?.id ?? null);
       setRequestState('idle');
+      setShareStatus(null);
     } catch (cause) {
       setRequestState('error');
       setError(
@@ -640,6 +732,7 @@ export default function Home() {
   };
 
   const updatePlan = (updater: (current: RoutinePlan) => RoutinePlan) => {
+    setShareStatus(null);
     setPlan((current) => {
       if (!current) return current;
       try {
@@ -671,6 +764,47 @@ export default function Home() {
       toICS(plan),
       'text/calendar;charset=utf-8',
     );
+  };
+
+  const handleAddToGoogle = (session: Session) => {
+    if (!plan || stale) return;
+    try {
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const link = document.createElement('a');
+      link.href = googleCalendarUrl(plan, session, timeZone);
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.click();
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'No pudimos preparar el evento de calendario.',
+      );
+    }
+  };
+
+  const handleShare = async () => {
+    if (!plan || stale) return;
+    const text = routineShareText(plan);
+    try {
+      if (typeof navigator.share === 'function') {
+        await navigator.share({ title: plan.intent.title, text });
+        setShareStatus('Rutina compartida.');
+      } else {
+        await navigator.clipboard.writeText(text);
+        setShareStatus('Rutina copiada para compartir.');
+      }
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === 'AbortError') return;
+      setError('No pudimos compartir la rutina en este navegador.');
+    }
+  };
+
+  const handleRefine = () => {
+    const field = document.getElementById('goal');
+    field?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    field?.focus();
   };
 
   const sampleCountLabel = useMemo(() => {
@@ -1005,6 +1139,9 @@ export default function Home() {
             <RoutinePreview
               onDownloadICS={handleDownloadICS}
               onDownloadMarkdown={handleDownloadMarkdown}
+              onAddToGoogle={handleAddToGoogle}
+              onShare={handleShare}
+              onRefine={handleRefine}
               onMarkDone={(id) =>
                 updatePlan((current) => markDone(current, id))
               }
@@ -1013,6 +1150,7 @@ export default function Home() {
               onSelectSession={setSelectedSessionId}
               plan={plan}
               selectedSessionId={selectedSessionId}
+              shareStatus={shareStatus}
               stale={stale}
               controlsDisabled={controlsDisabled}
             />

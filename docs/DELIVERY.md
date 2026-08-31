@@ -6,20 +6,22 @@ Cadencia convierte un objetivo escrito en sesiones semanales, con límites expl�
 
 Se utilizaron cuatro agentes `gpt-5.6-luna` con esfuerzo `max`, verificados en sus metadatos de ejecución:
 
-| Responsabilidad | Entrega |
-| --- | --- |
-| Concepto y difusión | Concepto, roadmap, investigación oficial y narrativa de lanzamiento |
-| Motor | Planificador, adaptador DeepSeek, endpoint, pruebas y contrato de IA |
-| Experiencia | Interfaz, estados, exportaciones, configuración y CI |
-| Imagen social | Una pieza original de marca |
+| Responsabilidad     | Entrega                                                              |
+| ------------------- | -------------------------------------------------------------------- |
+| Concepto y difusión | Concepto, roadmap, investigación oficial y narrativa de lanzamiento  |
+| Motor               | Planificador, adaptador DeepSeek, endpoint, pruebas y contrato de IA |
+| Experiencia         | Interfaz, estados, exportaciones, configuración y CI                 |
+| Imagen social       | Una pieza original de marca                                          |
 
 El agente principal definió los contratos, integró los archivos, inspeccionó el código y repitió las comprobaciones. El trabajo no reutilizó código, datos o diseños de otros proyectos del usuario. El historial corresponde al trabajo realizado; no se fabricaron fechas ni actividad pasada.
 
+Para la evolución V2 se añadieron tres carriles Luna Max: insights deterministas, calendario y texto compartible, y arquitectura/mercado. Cada carril tuvo archivos separados; la sesión principal integró la experiencia y repitió las verificaciones completas.
+
 ## Evidencia reproducible
 
-`npm test` ejecuta 20 pruebas: 19 casos del motor/proveedor/endpoint y una matriz adicional que recorre 1,524 combinaciones de días, duración y presupuesto. La matriz verifica límites, reproducibilidad, conservación de sesiones completadas, cambios inmutables y exportación. Los mocks comprueban el contrato del proveedor y sus errores; no envían solicitudes reales.
+`npm test` ejecuta 29 pruebas: 28 casos del motor, proveedor, endpoint, insights, calendario y texto compartible, más una matriz que recorre 1,524 combinaciones de días, duración y presupuesto. La matriz verifica límites, reproducibilidad, conservación de sesiones completadas, cambios inmutables y exportación. Los mocks comprueban el contrato del proveedor y sus errores; no envían solicitudes reales.
 
-`npm run typecheck` y `npm run build` verifican la integración. La revisión de dependencias con `npm audit` no reportó vulnerabilidades al preparar esta entrega. Las comprobaciones HTTP locales verificaron generación demo, rechazo de origen cruzado, entrada inválida y proveedor deshabilitado. Una prueba autorizada con `deepseek-v4-flash` el 30 de agosto de 2026 verificó también el adaptador y la ruta completa: la API respondió 200, generó una intención válida en español y el plan respetó dos sesiones de 45 minutos, el tope de 90 minutos y cuatro comprobaciones deterministas. No se realizó una prueba automatizada de interacción en navegador ni una importación manual en una aplicación de calendario.
+`npm run typecheck` y `npm run build` verifican la integración. La revisión de dependencias con `npm audit` no reportó vulnerabilidades al preparar esta entrega. Las comprobaciones HTTP locales verificaron generación demo, rechazo de origen cruzado, entrada inválida y proveedor deshabilitado. Una prueba autorizada con `deepseek-v4-flash` el 30 de agosto de 2026 verificó también el adaptador y la ruta completa: la API respondió 200, generó una intención válida en español y el plan respetó dos sesiones de 45 minutos, el tope de 90 minutos y cuatro comprobaciones deterministas. Un recorrido automatizado local verificó generación, contenido avanzado, enfoque del campo de aclaración y diseño en escritorio y móvil. No se realizó una importación manual en una aplicación de calendario.
 
 ## Límites honestos de la IA
 

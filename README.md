@@ -10,7 +10,7 @@ The product sample is Spanish even when the goal is English practice:
 
 > Practicar inglés para entrevistas de trabajo, con foco en responder con más seguridad.
 
-You can also load examples for learning TypeScript or writing every week. After generating a plan, mark a session complete, ask Cadencia to replan a missed session, inspect the understood intent and deterministic checks, or download Markdown and ICS files.
+You can also load examples for learning TypeScript or writing every week. After generating a plan, Cadencia explains the available capacity, projects four weeks of practice time without promising results, asks for missing context, and defines observable progress signals. You can mark a session complete, replan a missed session, add the selected session to Google Calendar, export the whole routine for Apple or Outlook, or share a plain-text copy with someone you trust.
 
 ## Local setup
 
@@ -48,6 +48,7 @@ Keep `CADENCIA_ENABLE_LIVE=false` for a local demo. No paid calls are enabled by
 - The weekly cap may leave some selected days without a session; Cadencia shows that conflict instead of inventing time.
 - There are no accounts, persistence, reminders, connected calendars, payments, or background jobs.
 - The live DeepSeek path is optional and has no quality benchmark in this project. Deterministic fixture checks are evidence about the scheduler, not measurements of model quality.
+- Calendar links, ICS files, and shared text are one-time copies. They do not create accounts or synchronize later changes.
 
 This is a portfolio demo and an explicit boundary for future work, not a production readiness claim.
 
@@ -59,3 +60,7 @@ This is a portfolio demo and an explicit boundary for future work, not a product
 - [Research from official product sources](docs/RESEARCH.md)
 - [Launch narrative](docs/LAUNCH.md)
 - [Delivery and verification](docs/DELIVERY.md)
+- [Advanced insight contract](docs/INSIGHTS.md)
+- [Calendar and sharing boundary](docs/CALENDAR.md)
+- [V2 architecture](docs/ARCHITECTURE_V2.md)
+- [V2 market direction](docs/MARKET_V2.md)
