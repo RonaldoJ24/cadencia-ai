@@ -8,6 +8,7 @@ const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   '00000000-0000-4000-8000-000000000000';
 
 const { d1, r2 } = hostingConfig;
+const localLiveEnabled = process.env.CADENCIA_ENABLE_LIVE === 'true';
 
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === 'seatbelt';
@@ -15,6 +16,15 @@ const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === 'seatbelt';
 const localBindingConfig = {
   main: 'vinext/server/fetch-handler',
   compatibility_flags: ['nodejs_compat'],
+  ...(localLiveEnabled
+    ? {
+        vars: {
+          CADENCIA_ENABLE_LIVE: 'true',
+          DEEPSEEK_MODEL: process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash',
+        },
+        secrets: { required: ['DEEPSEEK_API_KEY'] },
+      }
+    : {}),
   d1_databases: d1
     ? [
         {

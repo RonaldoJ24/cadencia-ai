@@ -696,9 +696,6 @@ export default function Home() {
             <span className="status-dot" aria-hidden="true" />
             {availableModeLabel}
           </span>
-          <span className="session-note">
-            Esta sesión no se guarda al cerrar
-          </span>
         </div>
       </header>
 
@@ -899,9 +896,8 @@ export default function Home() {
                   )}
                 </p>
                 <p className="authority-note">
-                  Los días, minutos, hora y tope que eliges prevalecen sobre
-                  cualquier cosa escrita en tu petición. Elige siempre un lunes
-                  para empezar la semana.
+                  Los días, minutos, hora y tope elegidos prevalecen sobre el
+                  texto; la semana debe empezar en lunes.
                 </p>
               </div>
             </div>
@@ -952,16 +948,14 @@ export default function Home() {
               </fieldset>
               {!liveAvailable ? (
                 <p className="mode-help">
-                  IA conectada está desactivada porque el proveedor no está
-                  habilitado o configurado en este entorno. La demo local no
-                  hace llamadas pagadas.
+                  IA conectada está desactivada: el proveedor no está habilitado
+                  o configurado aquí.
                 </p>
               ) : null}
               {mode === 'live' && liveAvailable ? (
                 <p className="live-warning">
-                  Al crear, tu petición se envía a DeepSeek; evita datos
-                  sensibles. El proveedor puede aplicar costes según su
-                  configuración.
+                  Al crear, tu petición se enviará a DeepSeek; evita datos
+                  sensibles y considera posibles costes.
                 </p>
               ) : null}
             </div>
@@ -984,9 +978,6 @@ export default function Home() {
                 )}
                 {requestState === 'loading' ? 'Creando…' : 'Crear mi rutina'}
               </Button>
-              <p className="action-note">
-                {availableModeLabel} · tus límites se respetan primero.
-              </p>
             </div>
             {error ? (
               <div className="error-banner" role="alert">

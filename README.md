@@ -10,7 +10,7 @@ The product sample is Spanish even when the goal is English practice:
 
 > Practicar inglés para entrevistas de trabajo, con foco en responder con más seguridad.
 
-You can also load examples for learning TypeScript or writing every week. After generating a plan, mark a session complete, ask Cadencia to replan a missed session, inspect the understood intent and deterministic checks, or download Markdown and ICS files. Plans exist only in the current browser session and are not saved when the tab closes.
+You can also load examples for learning TypeScript or writing every week. After generating a plan, mark a session complete, ask Cadencia to replan a missed session, inspect the understood intent and deterministic checks, or download Markdown and ICS files.
 
 ## Local setup
 

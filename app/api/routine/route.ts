@@ -22,14 +22,26 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-function env(name: string): string {
-  return process.env[name]?.trim() ?? '';
+async function runtimeEnv(): Promise<Record<string, unknown>> {
+  try {
+    const worker = await import('cloudflare:workers');
+    return worker.env as Record<string, unknown>;
+  } catch {
+    return process.env;
+  }
 }
 
-function liveConfig(): { apiKey: string; model: string } | null {
-  const apiKey = env('DEEPSEEK_API_KEY');
-  const model = env('DEEPSEEK_MODEL') || DEFAULT_MODEL;
-  if (env('CADENCIA_ENABLE_LIVE') !== 'true' || apiKey.length === 0) return null;
+function env(source: Record<string, unknown>, name: string): string {
+  const value = source[name];
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+async function liveConfig(): Promise<{ apiKey: string; model: string } | null> {
+  const source = await runtimeEnv();
+  const apiKey = env(source, 'DEEPSEEK_API_KEY');
+  const model = env(source, 'DEEPSEEK_MODEL') || DEFAULT_MODEL;
+  if (env(source, 'CADENCIA_ENABLE_LIVE') !== 'true' || apiKey.length === 0)
+    return null;
   return { apiKey, model };
 }
 
@@ -50,13 +62,15 @@ async function bodyJson(request: Request): Promise<unknown> {
   const declared = request.headers.get('content-length');
   if (declared !== null) {
     const size = Number(declared);
-    if (!Number.isFinite(size) || size < 0 || size > MAX_BODY_BYTES) throw new Error('body-size');
+    if (!Number.isFinite(size) || size < 0 || size > MAX_BODY_BYTES)
+      throw new Error('body-size');
   }
   const reader = request.body?.getReader();
   let raw: string;
   if (!reader) {
     raw = await request.text();
-    if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) throw new Error('body-size');
+    if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES)
+      throw new Error('body-size');
   } else {
     const chunks: Uint8Array[] = [];
     let total = 0;
@@ -86,7 +100,7 @@ async function bodyJson(request: Request): Promise<unknown> {
 }
 
 export async function GET(): Promise<Response> {
-  return json({ liveAvailable: liveConfig() !== null });
+  return json({ liveAvailable: (await liveConfig()) !== null });
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -96,7 +110,10 @@ export async function POST(request: Request): Promise<Response> {
   try {
     value = dict(await bodyJson(request));
   } catch {
-    return json({ error: 'El cuerpo JSON no es válido o supera el límite.' }, 400);
+    return json(
+      { error: 'El cuerpo JSON no es válido o supera el límite.' },
+      400,
+    );
   }
   if (!value) return json({ error: 'El cuerpo JSON debe ser un objeto.' }, 400);
 
@@ -110,9 +127,10 @@ export async function POST(request: Request): Promise<Response> {
   if (mode !== 'demo' && mode !== 'deepseek') {
     return json({ error: 'El modo de rutina no es válido.' }, 400);
   }
-  if (mode === 'demo') return json({ plan: buildPlan(input, undefined, 'demo') });
+  if (mode === 'demo')
+    return json({ plan: buildPlan(input, undefined, 'demo') });
 
-  const config = liveConfig();
+  const config = await liveConfig();
   if (!config) return json({ error: 'La IA real no está configurada.' }, 503);
   try {
     const intent = await generateIntent(input.request, config);
