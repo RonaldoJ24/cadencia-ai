@@ -17,6 +17,7 @@ import os
 import re
 import sys
 import time
+import unicodedata
 from collections import Counter
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -36,7 +37,16 @@ from provider import (  # noqa: E402
     PROMPT_VERSION,
     ProviderAttemptLimitError,
 )
-from evidence import corpus_info, new_run_id, source_revision, validate_id, write_new  # noqa: E402
+from evidence import (  # noqa: E402
+    canonical,
+    corpus_info,
+    digest,
+    live_preflight,
+    new_run_id,
+    source_revision,
+    validate_id,
+    write_new,
+)
 
 
 DEFAULT_CASES = Path(__file__).with_name("cases.jsonl")
@@ -57,6 +67,12 @@ _SUSPICIOUS_METADATA = (
     "secret",
     "token",
 )
+
+
+def _artifact_collision_key(path: Path) -> str:
+    """Conservatively identify path aliases before any paid provider work."""
+
+    return unicodedata.normalize("NFC", str(path.resolve())).casefold()
 
 
 def _mapping(value: Any) -> Mapping[str, Any] | None:
@@ -919,6 +935,7 @@ def run_evaluation(
     export_review: bool = False,
     review_packets: list[dict[str, Any]] | None = None,
     max_provider_attempts: int | None = None,
+    preflight_path: Path | None = None,
 ) -> dict[str, Any]:
     from review import RUBRIC_VERSION, make_review_packet, summarize_review
 
@@ -927,6 +944,8 @@ def run_evaluation(
             raise ValueError("Los precios deben ser números finitos no negativos")
     cases = load_cases(cases_path)
     corpus_name, corpus_hash, metadata = corpus_info(cases_path)
+    if preflight_path is not None and not live:
+        raise ValueError("--preflight requires --live")
     if export_review and (corpus_name == "custom-unreviewed" or review_packets is None):
         raise ValueError("review export requires the hash-declared public synthetic corpus and an output sink")
     revision = source_revision()
@@ -943,6 +962,36 @@ def run_evaluation(
         ]
         if missing:
             raise RuntimeError("Live evaluation requires explicit credentials: " + ", ".join(missing))
+        if preflight_path is not None:
+            configured_model = os.environ.get("DEEPSEEK_MODEL", "").strip() or DEFAULT_MODEL
+            if configured_model != DEFAULT_MODEL:
+                raise ValueError("Live preflight requires requested model deepseek-v4-flash")
+            if input_rate is None or cached_input_rate is None or output_rate is None:
+                raise ValueError("Live preflight requires explicit current peak prices")
+            preflight = live_preflight(
+                corpus_name=corpus_name,
+                corpus_sha256=corpus_hash,
+                prompt_version=PROMPT_VERSION,
+                requested_model=configured_model,
+                run_id=run_id,
+                repeat_id=repeat_id,
+                revision=revision,
+                max_provider_attempts=max_provider_attempts,
+                input_rate=input_rate,
+                cached_input_rate=cached_input_rate,
+                output_rate=output_rate,
+            )
+            # A prior owner inspection may supply the exact immutable binding.
+            if preflight_path.exists():
+                try:
+                    existing_preflight = json.loads(preflight_path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError) as exc:
+                    raise ValueError("live preflight artifact is unreadable") from exc
+                if canonical(existing_preflight) != canonical(preflight):
+                    raise ValueError("live preflight artifact does not match this run")
+            else:
+                # Exclusive write is deliberately immediately before the first provider path.
+                write_new(preflight_path, preflight)
         selected = [case for case in cases if not case.get("provider_fixture")]
         fixtures: dict[str, dict[str, Any]] = {}
         attempt_budget = AttemptBudget(max_provider_attempts)
@@ -995,6 +1044,7 @@ def run_evaluation(
     report["provenance"] = {**provenance, "source_files": revision["source_files"]}
     report["answer_quality"]["rubric_version"] = RUBRIC_VERSION
     report["review_packet_sha256"] = None
+    report["preflight_sha256"] = digest(preflight_path.read_bytes()) if preflight_path else None
     if export_review:
         by_id = {case["id"]: case for case in cases}
         packet = make_review_packet(provenance, [
@@ -1021,6 +1071,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--repeat-id", default="1")
     parser.add_argument("--export-review", action="store_true", help="Save bounded answers only for a hash-declared public synthetic corpus")
     parser.add_argument("--live", action="store_true", help="Use the configured real provider; never defaulted")
+    parser.add_argument("--preflight", type=Path, default=None, help="Optional immutable binding for the strict live-baseline-v1 evidence path")
     parser.add_argument(
         "--max-provider-attempts",
         type=int,
@@ -1047,6 +1098,12 @@ def main(argv: list[str] | None = None) -> int:
         run_id = validate_id(args.run_id or new_run_id())
         output = args.output or DEFAULT_OUTPUT_DIR / run_id / "report.json"
         review_output = output.with_name(output.stem + ".review-packet.json")
+        if args.preflight is not None and not args.live:
+            raise ValueError("--preflight requires --live")
+        if args.preflight is not None and _artifact_collision_key(args.preflight) in {
+            _artifact_collision_key(output), _artifact_collision_key(review_output),
+        }:
+            raise ValueError("preflight must differ from report and review-packet paths")
         if output.exists() or (args.export_review and review_output.exists()):
             raise ValueError("artifact already exists; choose a new run/output path, do not overwrite a baseline")
         packets: list[dict[str, Any]] = []
@@ -1061,6 +1118,7 @@ def main(argv: list[str] | None = None) -> int:
             export_review=args.export_review,
             review_packets=packets,
             max_provider_attempts=args.max_provider_attempts,
+            preflight_path=args.preflight,
         )
         write_new(output, report)
         if packets:

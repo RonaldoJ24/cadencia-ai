@@ -10,8 +10,8 @@ La evaluación separa cinco preguntas que no deben colapsarse en una sola tasa:
 2. **Acuerdo de dominio:** `learning`, `creative` o `general`; no implica relevancia.
 3. **Guard:** qué solicitudes rechazó el filtro léxico antes del proveedor, incluidos falsos positivos.
 4. **Comportamiento adversarial:** señales automatizadas y casos que todavía necesitan revisión semántica.
-5. **Calidad de respuesta:** sólo una revisión humana de una futura línea base live
-   puede establecerla; los fixtures sintéticos quedan `not_established`.
+5. **Calidad de respuesta:** la línea base live pequeña ya existe, pero sólo una
+   revisión humana ciega puede establecerla; permanece `not_established`.
 
 Un intent válido de dominio `learning` sobre tejer no responde a una solicitud de
 TypeScript. Los tests conservan ese contraejemplo, una salida válida pero vaga y una
@@ -86,9 +86,9 @@ mantienen pendientes o se marcan como fixture; no se presentan como valor revisa
 El programa valida los metadatos declarados, pero no puede verificar la identidad ni
 la honestidad de un revisor. Los archivos se escriben con modo exclusivo.
 
-La revisión humana de valor queda reservada para una futura línea base live acotada,
-con un máximo positivo de intentos y respuestas reales del proveedor. Hasta entonces,
-la aceptación y la calidad representativa permanecen **no establecidas**.
+La línea base live acotada ya contiene respuestas reales del proveedor. Su revisión
+humana ciega sigue pendiente; la aceptación y la calidad representativa permanecen
+**no establecidas**.
 
 ## Denominadores y evidencia actual
 
@@ -103,9 +103,10 @@ la aceptación y la calidad representativa permanecen **no establecidas**.
 - `guard` informa rechazos antes del proveedor y falsos rechazos. Los 8 rechazos del
   corpus de desarrollo hicieron **cero** llamadas: prueban el guard, no la negativa del modelo.
 - `critical_cases` separa casos pre-proveedor de casos que invocaron proveedor y deja
-  `semantic_safety=not_established`; su valor requiere una línea base live revisada.
+  `semantic_safety=not_established`; su valor requiere revisión humana ciega de la
+  línea base live.
 - `adversarial` separa contrato y warnings automatizados; el valor semántico queda para
-  revisión humana de una futura línea base live.
+  revisión humana ciega de la línea base live existente.
 - Las latencias se dividen en `provider_invoked` y `pre_provider`. En replay son
   tiempos locales, no latencia real.
 - Uso `synthetic_fixture` no es facturable. El costo queda `null` sin precios explícitos.
@@ -115,26 +116,36 @@ alcance que llegan al proveedor simulado y dos coincidencias benignas que antes
 producían falsos rechazos. La corrección contextual permite ahora las dos solicitudes
 benignas; el replay sigue siendo evidencia del guard, no una evaluación de DeepSeek.
 Las respuestas sintéticas no reciben una interpretación de calidad; la revisión de
-valor corresponde a una futura línea base live.
+valor permanece pendiente de revisión humana ciega; existe una línea base live
+pequeña separada y acotada.
 
 ## Live opt-in
 
-Live requiere `--live`, `--max-provider-attempts` positivo, credenciales ya inyectadas
-y autorización de gasto. Los 7
+Todo live genérico requiere `--live`, `--max-provider-attempts` positivo,
+credenciales ya inyectadas y autorización de gasto. Los 7
 fallos artificiales se excluyen: quedan 53 casos de servicio, normalmente **40 casos
 que invocan el LLM**, 8 rechazos pre-proveedor y 5 entradas inválidas; retries pueden
 cambiar el número de requests. Nunca describirlo como 53 generaciones reales.
 
 ```bash
 uv run --project service --frozen python service/evals/run.py --live --export-review \
+  --cases service/evals/live-baseline-v1.jsonl \
   --run-id '<new-live-run-id>' --repeat-id 1 \
-  --max-provider-attempts 64 \
+  --max-provider-attempts '<capped-attempts>' \
+  --input-usd-per-million 0.44 --cached-input-usd-per-million 0.014 \
+  --output-usd-per-million 1.32 \
+  --preflight 'outputs/evals/<new-live-run-id>/preflight.json' \
   --output 'outputs/evals/<new-live-run-id>/report.json'
 ```
 
-El workflow manual exige una aceptación booleana de gasto. No se ejecutó en Phase 1.
-Una evaluación live real aún no establece calidad hasta completar la rúbrica humana.
+El bloque anterior es la ruta estricta de evidencia `live-baseline-v1`; `--preflight`
+es opcional para ejecuciones live genéricas y no cambia el workflow manual existente.
+Ya existe una línea base live pequeña, ejecutada por el owner; aún no establece
+calidad hasta completar una revisión humana ciega.
 Seguridad crítica requiere cero fallos conocidos, sin pretender cobertura exhaustiva.
+La preflight de esa ruta fija hash del corpus, fuente, prompt/modelo, límite,
+precios y coste máximo antes de la primera llamada; no contiene dotenv, secretos
+ni cuerpos.
 
 ## Smoke y ciclo de regresión
 
