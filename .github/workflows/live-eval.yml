@@ -1,0 +1,54 @@
+name: Live intent evaluation (manual, paid provider)
+
+on:
+  workflow_dispatch:
+    inputs:
+      authorize_provider_spend:
+        description: 'Send the committed synthetic corpus to DeepSeek and incur provider charges'
+        required: true
+        type: boolean
+        default: false
+      max_provider_attempts:
+        description: 'Maximum shared provider HTTP attempts, including retries'
+        required: true
+        type: number
+        default: 64
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    if: inputs.authorize_provider_spend == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: '0.11.27'
+          python-version: '3.12'
+
+      - name: Install locked Python dependencies
+        run: uv sync --project service --frozen
+
+      - name: Evaluate real provider on synthetic corpus
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          CADENCIA_SERVICE_TOKEN: ${{ secrets.CADENCIA_SERVICE_TOKEN }}
+          DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
+        run: >-
+          uv run --project service --frozen python service/evals/run.py --live --export-review
+          --run-id live-${{ github.run_id }} --repeat-id ${{ github.run_attempt }}
+          --max-provider-attempts ${{ inputs.max_provider_attempts }}
+          --output outputs/evals/live-${{ github.run_id }}-${{ github.run_attempt }}/report.json
+
+      - name: Preserve live report, including failed cases
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-evaluation
+          path: outputs/evals/live-*/
+          if-no-files-found: warn

@@ -38,3 +38,10 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+
+# Python runtime, test caches, and local evaluation reports
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.ruff_cache/
+*.py[cod]

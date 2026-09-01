@@ -10,7 +10,9 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    env:
+      CADENCIA_ENABLE_LIVE: 'false'
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -35,3 +37,38 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: '0.11.27'
+          python-version: '3.12'
+
+      - name: Install locked Python dependencies
+        run: uv sync --project service --frozen
+
+      - name: Python tests
+        run: uv run --project service --frozen pytest service
+
+      - name: Python lint
+        run: uv run --project service --frozen ruff check service
+
+      - name: Deterministic evaluation (no provider calls)
+        run: >-
+          uv run --project service --frozen python service/evals/run.py
+          --run-id ci-${{ github.run_id }} --repeat-id ${{ github.run_attempt }}
+          --output outputs/evals/ci-${{ github.run_id }}-${{ github.run_attempt }}/report.json
+
+      - name: Local HTTP integration smoke (fake provider)
+        run: uv run --project service --frozen python service/evals/smoke.py
+
+      - name: Python container build
+        run: docker build --tag cadencia-intents:ci service
+
+      - name: Preserve deterministic evaluation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deterministic-evaluation
+          path: outputs/evals/ci-*/report.json
+          if-no-files-found: warn

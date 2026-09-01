@@ -1,0 +1,112 @@
+{
+  "learning-code": {
+    "title": "Ruta de programación",
+    "goal": "Comprender el concepto y demostrarlo con una práctica pequeña.",
+    "domain": "learning",
+    "steps": [
+      {"title": "Define la evidencia", "instructions": "Escribe qué ejemplo podrás explicar al terminar."},
+      {"title": "Practica sin copiar", "instructions": "Resuelve un ejercicio breve y anota el error principal."},
+      {"title": "Explica el flujo", "instructions": "Describe con tus palabras qué ocurre y guarda la explicación."}
+    ]
+  },
+  "learning-language": {
+    "title": "Práctica de idioma",
+    "goal": "Usar vocabulario y estructuras en una situación breve y observable.",
+    "domain": "learning",
+    "steps": [
+      {"title": "Elige expresiones", "instructions": "Selecciona unas pocas frases relacionadas con tu objetivo."},
+      {"title": "Practica en voz alta", "instructions": "Responde sin leer y registra dónde te detuviste."},
+      {"title": "Recupera y revisa", "instructions": "Repite la situación y compara qué pudiste decir mejor."}
+    ]
+  },
+  "learning-reading": {
+    "title": "Ruta de lectura",
+    "goal": "Leer con atención y recuperar las ideas principales sin consultar las notas.",
+    "domain": "learning",
+    "steps": [
+      {"title": "Define un foco", "instructions": "Anota la pregunta que guiará la lectura del bloque."},
+      {"title": "Lee y marca", "instructions": "Lee una sección y apunta solo las ideas que sostienen tu foco."},
+      {"title": "Recuerda", "instructions": "Cierra el material y explica lo que conservaste con tus palabras."}
+    ]
+  },
+  "learning-foundation": {
+    "title": "Fundamentos en práctica",
+    "goal": "Construir una base comprensible mediante ejemplos y recuperación activa.",
+    "domain": "learning",
+    "steps": [
+      {"title": "Mapa inicial", "instructions": "Escribe tres conceptos y cómo crees que se relacionan."},
+      {"title": "Un ejemplo", "instructions": "Trabaja un caso pequeño y señala el paso que más cuesta."},
+      {"title": "Comprobación", "instructions": "Explica el caso sin consultar la fuente y corrige los huecos."}
+    ]
+  },
+  "creative-visual": {
+    "title": "Estudio visual",
+    "goal": "Crear varias versiones breves y observar una decisión visual concreta.",
+    "domain": "creative",
+    "steps": [
+      {"title": "Reduce el foco", "instructions": "Escoge una forma, luz o textura para estudiar."},
+      {"title": "Haz versiones", "instructions": "Produce bocetos rápidos sin pulir la primera idea."},
+      {"title": "Compara", "instructions": "Guarda la mejor muestra y escribe qué decisión la distingue."}
+    ]
+  },
+  "creative-writing": {
+    "title": "Taller de escritura",
+    "goal": "Terminar una pieza breve y reconocer qué recurso sostiene su efecto.",
+    "domain": "creative",
+    "steps": [
+      {"title": "Elige una tensión", "instructions": "Formula en una frase qué quiere o teme el texto."},
+      {"title": "Escribe una versión", "instructions": "Avanza sin editar hasta llegar a un cierre provisional."},
+      {"title": "Lee y recorta", "instructions": "Marca una imagen fuerte y elimina una parte que distraiga."}
+    ]
+  },
+  "creative-music": {
+    "title": "Boceto musical",
+    "goal": "Crear una idea musical corta y conservar dos variaciones para compararlas.",
+    "domain": "creative",
+    "steps": [
+      {"title": "Fija un motivo", "instructions": "Elige un ritmo o intervalo que puedas repetir."},
+      {"title": "Cambia una cosa", "instructions": "Graba una versión y modifica solo el ritmo o la altura."},
+      {"title": "Escucha", "instructions": "Compara las tomas y anota qué versión quieres continuar."}
+    ]
+  },
+  "creative-design": {
+    "title": "Exploración de diseño",
+    "goal": "Comparar alternativas simples y escoger una dirección para continuar.",
+    "domain": "creative",
+    "steps": [
+      {"title": "Define el foco", "instructions": "Escribe qué debe comunicar la pieza en pocas palabras."},
+      {"title": "Boceta opciones", "instructions": "Haz tres opciones pequeñas cambiando una decisión cada vez."},
+      {"title": "Elige y guarda", "instructions": "Selecciona una opción y conserva las razones de la elección."}
+    ]
+  },
+  "general-planning": {
+    "title": "Plan personal",
+    "goal": "Convertir una intención amplia en un siguiente paso pequeño y comprobable.",
+    "domain": "general",
+    "steps": [
+      {"title": "Aclara el resultado", "instructions": "Escribe qué quedará terminado al final del bloque."},
+      {"title": "Haz el siguiente paso", "instructions": "Trabaja en una sola tarea y aparta lo secundario."},
+      {"title": "Cierra", "instructions": "Registra el avance y deja escrito el primer movimiento siguiente."}
+    ]
+  },
+  "general-organizing": {
+    "title": "Organización práctica",
+    "goal": "Ordenar pendientes visibles y avanzar sin llenar toda la semana.",
+    "domain": "general",
+    "steps": [
+      {"title": "Reúne pendientes", "instructions": "Anota lo necesario y separa lo urgente de lo opcional."},
+      {"title": "Agrupa", "instructions": "Junta tareas parecidas y escoge un bloque para la primera."},
+      {"title": "Revisa", "instructions": "Comprueba qué cambió y decide el siguiente bloque realista."}
+    ]
+  },
+  "general-personal": {
+    "title": "Siguiente paso personal",
+    "goal": "Dar forma a una intención abierta con una acción pequeña y revisable.",
+    "domain": "general",
+    "steps": [
+      {"title": "Describe el cambio", "instructions": "Escribe cómo notarás que avanzaste un poco."},
+      {"title": "Prueba una acción", "instructions": "Haz una tarea breve que produzca una señal concreta."},
+      {"title": "Anota lo aprendido", "instructions": "Registra qué ayudó y qué ajustarás en la próxima sesión."}
+    ]
+  }
+}

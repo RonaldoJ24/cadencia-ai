@@ -149,12 +149,72 @@ function compact(value: string): string {
   return value.replace(/\s+/gu, ' ').trim();
 }
 
+const RESTRICTED_REQUEST = /\b(?:diagnos(?:is|tico|tica|ticos|ticas|ticar)?|sintom(?:a|as)?|tratamiento(?:s)?|medicamento(?:s)?|dosis|enfermedad(?:es)?|lesion(?:es)?|dolor(?:es)?|ejercicio(?:s)?|entrenamiento(?:s)?|fitness|calorias|dieta(?:s)?|nutricion|perder peso|ganar musculo|symptom(?:s)?|medical|medicine|medication|dosage|disease(?:s)?|injur(?:y|ies)|pain|exercise|workout|calorie(?:s)?|diet(?:s)?|weight loss|muscle gain|invertir|inversion(?:es)?|acciones|cripto(?:moneda)?|trading|prestamo(?:s)?|credito|hipoteca|impuesto(?:s)?|finanzas personales|asesoria financiera|ganar dinero|invest(?:ment|ing)?|stocks?|crypto(?:currency)?|loan|credit|mortgage|tax(?:es)?|personal finance|financial advice|make money|abogado(?:s)?|asesoria legal|demanda(?:s)?|contrato(?:s)?|litigio|derechos legales|divorcio|visa|inmigracion|testamento|lawyer|legal advice|lawsuit|contract|litigation|legal rights|divorce|immigration)\b/u;
+const RESTRICTED_REQUEST_GLOBAL = new RegExp(RESTRICTED_REQUEST.source, 'gu');
+const DIRECT_REQUEST_CUE = /\b(?:dime|decime|indica(?:me)?|explica(?:me)?|recomiend(?:a|ame)|aconsej(?:a|ame)|sugier(?:e|eme)|que\s+(?:debo|puedo|tengo\s+que)|como\s+(?:debo|puedo|tengo\s+que)|cuant(?:o|a|os|as)\s+(?:pastill(?:a|as)|tableta(?:s)?|capsul(?:a|as)|comprimid(?:o|os|a|as))|tell\s+me|what\s+should|how\s+(?:much|many)|should\s+i|can\s+i)\b/u;
+const DIRECT_REQUEST_CUE_GLOBAL = new RegExp(DIRECT_REQUEST_CUE.source, 'gu');
+const DIRECT_DOMAIN_ACTION_CUE = /\b(?:pastill(?:a|as)|tableta(?:s)?|capsul(?:a|as)|comprimid(?:o|os|a|as)|tomar|tome|consumir|ingerir|declarar|declare|declar(?:acion|aciones)|testificar|testifique|juez|tribunal|ganar\s+(?:mi|el)\s+caso|defender(?:me)?|presentar\s+(?:ante|al)|pill(?:s)?|tablet(?:s)?|capsule(?:s)?|take|ingest|declare|testify|judge|court|win\s+(?:my|the)\s+case|defend(?:\s+me)?|file\s+(?:with|in))\b/u;
+const DIRECT_DOMAIN_ACTION_CUE_GLOBAL = new RegExp(DIRECT_DOMAIN_ACTION_CUE.source, 'gu');
+const DOSAGE_MATCH = /\b(?:dosis|dosage)\b/u;
+const LAWYER_MATCH = /\b(?:abogado|abogados|lawyer|lawyers)\b/u;
+const ANALYSIS_ACTION = /\b(?:analiz(?:ar|a|ando|is)|analic(?:e|es|emos|en)|estudi(?:ar|a|ando|o)|examinar|interpretar|identificar|explorar|comprender|comparar|uso|significado|meaning|analy[sz](?:e|ing|is))\b/gu;
+const ANALYSIS_NEGATION = /\b(?:no|nunca|never|not|don't|do not|sin|without|avoid)\b(?:\s+[a-z0-9]+){0,3}\s*$/u;
+const LITERARY_LINGUISTIC_CONTEXT = /\b(?:literari[oa]s?|literatura|poema(?:s)?|poesi(?:a|as)|metafora(?:s)?|figura(?:s)? retorica(?:s)?|linguistic[oa]s?|linguistic|palabra(?:s)?|lenguaje|language|literary|poem(?:s)?|metaphor(?:s)?|novela(?:s)?|cuento(?:s)?|relato(?:s)?|texto(?:s)?|verso(?:s)?|semantica(?:s)?|gramatica(?:s)?|retorica(?:s)?)\b/gu;
+const HEALTH_ADVICE_CONTEXT = /\b(?:salud|health|medic(?:a|o|al)(?:s|es)?|medical|medicine|medication|recomendacion(?:es)?|consejo(?:s)?|orientacion(?:es)?|asesoria(?:s)?|advice|recommendation(?:s)?)\b/u;
+const HEALTH_ADVICE_EXCLUSION = /(?:\b(?:sin|no|nunca|evitar|evitando|excluir|excluyendo|exclude|without|avoid|excluding)\b(?:\s+[a-z0-9]+){0,2}\s+(?:recomendacion(?:es)?|consejo(?:s)?|orientacion(?:es)?|asesoria(?:s)?|advice|recommendation(?:s)?)(?:\s+[a-z0-9]+){0,3}\s+(?:salud|health|medic(?:a|o|al)(?:s|es)?|medical|medicine|medication)\b)|(?:\b(?:sin|no|nunca|evitar|evitando|excluir|excluyendo|exclude|without|avoid|excluding)\b(?:\s+[a-z0-9]+){0,2}\s+(?:salud|health|medic(?:a|o|al)(?:s|es)?|medical|medicine|medication)(?:\s+[a-z0-9]+){0,3}\s+(?:recomendacion(?:es)?|consejo(?:s)?|orientacion(?:es)?|asesoria(?:s)?|advice|recommendation(?:s)?)\b)/u;
+const HEALTH_ADVICE_EXCLUSION_GLOBAL = new RegExp(HEALTH_ADVICE_EXCLUSION.source, 'gu');
+const CREATIVE_ACTION = /\b(?:ficcion|fictici[oa]s?|fiction|creative|escrib(?:ir|e|iendo)|crear|crea|creando|redactar|narrar|imagina|cuento|relato|novela|story|write|writing|create)\b/u;
+const FICTION_TARGET = /\b(?:personaje(?:s)?|escena(?:s)?|dialogo(?:s)?|narrativ[oa]s?|character(?:s)?|scene(?:s)?|dialogue(?:s)?|narrative(?:s)?|historia(?:s)?|story(?:line|lines)?|capitulo(?:s)?)\b/u;
+
+function directAdviceRequest(normalized: string): boolean {
+  const requestCues = [...normalized.matchAll(DIRECT_REQUEST_CUE_GLOBAL)];
+  const actionCues = [...normalized.matchAll(DIRECT_DOMAIN_ACTION_CUE_GLOBAL)];
+  return requestCues.length > 0 && actionCues.length > 0;
+}
+
+function literaryAnalysisContext(normalized: string): boolean {
+  const literaryTerms = [...normalized.matchAll(LITERARY_LINGUISTIC_CONTEXT)];
+  return [...normalized.matchAll(ANALYSIS_ACTION)].some((action) => {
+    const actionStart = action.index ?? 0;
+    const beforeAction = normalized.slice(Math.max(0, actionStart - 64), actionStart);
+    return !ANALYSIS_NEGATION.test(beforeAction) && literaryTerms.some((term) =>
+      Math.abs(actionStart - (term.index ?? 0)) <= 120,
+    );
+  });
+}
+
+function explicitHealthExclusion(normalized: string): boolean {
+  return HEALTH_ADVICE_EXCLUSION.test(normalized);
+}
+
+function explicitlyExcludedHealthTerm(normalized: string, match: RegExpMatchArray): boolean {
+  const matchStart = match.index ?? -1;
+  return HEALTH_ADVICE_CONTEXT.test(match[0]) &&
+    [...normalized.matchAll(HEALTH_ADVICE_EXCLUSION_GLOBAL)].some((exclusion) => {
+      const exclusionStart = exclusion.index ?? -1;
+      return exclusionStart <= matchStart && matchStart + match[0].length <= exclusionStart + exclusion[0].length;
+    });
+}
+
 function restrictedRequest(request: string): boolean {
   const normalized = request
     .normalize('NFD')
     .replace(/\p{M}/gu, '')
     .toLowerCase();
-  return /\b(?:diagnos(?:is|tico|tica|ticos|ticas|ticar)?|sintom(?:a|as)?|tratamiento(?:s)?|medicamento(?:s)?|dosis|enfermedad(?:es)?|lesion(?:es)?|dolor(?:es)?|ejercicio(?:s)?|entrenamiento(?:s)?|fitness|calorias|dieta(?:s)?|nutricion|perder peso|ganar musculo|symptom(?:s)?|medical|medicine|medication|dosage|disease(?:s)?|injur(?:y|ies)|pain|exercise|workout|calorie(?:s)?|diet(?:s)?|weight loss|muscle gain|invertir|inversion(?:es)?|acciones|cripto(?:moneda)?|trading|prestamo(?:s)?|credito|hipoteca|impuesto(?:s)?|finanzas personales|asesoria financiera|ganar dinero|invest(?:ment|ing)?|stocks?|crypto(?:currency)?|loan|credit|mortgage|tax(?:es)?|personal finance|financial advice|make money|abogado(?:s)?|asesoria legal|demanda(?:s)?|contrato(?:s)?|litigio|derechos legales|divorcio|visa|inmigracion|testamento|lawyer|legal advice|lawsuit|contract|litigation|legal rights|divorce|immigration)\b/u.test(normalized);
+  const matches = [...normalized.matchAll(RESTRICTED_REQUEST_GLOBAL)];
+  if (matches.length === 0) return false;
+  if (directAdviceRequest(normalized)) return true;
+
+  const dosageContext = DOSAGE_MATCH.test(normalized) &&
+    literaryAnalysisContext(normalized) && explicitHealthExclusion(normalized);
+  const fictionContext = CREATIVE_ACTION.test(normalized) && FICTION_TARGET.test(normalized);
+  for (const match of matches) {
+    if (DOSAGE_MATCH.test(match[0]) && dosageContext) continue;
+    if (dosageContext && explicitlyExcludedHealthTerm(normalized, match)) continue;
+    if (LAWYER_MATCH.test(match[0]) && fictionContext) continue;
+    return true;
+  }
+  return false;
 }
 
 function scopeIntent(): Intent {
@@ -384,12 +444,18 @@ export function buildPlan(
   rawInput: RoutineInput,
   rawIntent?: Intent,
   mode: RoutinePlan['mode'] = 'demo',
+  scopeRefused?: boolean,
 ): RoutinePlan {
   const input = validateInput(rawInput);
   if (mode !== 'demo' && mode !== 'deepseek') invalid('mode no es válido.');
-  const candidate = rawIntent === undefined ? demoIntent(input.request) : validateIntent(rawIntent);
+  if (mode === 'deepseek' && typeof scopeRefused !== 'boolean') {
+    invalid('scope_refused debe ser un booleano validado.');
+  }
+  const candidate = rawIntent === undefined
+    ? mode === 'demo' ? demoIntent(input.request) : scopeIntent()
+    : validateIntent(rawIntent);
   const warnings: string[] = [];
-  const unsafe = restrictedRequest(input.request);
+  const unsafe = mode === 'demo' ? restrictedRequest(input.request) : scopeRefused === true;
   const intent = unsafe ? scopeIntent() : candidate;
   if (unsafe) {
     warnings.push('Esta solicitud queda fuera de alcance; no se ofrece orientación médica, de ejercicio, financiera ni legal.');
