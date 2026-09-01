@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from pathlib import Path
 
 import pytest
 
@@ -184,6 +185,95 @@ def test_live_mode_requires_both_explicit_credentials(monkeypatch: pytest.Monkey
         run_evaluation(live=True, max_provider_attempts=1)
 
 
+def test_live_preflight_binds_frozen_corpus_before_provider_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    import run
+
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "eval-live-key")
+    monkeypatch.setenv("CADENCIA_SERVICE_TOKEN", "eval-live-token")
+    monkeypatch.setenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
+    preflight_path = tmp_path / "preflight.json"
+    observed: list[dict[str, object]] = []
+
+    async def no_network(*_: object, **__: object) -> tuple[list[object], int]:
+        observed.append(json.loads(preflight_path.read_text(encoding="utf-8")))
+        return [], 0
+
+    monkeypatch.setattr(run, "_run_async", no_network)
+    report = run_evaluation(
+        cases_path=Path("service/evals/live-baseline-v1.jsonl"),
+        live=True,
+        max_provider_attempts=20,
+        input_rate=0.44,
+        cached_input_rate=0.014,
+        output_rate=1.32,
+        run_id="live-preflight-test",
+        preflight_path=preflight_path,
+    )
+
+    assert observed and observed[0]["corpus_name"] == "live-baseline-v1"
+    assert observed[0]["baseline_max_provider_attempts"] == 20
+    assert observed[0]["conservative_max_estimated_usd"] == pytest.approx(0.05632)
+    assert report["preflight_sha256"]
+    with pytest.raises(ValueError, match="does not match"):
+        run_evaluation(
+            cases_path=Path("service/evals/live-baseline-v1.jsonl"),
+            live=True,
+            max_provider_attempts=20,
+            input_rate=0.44,
+            cached_input_rate=0.014,
+            output_rate=1.32,
+            run_id="live-preflight-test-2",
+            preflight_path=preflight_path,
+        )
+
+
+def test_legacy_live_mode_remains_bounded_without_preflight(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "eval-live-key")
+    monkeypatch.setenv("CADENCIA_SERVICE_TOKEN", "eval-live-token")
+    monkeypatch.setenv("DEEPSEEK_MODEL", "deepseek-v4-pro")
+    replay = ReplayTransport(load_replay_fixtures())
+
+    report = run_evaluation(live=True, replay_transport=replay, max_provider_attempts=64)
+
+    assert report["mode"] == "live-mocked"
+    assert report["provider_attempt_budget"]["configured_max_attempts"] == 64
+    assert report["preflight_sha256"] is None
+
+
+def test_preflight_cli_requires_live_and_avoids_all_output_collisions(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    import run
+
+    output = tmp_path / "report.json"
+    invoked: list[bool] = []
+
+    def must_not_run(**_: object) -> dict[str, object]:
+        invoked.append(True)
+        raise AssertionError("collision must stop before run_evaluation")
+
+    monkeypatch.setattr(run, "run_evaluation", must_not_run)
+    with pytest.raises(ValueError, match="requires --live"):
+        run_evaluation(preflight_path=tmp_path / "preflight.json")
+    assert run.main(["--preflight", str(tmp_path / "preflight.json"), "--output", str(output)]) == 2
+    alias = tmp_path / "report-alias"
+    alias.symlink_to(tmp_path, target_is_directory=True)
+    assert run.main(["--live", "--preflight", str(alias / "report.json"), "--output", str(output)]) == 2
+    assert run.main([
+        "--live", "--preflight", str(tmp_path / "REPORT.JSON"), "--output", str(output),
+    ]) == 2
+    assert run.main([
+        "--live", "--export-review",
+        "--preflight", str(tmp_path / "nested" / ".." / "report.review-packet.json"),
+        "--output", str(output),
+    ]) == 2
+    assert invoked == []
+
+
 def test_live_metrics_capture_internal_provider_metadata_without_network(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -298,8 +388,7 @@ def test_forged_scope_shape_is_not_classified_as_refusal() -> None:
 
 
 def test_report_records_reproducible_provenance_and_prompt_version() -> None:
-    from evidence import digest
-    from pathlib import Path
+    from evidence import digest, source_revision
     from provider import PROMPT, PROMPT_VERSION
 
     report = run_evaluation(run_id="phase1-test", repeat_id="2")
@@ -309,7 +398,8 @@ def test_report_records_reproducible_provenance_and_prompt_version() -> None:
     assert report["provenance"]["repeat_id"] == "2"
     assert report["provenance"]["corpus_sha256"] == digest(Path("service/evals/cases.jsonl").read_bytes())
     assert len(report["provenance"]["source_fingerprint"]) == 64
-    assert report["provenance"]["source_dirty"] is True
+    assert type(report["provenance"]["source_dirty"]) is bool
+    assert report["provenance"]["source_dirty"] == source_revision()["source_dirty"]
     assert all("env" not in name.lower() for name in report["provenance"]["source_files"])
 
 

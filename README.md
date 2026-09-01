@@ -107,7 +107,8 @@ guard behavior, adversarial behavior, and human answer quality have different
 denominators. Bounded outputs leave normal reports only with `--export-review` for a
 catalogued public corpus. The bound packets support control and rubric tooling;
 synthetic outputs do not receive meaningful value review. That review is reserved
-for a future capped live baseline with identified reviewer metadata.
+for blind human review with identified reviewer metadata; the small owner-only live
+baseline is recorded separately and does not establish representative quality.
 Reports identify `requested_model` separately from bounded provider observations
 (`observed_model_counts` and `system_fingerprint_counts`); deterministic replay
 leaves those observations empty. Live evaluation requires a positive shared
@@ -117,8 +118,12 @@ Generated artifacts live under ignored `outputs/`; CI preserves reports. The
 the frozen held-out set, rubric, provenance, live commands and limits. The manual
 live workflow requires explicit spend acknowledgement and repository secrets. The
 synthetic packets and rubric calibrate controls only; meaningful value review is
-reserved for a future capped live baseline. No representative quality result exists
-before that run and review.
+pending blind human review. No representative quality result exists.
+
+The bounded owner-only DeepSeek baseline and one local route proof are recorded in
+[LIVE-AI-VALIDATION.md](docs/LIVE-AI-VALIDATION.md). They establish limited local
+pipeline evidence only; no human review, production, deployment, or representative
+quality claim follows from them.
 
 ## Deployment and evidence boundary
 
@@ -151,8 +156,8 @@ Cloud platform access logs are separate and need their own retention/access poli
 - No claim of production scale, representative model accuracy, real users, or cost reduction.
 - Fixture evaluation does not represent production quality. Synthetic transport
   responses validate code behavior; they cannot measure language understanding.
-- Deployment, real live baseline, external beta usage, and a documented real
-  failure-to-regression cycle remain necessary before writing a résumé claim.
+- Deployment, external beta usage, and a documented real failure-to-regression
+  cycle remain necessary before broader résumé claims.
 
 ## Project notes
 
