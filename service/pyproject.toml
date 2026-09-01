@@ -1,0 +1,28 @@
+[project]
+name = "cadencia-intent-service"
+version = "0.1.0"
+description = "Cadencia's schema validated intent service"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi==0.141.1",
+  "httpx==0.28.1",
+  "pydantic==2.11.7",
+  "uvicorn==0.35.0",
+]
+
+[dependency-groups]
+dev = [
+  "pytest==8.4.1",
+  "ruff==0.12.10",
+]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["test_service.py"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

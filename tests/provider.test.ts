@@ -1,136 +1,482 @@
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { GET, POST } from '../app/api/routine/route.ts';
-import { generateIntent } from '../lib/provider.ts';
 
-const config = { apiKey: 'test-key', model: 'deepseek-v4-flash' };
+const ENV_NAMES = [
+  'CADENCIA_ENABLE_LIVE',
+  'CADENCIA_INTENT_SERVICE_URL',
+  'CADENCIA_SERVICE_TOKEN',
+  'DEEPSEEK_API_KEY',
+  'DEEPSEEK_MODEL',
+] as const;
+
+const input = {
+  request: 'aprender TypeScript',
+  days: [0, 2],
+  sessionMinutes: 30,
+  weeklyMinutes: 90,
+  startDate: '2026-08-31',
+  time: '18:00',
+};
+
 const intent = {
-  title: 'Practicar acuarela',
-  goal: 'Crear una muestra breve.',
-  domain: 'creative',
-  steps: [{ title: 'Boceto', instructions: 'Haz una primera versión pequeña.' }],
+  title: 'Aprender TypeScript',
+  goal: 'Construir una pequeña función tipada.',
+  domain: 'learning',
+  steps: [{ title: 'Practica tipos', instructions: 'Escribe y revisa una función.' }],
 } as const;
 
-function response(content: string, status = 200): Response {
-  return new Response(
-    JSON.stringify({ choices: [{ finish_reason: 'stop', message: { content } }] }),
-    { status, headers: { 'content-type': 'application/json' } },
-  );
+const scopeIntent = {
+  title: 'Solicitud fuera de alcance',
+  goal: 'Cadencia organiza aprendizaje, práctica creativa y trabajo personal general; no ofrece orientación médica, de ejercicio, financiera ni legal.',
+  domain: 'general',
+  steps: [{
+    title: 'Reformula el objetivo',
+    instructions: 'Pide una rutina de aprendizaje, creatividad u organización general sin asesoría especializada.',
+  }],
+} as const;
+
+const requestId = '123e4567-e89b-12d3-a456-426614174000';
+const padding = ' trama narrativa '.repeat(25);
+
+function serviceResponse(
+  body: unknown,
+  status = 200,
+  extraHeaders: Record<string, string> = {},
+): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json', ...extraHeaders },
+  });
 }
 
-void test('provider sends the fixed DeepSeek JSON contract and validates output', async () => {
-  let receivedUrl = '';
-  let receivedInit: RequestInit | undefined;
-  const result = await generateIntent(
-    'practicar acuarela',
-    config,
-    async (url, init) => {
-      receivedUrl = typeof url === 'string' ? url : url instanceof URL ? url.href : url.url;
-      receivedInit = init;
-      return response(JSON.stringify(intent));
+function routeRequest(body: unknown, headers: Record<string, string> = {}): Request {
+  return new Request('http://localhost/api/routine', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+  });
+}
+
+async function withEnvironment<T>(
+  updates: Partial<Record<(typeof ENV_NAMES)[number], string | undefined>>,
+  callback: () => Promise<T>,
+): Promise<T> {
+  const previous = Object.fromEntries(
+    ENV_NAMES.map((name) => [name, process.env[name]]),
+  ) as Record<string, string | undefined>;
+  try {
+    for (const name of ENV_NAMES) {
+      if (!(name in updates)) continue;
+      const value = updates[name];
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+    return await callback();
+  } finally {
+    for (const name of ENV_NAMES) {
+      const value = previous[name];
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+}
+
+async function withFetch<T>(fetcher: typeof fetch, callback: () => Promise<T>): Promise<T> {
+  const previous = globalThis.fetch;
+  globalThis.fetch = fetcher;
+  try {
+    return await callback();
+  } finally {
+    globalThis.fetch = previous;
+  }
+}
+
+void test('demo mode is local and GET exposes only boolean live readiness', async () => {
+  await withEnvironment(
+    {
+      CADENCIA_ENABLE_LIVE: undefined,
+      CADENCIA_INTENT_SERVICE_URL: undefined,
+      CADENCIA_SERVICE_TOKEN: undefined,
+      DEEPSEEK_API_KEY: undefined,
+      DEEPSEEK_MODEL: undefined,
+    },
+    async () => {
+      let calls = 0;
+      const fetcher: typeof fetch = async () => {
+        calls += 1;
+        throw new Error('network must not be called in demo mode');
+      };
+      const get = await GET();
+      assert.deepEqual(await get.json(), { liveAvailable: false });
+      const result = await withFetch(fetcher, () => POST(routeRequest({ input, mode: 'demo' })));
+      assert.equal(result.status, 200);
+      const payload = await result.json() as { plan: { mode: string; input: { request: string } } };
+      assert.equal(payload.plan.mode, 'demo');
+      assert.equal(payload.plan.input.request, input.request);
+      assert.equal(calls, 0);
     },
   );
-  assert.deepEqual(result, intent);
-  assert.equal(receivedUrl, 'https://api.deepseek.com/chat/completions');
-  assert.equal(receivedInit?.method, 'POST');
-  const headers = receivedInit?.headers as Record<string, string> | undefined;
-  assert.equal(headers?.authorization, 'Bearer test-key');
-  const requestBody = receivedInit?.body;
-  assert.ok(typeof requestBody === 'string');
-  const payload = JSON.parse(requestBody);
-  assert.deepEqual(payload.response_format, { type: 'json_object' });
-  assert.deepEqual(payload.thinking, { type: 'disabled' });
-  assert.equal(payload.temperature, 0.2);
-  assert.equal(payload.max_tokens, 800);
-  assert.equal(payload.stream, false);
-  assert.equal(payload.tools, undefined);
-  assert.match(payload.messages[1].content, /practicar acuarela/u);
 });
 
-void test('provider rejects malformed, truncated, oversized, and invalid schema output generically', async () => {
-  await assert.rejects(
-    () => generateIntent('objetivo', config, async () => response('{bad json')),
-    { message: 'No se pudo generar la intención con el proveedor.' },
+void test('GET reports readiness only for a valid authenticated service config', async () => {
+  await withEnvironment(
+    {
+      CADENCIA_ENABLE_LIVE: 'true',
+      CADENCIA_INTENT_SERVICE_URL: 'https://intent.example/base',
+      CADENCIA_SERVICE_TOKEN: 'server-secret',
+    },
+    async () => {
+      assert.deepEqual(await (await GET()).json(), { liveAvailable: true });
+    },
   );
-  await assert.rejects(
-    () => generateIntent('objetivo', config, async () => response(JSON.stringify({ ...intent, domain: 'medical' }))),
-    { message: 'No se pudo generar la intención con el proveedor.' },
-  );
-  await assert.rejects(
-    () => generateIntent('objetivo', config, async () => response('x'.repeat(40_000))),
-    { message: 'No se pudo generar la intención con el proveedor.' },
-  );
-  await assert.rejects(
-    () => generateIntent('objetivo', config, async () => response('upstream secret', 503)),
-    (error: unknown) => error instanceof Error && error.message === 'No se pudo generar la intención con el proveedor.' && !error.message.includes('secret'),
+  for (const serviceUrl of [
+    'http://intent.example',
+    'https://intent.example?token=leak',
+    'https://user:password@intent.example',
+  ]) {
+    await withEnvironment(
+      {
+        CADENCIA_ENABLE_LIVE: 'true',
+        CADENCIA_INTENT_SERVICE_URL: serviceUrl,
+        CADENCIA_SERVICE_TOKEN: 'server-secret',
+      },
+      async () => {
+        assert.deepEqual(await (await GET()).json(), { liveAvailable: false });
+      },
+    );
+  }
+});
+
+void test('live mode calls the normalized Python endpoint with only the request and server auth', async () => {
+  await withEnvironment(
+    {
+      CADENCIA_ENABLE_LIVE: 'true',
+      CADENCIA_INTENT_SERVICE_URL: 'http://127.0.0.1:8787/base/',
+      CADENCIA_SERVICE_TOKEN: 'server-secret',
+      DEEPSEEK_API_KEY: 'deepseek-secret-must-not-be-used',
+    },
+    async () => {
+      let receivedUrl = '';
+      let receivedInit: RequestInit | undefined;
+      const fetcher: typeof fetch = async (url, init) => {
+        receivedUrl = typeof url === 'string' ? url : url instanceof URL ? url.href : url.url;
+        receivedInit = init;
+        return serviceResponse({
+          intent,
+          scope_refused: false,
+          meta: {
+            request_id: requestId,
+            prompt_version: 'cadencia-intent-v1',
+            model: 'deepseek-v4-flash',
+            latency_ms: 4,
+            attempts: 1,
+          },
+        }, 200, { 'x-request-id': requestId });
+      };
+      const result = await withFetch(fetcher, () => POST(routeRequest({ input, mode: 'deepseek' })));
+      assert.equal(result.status, 200);
+      const payload = await result.json() as { plan: { mode: string; intent: typeof intent } };
+      assert.equal(payload.plan.mode, 'deepseek');
+      assert.deepEqual(payload.plan.intent, intent);
+      assert.equal(receivedUrl, 'http://127.0.0.1:8787/base/v1/intents');
+      assert.equal(receivedInit?.method, 'POST');
+      assert.equal(receivedInit?.redirect, 'error');
+      assert.ok(receivedInit?.signal instanceof AbortSignal);
+      const headers = receivedInit?.headers as Record<string, string>;
+      assert.equal(headers.authorization, 'Bearer server-secret');
+      assert.equal(headers['content-type'], 'application/json');
+      assert.deepEqual(JSON.parse(receivedInit?.body as string), { request: input.request });
+      assert.equal(result.headers.get('x-request-id'), requestId);
+    },
   );
 });
 
-void test('provider converts network and configuration failures without exposing details', async () => {
-  await assert.rejects(
-    () => generateIntent('objetivo', config, async () => { throw new Error('secret network detail'); }),
-    { message: 'No se pudo generar la intención con el proveedor.' },
+void test('scope ownership stays local in demo and follows Python Intent in deepseek', async () => {
+  const benign = [
+    'Quiero estudiar el uso de la palabra dosis como metáfora en poemas, sin recomendaciones sobre salud.',
+    'Quiero escribir una escena de ficción sobre un abogado distraído, centrándome en diálogos y ritmo narrativo.',
+  ];
+  const mixed = [
+    'Analiza la palabra dosis como metáfora en un poema, sin recomendaciones sobre salud, pero dime cuántas pastillas debo tomar.',
+    'Escribe una escena de ficción con un personaje abogado y dime qué debo declarar ante el juez para ganar mi caso.',
+    `Escribe una escena de ficción sobre un abogado. Dime${padding}declarar ante el juez para ganar mi caso.`,
+    `Analiza dosis como metáfora en un poema, sin recomendaciones sobre salud. Dime${padding}tomar pastillas.`,
+  ];
+  await withEnvironment(
+    {
+      CADENCIA_ENABLE_LIVE: 'true',
+      CADENCIA_INTENT_SERVICE_URL: 'https://intent.example',
+      CADENCIA_SERVICE_TOKEN: 'server-secret',
+    },
+    async () => {
+      let calls = 0;
+      const fetcher: typeof fetch = async (_url, init) => {
+        calls += 1;
+        const request = JSON.parse(init?.body as string).request as string;
+        const refused = [...mixed, '¿Cuál es mi diagnóstico?'];
+        return serviceResponse({
+          intent: refused.includes(request) ? scopeIntent : intent,
+          scope_refused: refused.includes(request),
+        });
+      };
+
+      for (const request of benign) {
+        const demo = await withFetch(fetcher, () =>
+          POST(routeRequest({ input: { ...input, request }, mode: 'demo' })),
+        );
+        const demoPayload = await demo.json() as { plan: { sessions: unknown[] } };
+        assert.equal(demo.status, 200);
+        assert.equal(demoPayload.plan.sessions.length, 2);
+
+        const deepseek = await withFetch(fetcher, () =>
+          POST(routeRequest({ input: { ...input, request }, mode: 'deepseek' })),
+        );
+        const deepseekPayload = await deepseek.json() as { plan: { sessions: unknown[] } };
+        assert.equal(deepseek.status, 200);
+        assert.equal(deepseekPayload.plan.sessions.length, 2);
+      }
+
+      for (const request of mixed) {
+        const demo = await withFetch(fetcher, () =>
+          POST(routeRequest({ input: { ...input, request }, mode: 'demo' })),
+        );
+        const demoPayload = await demo.json() as { plan: { sessions: unknown[]; warnings: string[] } };
+        assert.equal(demo.status, 200);
+        assert.equal(demoPayload.plan.sessions.length, 0);
+        assert.match(demoPayload.plan.warnings.join(' '), /fuera de alcance/u);
+
+        const deepseek = await withFetch(fetcher, () =>
+          POST(routeRequest({ input: { ...input, request }, mode: 'deepseek' })),
+        );
+        const deepseekPayload = await deepseek.json() as { plan: { sessions: unknown[]; warnings: string[] } };
+        assert.equal(deepseek.status, 200);
+        assert.equal(deepseekPayload.plan.sessions.length, 0);
+        assert.match(deepseekPayload.plan.warnings.join(' '), /fuera de alcance/u);
+        assert.equal('scope_refused' in deepseekPayload.plan, false);
+      }
+
+      const direct = await withFetch(fetcher, () =>
+        POST(routeRequest({ input: { ...input, request: '¿Cuál es mi diagnóstico?' }, mode: 'deepseek' })),
+      );
+      const directPayload = await direct.json() as { plan: { sessions: unknown[]; warnings: string[] } };
+      assert.equal(direct.status, 200);
+      assert.equal(directPayload.plan.sessions.length, 0);
+      assert.match(directPayload.plan.warnings.join(' '), /fuera de alcance/u);
+      assert.equal(calls, benign.length + mixed.length + 1);
+    },
   );
-  await assert.rejects(() => generateIntent('', config, async () => response('{}')), /Entrada inválida/u);
-  await assert.rejects(() => generateIntent('objetivo', { apiKey: '', model: 'x' }, async () => response('{}')), /Configuración inválida/u);
 });
 
-void test('provider abort signal is passed for the bounded timeout', async () => {
-  let signal: AbortSignal | undefined;
-  await generateIntent('objetivo', config, async (_url, init) => {
-    signal = init?.signal as AbortSignal;
-    return response(JSON.stringify(intent));
-  });
-  assert.ok(signal);
-  assert.equal(signal?.aborted, false);
+void test('deepseek uses the explicit Python scope decision without reading Intent text', async () => {
+  await withEnvironment(
+    {
+      CADENCIA_ENABLE_LIVE: 'true',
+      CADENCIA_INTENT_SERVICE_URL: 'https://intent.example',
+      CADENCIA_SERVICE_TOKEN: 'server-secret',
+    },
+    async () => {
+      let calls = 0;
+      const fetcher: typeof fetch = async (_url, init) => {
+        calls += 1;
+        const request = JSON.parse(init?.body as string).request as string;
+        if (request === 'aprender TypeScript') {
+          return serviceResponse({
+            intent: { ...scopeIntent, title: 'Copia de solicitud fuera de alcance' },
+            scope_refused: true,
+          });
+        }
+        return serviceResponse({ intent, scope_refused: false });
+      };
+
+      const refused = await withFetch(fetcher, () =>
+        POST(routeRequest({ input: { ...input, request: 'aprender TypeScript' }, mode: 'deepseek' })),
+      );
+      const refusedPayload = await refused.json() as { plan: { sessions: unknown[]; warnings: string[] } };
+      assert.equal(refused.status, 200);
+      assert.equal(refusedPayload.plan.sessions.length, 0);
+      assert.match(refusedPayload.plan.warnings.join(' '), /fuera de alcance/u);
+      assert.equal('scope_refused' in refusedPayload.plan, false);
+
+      const allowed = await withFetch(fetcher, () =>
+        POST(routeRequest({ input: { ...input, request: '¿Cuál es mi diagnóstico?' }, mode: 'deepseek' })),
+      );
+      const allowedPayload = await allowed.json() as { plan: { sessions: unknown[]; warnings: string[] } };
+      assert.equal(allowed.status, 200);
+      assert.equal(allowedPayload.plan.sessions.length, 2);
+      assert.deepEqual(allowedPayload.plan.warnings, []);
+      assert.equal('scope_refused' in allowedPayload.plan, false);
+      assert.equal(calls, 2);
+    },
+  );
 });
 
-const environment = ['CADENCIA_ENABLE_LIVE', 'DEEPSEEK_API_KEY', 'DEEPSEEK_MODEL'] as const;
+void test('service errors stay generic and expose at most an opaque request ID header', async () => {
+  await withEnvironment(
+    {
+      CADENCIA_ENABLE_LIVE: 'true',
+      CADENCIA_INTENT_SERVICE_URL: 'https://intent.example',
+      CADENCIA_SERVICE_TOKEN: 'server-secret',
+    },
+    async () => {
+      const fetcher: typeof fetch = async () =>
+        serviceResponse(
+          { error: 'upstream key server-secret and private output', request_id: requestId },
+          503,
+        );
+      const result = await withFetch(fetcher, () => POST(routeRequest({ input, mode: 'deepseek' })));
+      assert.equal(result.status, 502);
+      const payload = await result.json() as { error: string };
+      assert.deepEqual(payload, { error: 'El proveedor de IA no está disponible.' });
+      assert.equal(result.headers.get('x-request-id'), requestId);
+      assert.equal(JSON.stringify(payload).includes('server-secret'), false);
+    },
+  );
 
-void test('route keeps demo available without live credentials and exposes only a boolean on GET', async () => {
-  for (const name of environment) delete process.env[name];
-  const get = await GET();
-  assert.deepEqual(await get.json(), { liveAvailable: false });
-  const request = new Request('http://localhost/api/routine', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ input: { request: 'aprender TypeScript', days: [0], sessionMinutes: 30, weeklyMinutes: 30, startDate: '2026-08-31', time: '18:00' }, mode: 'demo' }),
-  });
-  const result = await POST(request);
-  assert.equal(result.status, 200);
-  const payload = await result.json() as { plan: { mode: string; input: { request: string } } };
-  assert.equal(payload.plan.mode, 'demo');
-  assert.equal(payload.plan.input.request, 'aprender TypeScript');
+  await withEnvironment(
+    {
+      CADENCIA_ENABLE_LIVE: 'true',
+      CADENCIA_INTENT_SERVICE_URL: 'https://intent.example',
+      CADENCIA_SERVICE_TOKEN: requestId,
+    },
+    async () => {
+      const fetcher: typeof fetch = async () =>
+        serviceResponse({ error: 'private', request_id: requestId }, 503, {
+          'x-request-id': requestId,
+        });
+      const result = await withFetch(fetcher, () => POST(routeRequest({ input, mode: 'deepseek' })));
+      assert.equal(result.status, 502);
+      assert.equal(result.headers.get('x-request-id'), null);
+    },
+  );
 });
 
-void test('route rejects cross-origin, malformed, oversized, and unconfigured live requests', async () => {
-  for (const name of environment) delete process.env[name];
-  const crossOrigin = await POST(new Request('http://localhost/api/routine', {
-    method: 'POST',
-    headers: { origin: 'https://evil.example', 'content-type': 'application/json' },
-    body: '{}',
-  }));
-  assert.equal(crossOrigin.status, 403);
+void test('invalid service output is rejected before a plan is built', async () => {
+  await withEnvironment(
+    {
+      CADENCIA_ENABLE_LIVE: 'true',
+      CADENCIA_INTENT_SERVICE_URL: 'https://intent.example',
+      CADENCIA_SERVICE_TOKEN: 'server-secret',
+    },
+    async () => {
+      const fetcher: typeof fetch = async () =>
+        serviceResponse({ intent: { ...intent, domain: 'medical' } });
+      const result = await withFetch(fetcher, () => POST(routeRequest({ input, mode: 'deepseek' })));
+      assert.equal(result.status, 502);
+      assert.deepEqual(await result.json(), { error: 'El proveedor de IA no está disponible.' });
+    },
+  );
+});
 
-  const malformed = await POST(new Request('http://localhost/api/routine', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: '{',
-  }));
-  assert.equal(malformed.status, 400);
+void test('unavailable, malformed, truncated, and oversized service responses are safe errors', async () => {
+  await withEnvironment(
+    {
+      CADENCIA_ENABLE_LIVE: 'true',
+      CADENCIA_INTENT_SERVICE_URL: 'https://intent.example',
+      CADENCIA_SERVICE_TOKEN: 'server-secret',
+    },
+    async () => {
+      const cases: Array<[string, typeof fetch]> = [
+        ['unavailable', async () => { throw new Error('private network detail'); }],
+        ['malformed', async () => new Response('{not-json', { status: 200 })],
+        ['truncated', async () => new Response('{"intent":', { status: 200 })],
+        [
+          'declared oversized',
+          async () => new Response('{}', { status: 200, headers: { 'content-length': '32769' } }),
+        ],
+        [
+          'stream oversized',
+          async () =>
+            new Response(
+              new ReadableStream({
+                start(controller) {
+                  controller.enqueue(new TextEncoder().encode('x'.repeat(32_769)));
+                  controller.close();
+                },
+              }),
+              { status: 200 },
+            ),
+        ],
+      ];
+      for (const [label, fetcher] of cases) {
+        const result = await withFetch(fetcher, () => POST(routeRequest({ input, mode: 'deepseek' })));
+        assert.equal(result.status, 502, label);
+        assert.deepEqual(await result.json(), { error: 'El proveedor de IA no está disponible.' }, label);
+      }
+    },
+  );
+});
 
-  const oversized = await POST(new Request('http://localhost/api/routine', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: 'x'.repeat(40_000),
-  }));
-  assert.equal(oversized.status, 400);
+void test('fetch and slow response body timeouts abort within the route deadline', async () => {
+  await withEnvironment(
+    {
+      CADENCIA_ENABLE_LIVE: 'true',
+      CADENCIA_INTENT_SERVICE_URL: 'https://intent.example',
+      CADENCIA_SERVICE_TOKEN: 'server-secret',
+    },
+    async () => {
+      mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+      try {
+        const pendingFetch: typeof fetch = async (_url, init) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+          });
+        const pending = withFetch(pendingFetch, () => POST(routeRequest({ input, mode: 'deepseek' })));
+        await new Promise((resolve) => setImmediate(resolve));
+        mock.timers.tick(25_001);
+        const timeoutResult = await pending;
+        assert.equal(timeoutResult.status, 502);
 
-  process.env.CADENCIA_ENABLE_LIVE = 'true';
-  const live = await POST(new Request('http://localhost/api/routine', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ input: { request: 'aprender TypeScript', days: [0], sessionMinutes: 30, weeklyMinutes: 30, startDate: '2026-08-31', time: '18:00' }, mode: 'deepseek' }),
-  }));
-  assert.equal(live.status, 503);
+        let streamController: ReadableStreamDefaultController<Uint8Array> | undefined;
+        const slowBody: typeof fetch = async () =>
+          new Response(
+            new ReadableStream({
+              start(controller) {
+                streamController = controller;
+                controller.enqueue(new TextEncoder().encode('{"intent":'));
+              },
+            }),
+            { status: 200 },
+          );
+        const slow = withFetch(slowBody, () => POST(routeRequest({ input, mode: 'deepseek' })));
+        await new Promise((resolve) => setImmediate(resolve));
+        mock.timers.tick(25_001);
+        const slowResult = await slow;
+        assert.equal(slowResult.status, 502);
+        streamController?.error(new Error('closed'));
+      } finally {
+        mock.timers.reset();
+      }
+    },
+  );
+});
+
+void test('origin, body, and mode checks remain enforced', async () => {
+  await withEnvironment(
+    {
+      CADENCIA_ENABLE_LIVE: undefined,
+      CADENCIA_INTENT_SERVICE_URL: undefined,
+      CADENCIA_SERVICE_TOKEN: undefined,
+    },
+    async () => {
+      const crossOrigin = await POST(routeRequest({}, { origin: 'https://evil.example' }));
+      assert.equal(crossOrigin.status, 403);
+      const referer = await POST(routeRequest({}, { referer: 'https://evil.example/page' }));
+      assert.equal(referer.status, 403);
+      const malformed = await POST(new Request('http://localhost/api/routine', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{',
+      }));
+      assert.equal(malformed.status, 400);
+      const oversized = await POST(new Request('http://localhost/api/routine', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: 'x'.repeat(40_000),
+      }));
+      assert.equal(oversized.status, 400);
+      const invalidMode = await POST(routeRequest({ input, mode: 'provider' }));
+      assert.equal(invalidMode.status, 400);
+    },
+  );
 });

@@ -1,8 +1,10 @@
 # Contrato de IA de Cadencia
 
 Cadencia separa el contenido de la agenda. Un modelo opcional propone sólo una
-`Intent` (`title`, `goal`, `domain` y `steps`). El código valida esa salida y
-decide las fechas, la hora, la duración, el tope semanal y la reprogramación.
+`Intent` (`title`, `goal`, `domain` y `steps`). Python devuelve además la decisión
+interna estricta `scope_refused`; esa decisión proviene del guard Python y no forma
+parte de `Intent`. El código valida ambas partes antes de decidir las fechas, la
+hora, la duración, el tope semanal y la reprogramación.
 El modelo no recibe herramientas, no ejecuta código y no puede escribir en el
 calendario.
 
@@ -36,41 +38,70 @@ API](https://api-docs.deepseek.com/api/create-chat-completion/). El modelo por
 defecto del endpoint es `deepseek-v4-flash`; se puede reemplazar con
 `DEEPSEEK_MODEL`, según [Your First API Call](https://api-docs.deepseek.com/).
 
-La solicitud del usuario se incluye como datos delimitados. No se registran la
-solicitud, la clave ni la respuesta. El adaptador aborta después de 20 segundos,
-limita la respuesta a 32 KiB y convierte errores HTTP, red, timeout, JSON
-malformado y esquemas inválidos en un error genérico sin detalles sensibles.
-`validateIntent` vuelve a comprobar todos los campos antes de entregar la
-intención al planificador.
+El único adaptador vivo está ahora en `service/provider.py`. FastAPI recibe sólo
+la solicitud, valida JSON con modelos Pydantic estrictos y devuelve una intención
+sin fechas ni agenda. El prompt versionado es `cadencia-intent-v1`. El proveedor
+no recibe herramientas. La operación completa tiene un límite de 20 segundos;
+sólo 429 y 5xx permiten un segundo intento. La respuesta está limitada a 32 KiB y
+los errores de red, timeout, truncamiento, JSON o esquema se convierten en errores
+genéricos con un ID opaco. No se registran prompts, respuestas crudas ni secretos.
+`validateIntent` vuelve a comprobar la intención en TypeScript antes del motor, y
+la ruta exige el booleano `scope_refused` antes de llamar a
+`buildPlan(input, intent, 'deepseek', scopeRefused)`. El booleano es interno y no
+se copia a la respuesta del navegador.
+`IntentResult.model` y `ProviderError.model` conservan el modelo solicitado. El
+adaptador puede conservar por separado `observed_model` y `system_fingerprint` del
+envelope del proveedor sólo cuando cada valor es corto, ASCII, sin controles y no
+parece secreto; los valores inválidos se convierten en `null`.
+El runner de evaluación live añade un máximo positivo compartido de requests al
+transporte, incluidos los retries; si se agota, falla antes del siguiente request.
 
 ## Activación del servidor
 
-El modo `deepseek` sólo se puede activar explícitamente en el cuerpo `POST` y
-requiere `CADENCIA_ENABLE_LIVE=true` junto con `DEEPSEEK_API_KEY`. Si
-`DEEPSEEK_MODEL` está vacío se usa `deepseek-v4-flash`. La clave se lee sólo en
-el servidor desde `process.env`; nunca se usa `VITE_*` ni `NEXT_PUBLIC_*`.
-`GET /api/routine` devuelve únicamente `{ "liveAvailable": boolean }`.
+El modo `deepseek` conserva el contrato del navegador `{ input, mode }` y la
+respuesta `{ plan }`. La ruta Next.js requiere `CADENCIA_ENABLE_LIVE=true`,
+`CADENCIA_INTENT_SERVICE_URL` y `CADENCIA_SERVICE_TOKEN`. Envía únicamente
+`{ request }` por HTTPS al servicio Python (HTTP sólo en loopback local), con el
+token interno y un timeout independiente de 25 segundos. No sigue redirecciones
+con la credencial. `GET /api/routine` devuelve sólo `{ "liveAvailable": boolean }`,
+que indica configuración local válida, no disponibilidad comprobada de DeepSeek.
 
-El `POST /api/routine` acepta `{ input, mode }`. El cuerpo está limitado a 32
-KiB y, cuando el navegador lo envía, el origen debe coincidir con el origen de
-la solicitud. Si no llega `Origin` ni `Referer`, se permite el uso de una
-herramienta local o CLI; esta comprobación ofrece protección CSRF básica, no
-autenticación ni límites de uso. Un cuerpo o input inválido devuelve 400, el
-modo vivo sin configuración devuelve 503 y un fallo del proveedor devuelve
-502. El modo demo no necesita clave ni red.
+Python lee `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL` y `CADENCIA_SERVICE_TOKEN` desde su
+entorno del servidor. El frontend ya no necesita la clave de DeepSeek. No se usan
+variables públicas `VITE_*` o `NEXT_PUBLIC_*` para secretos. `GET /healthz` no
+requiere autenticación ni revela configuración. `POST /v1/intents` compara el
+bearer token de forma segura, valida el cuerpo acotado y devuelve metadatos de
+versión, modelo, latencia e intentos sin exponer datos privados.
 
-El modo vivo queda pensado para uso local o del propietario mientras no haya
-autenticación, cuotas y controles de abuso delante del endpoint; no debe
-publicarse con una clave compartida sin esas capas.
+El `POST /api/routine` limita el cuerpo a 32 KiB y comprueba el origen cuando
+llegan `Origin` o `Referer`. Esto ofrece protección CSRF básica, no autenticación
+de usuarios ni cuotas. El cuerpo/input inválido devuelve 400, el modo vivo sin
+configuración devuelve 503 y un fallo del servicio devuelve 502. La demo no
+necesita Python, clave ni red. El modo vivo debe permanecer local o del propietario
+hasta tener autenticación, cuotas y controles de abuso para generación pagada.
+
+Consulta [arquitectura y despliegue Python](PYTHON-SERVICE.md) y [evaluaciones y
+regresiones](../service/evals/README.md). Los fixtures comprueban el código con
+respuestas sintéticas; no miden precisión representativa del modelo. La evaluación
+viva requiere credenciales explícitas y una acción opt-in separada de CI normal.
 
 ## Seguridad de contenido
 
 Las solicitudes que piden orientación médica, de ejercicio, financiera o legal
-reciben una intención breve de fuera de alcance y cero sesiones. Es una barrera
-de alcance basada en palabras y patrones, no un sistema completo de moderación;
-una revisión de producto debe cubrir los casos nuevos antes de ampliar el
-alcance. Las rutinas de aprendizaje, práctica creativa y trabajo personal
-general siguen disponibles.
+reciben una intención breve de fuera de alcance y cero sesiones. El guard Python
+permite una coincidencia de `dosis`/`dosage` sólo para análisis literario o
+lingüístico que excluye de forma explícita recomendaciones de salud, y una
+coincidencia de `abogado`/`lawyer` sólo en ficción o escritura creativa sobre
+personajes, escenas, diálogos o narrativa. Cualquier otra coincidencia restringida
+mantiene el rechazo. Una señal de petición directa junto con una acción médica o
+legal inequívoca en cualquier parte de la misma solicitud prevalece sobre una
+envoltura literaria o ficticia. Es una barrera basada en palabras y contexto
+acotado, no un sistema completo de moderación. Python es la autoridad de alcance
+para solicitudes enviadas al proveedor. La demo conserva un guard local con las
+mismas señales directas y excepciones contextuales acotadas; en `deepseek`,
+TypeScript usa únicamente el booleano validado por Python y no infiere el alcance
+desde `Intent`. No se establece calidad semántica de extremo a extremo ni
+preparación para producción.
 
 ## Replanificación y exportación
 

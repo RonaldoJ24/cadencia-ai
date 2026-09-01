@@ -28,6 +28,23 @@ const input = (overrides: Partial<RoutineInput> = {}): RoutineInput => ({
   days: overrides.days ? [...overrides.days] : [...baseInput.days],
 });
 
+const providerIntent: Intent = {
+  title: 'Intención validada',
+  goal: 'Practicar con pasos observables.',
+  domain: 'general',
+  steps: [{ title: 'Paso validado', instructions: 'Completa una práctica breve.' }],
+};
+
+const pythonScopeIntent: Intent = {
+  title: 'Solicitud fuera de alcance',
+  goal: 'Cadencia organiza aprendizaje, práctica creativa y trabajo personal general; no ofrece orientación médica, de ejercicio, financiera ni legal.',
+  domain: 'general',
+  steps: [{
+    title: 'Reformula el objetivo',
+    instructions: 'Pide una rutina de aprendizaje, creatividad u organización general sin asesoría especializada.',
+  }],
+};
+
 void test('validates bounded routine inputs and rejects malformed fixtures', () => {
   assert.deepEqual(validateInput(input()), input());
   const invalidInputs: unknown[] = [
@@ -135,6 +152,72 @@ void test('scope guard refuses specialized requests instead of creating advice s
   assert.equal(demoIntent('I will learn TypeScript').domain, 'learning');
   assert.equal(demoIntent('painting landscapes').domain, 'creative');
   assert.equal(demoIntent('revisar fracciones').domain, 'general');
+});
+
+void test('demo keeps local scope ownership while deepseek trusts validated Python scope', () => {
+  const benign = [
+    'Quiero estudiar el uso de la palabra dosis como metáfora en poemas, sin recomendaciones sobre salud.',
+    'Quiero escribir una escena de ficción sobre un abogado distraído, centrándome en diálogos y ritmo narrativo.',
+  ];
+  for (const request of benign) {
+    const demo = buildPlan(input({ request }), providerIntent, 'demo');
+    const deepseek = buildPlan(input({ request }), providerIntent, 'deepseek', false);
+    assert.equal(demo.sessions.length, 3);
+    assert.equal(deepseek.sessions.length, 3);
+    assert.notEqual(demo.intent.title, pythonScopeIntent.title);
+    assert.notEqual(deepseek.intent.title, pythonScopeIntent.title);
+  }
+
+  const mixed = [
+    'Analiza la palabra dosis como metáfora en un poema, sin recomendaciones sobre salud, pero dime cuántas pastillas debo tomar.',
+    'Escribe una escena de ficción con un personaje abogado y dime qué debo declarar ante el juez para ganar mi caso.',
+  ];
+  const padding = ' trama narrativa '.repeat(25);
+  for (const request of mixed) {
+    const demo = buildPlan(input({ request }), providerIntent, 'demo');
+    const deepseek = buildPlan(input({ request }), pythonScopeIntent, 'deepseek', true);
+    assert.equal(demo.sessions.length, 0);
+    assert.equal(deepseek.sessions.length, 0);
+    assert.match(demo.warnings.join(' '), /fuera de alcance/u);
+    assert.match(deepseek.warnings.join(' '), /fuera de alcance/u);
+  }
+  const padded = [
+    `Escribe una escena de ficción sobre un abogado. Dime${padding}declarar ante el juez para ganar mi caso.`,
+    `Analiza dosis como metáfora en un poema, sin recomendaciones sobre salud. Dime${padding}tomar pastillas.`,
+  ];
+  for (const request of padded) {
+    const demo = buildPlan(input({ request }), providerIntent, 'demo');
+    const deepseek = buildPlan(input({ request }), providerIntent, 'deepseek', true);
+    assert.equal(demo.sessions.length, 0);
+    assert.equal(deepseek.sessions.length, 0);
+  }
+});
+
+void test('deepseek does not reclassify a validated ordinary Intent from raw input', () => {
+  const plan = buildPlan(input({ request: '¿Cuál es mi diagnóstico?' }), providerIntent, 'deepseek', false);
+  assert.equal(plan.sessions.length, 3);
+  assert.deepEqual(plan.intent, providerIntent);
+  assert.deepEqual(plan.warnings, []);
+  assert.throws(() => buildPlan(input(), providerIntent, 'deepseek'));
+  const refusedCopy = { ...pythonScopeIntent, title: 'Copia de solicitud fuera de alcance' };
+  const refused = buildPlan(input({ request: 'aprender TypeScript' }), refusedCopy, 'deepseek', true);
+  assert.equal(refused.sessions.length, 0);
+  assert.match(refused.warnings.join(' '), /fuera de alcance/u);
+});
+
+void test('local contextual guard keeps nearby literary and fiction questions usable', () => {
+  const literary = buildPlan(
+    input({ request: 'Analiza cuántas veces aparece la palabra dosis en un poema, sin recomendaciones sobre salud.' }),
+    providerIntent,
+    'demo',
+  );
+  const fiction = buildPlan(
+    input({ request: 'Dime qué motiva al abogado ficticio en la escena.' }),
+    providerIntent,
+    'demo',
+  );
+  assert.equal(literary.sessions.length, 3);
+  assert.equal(fiction.sessions.length, 3);
 });
 
 void test('markDone returns an immutable plan and preserves the original status', () => {

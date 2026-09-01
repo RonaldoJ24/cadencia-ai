@@ -1,36 +1,68 @@
 # Entrega inicial de Cadencia
 
-Cadencia convierte un objetivo escrito en sesiones semanales, con límites explícitos de días, duración y tiempo total. La demo permite completar y reajustar sesiones, inspeccionar las comprobaciones y descargar Markdown o iCalendar. Es un prototipo de producto, no una afirmación de preparación para producción.
+> Esta nota resume un snapshot de validación local del prototipo. No establece
+> calidad semántica, uso externo, despliegue ni preparación para producción.
 
-## Orquestación realizada
+Cadencia convierte un objetivo escrito en sesiones semanales, con límites
+explícitos de días, duración y tiempo total. La demo permite completar y
+reajustar sesiones, inspeccionar las comprobaciones y descargar Markdown o
+iCalendar. El planificador y las exportaciones siguen siendo deterministas y
+locales.
 
-Se utilizaron cuatro agentes `gpt-5.6-luna` con esfuerzo `max`, verificados en sus metadatos de ejecución:
+## Evidencia local
 
-| Responsabilidad     | Entrega                                                              |
-| ------------------- | -------------------------------------------------------------------- |
-| Concepto y difusión | Concepto, roadmap, investigación oficial y narrativa de lanzamiento  |
-| Motor               | Planificador, adaptador DeepSeek, endpoint, pruebas y contrato de IA |
-| Experiencia         | Interfaz, estados, exportaciones, configuración y CI                 |
-| Imagen social       | Una pieza original de marca                                          |
+Las pruebas del frontend verifican el planificador, los límites, la
+replanificación, las exportaciones y la demo sin llamadas al proveedor. El
+servicio Python valida entrada y salida con esquemas estrictos, usa respuestas
+simuladas para las comprobaciones deterministas y conserva errores genéricos y
+redacción segura. La guía de evaluación describe los denominadores y el
+[snapshot de validación de Phase 1](PHASE1-VALIDATION.md).
 
-El agente principal definió los contratos, integró los archivos, inspeccionó el código y repitió las comprobaciones. El trabajo no reutilizó código, datos o diseños de otros proyectos del usuario. El historial corresponde al trabajo realizado; no se fabricaron fechas ni actividad pasada.
+La evaluación determinista recorre casos sintéticos mediante la ruta HTTP local
+y un transporte simulado. Sus respuestas prefabricadas sirven para calibrar
+controles, contratos, fallas y procedencia; no son evidencia de precisión,
+relevancia o calidad del proveedor. Los metadatos de proveedor observados se
+registran separados del modelo solicitado y los fixtures sin esos metadatos
+mantienen ambos contadores vacíos.
 
-Para la evolución V2 se añadieron tres carriles Luna Max: insights deterministas, calendario y texto compartible, y arquitectura/mercado. Cada carril tuvo archivos separados; la sesión principal integró la experiencia y repitió las verificaciones completas.
+## Límites actuales
 
-## Evidencia reproducible
+La sesión vive en memoria del navegador y se pierde al recargar o cerrar la
+página. La exportación es una copia, no una sincronización de calendario. El
+modo con proveedor está desactivado por defecto y requiere configuración
+explícita, credenciales fuera del repositorio y un límite positivo de intentos
+compartido entre todos los casos y reintentos.
 
-`npm test` ejecuta 29 pruebas: 28 casos del motor, proveedor, endpoint, insights, calendario y texto compartible, más una matriz que recorre 1,524 combinaciones de días, duración y presupuesto. La matriz verifica límites, reproducibilidad, conservación de sesiones completadas, cambios inmutables y exportación. Los mocks comprueban el contrato del proveedor y sus errores; no envían solicitudes reales.
+El guard de Python conserva las negativas directas para solicitudes médicas, de
+ejercicio, financieras y legales. Permite las menciones de `dosis`/`dosage` en
+análisis literario o lingüístico con una exclusión explícita de orientación de
+salud, y `abogado`/`lawyer` en escritura de ficción sobre personajes, escenas,
+diálogos o narrativa. Una señal de petición directa junto con una acción médica o
+legal inequívoca en cualquier parte de la solicitud prevalece sobre una envoltura
+literaria o ficticia. Python es la autoridad de alcance y devuelve el booleano
+interno `scope_refused` para solicitudes enviadas al proveedor. La demo conserva
+en `lib/routine.ts` un guard local con las mismas señales directas y excepciones
+contextuales acotadas; `deepseek` usa el booleano validado y no infiere alcance
+desde el texto de `Intent`. Ninguno de estos controles constituye una garantía
+semántica de extremo a extremo.
 
-`npm run typecheck` y `npm run build` verifican la integración. La revisión de dependencias con `npm audit` no reportó vulnerabilidades al preparar esta entrega. Las comprobaciones HTTP locales verificaron generación demo, rechazo de origen cruzado, entrada inválida y proveedor deshabilitado. Una prueba autorizada con `deepseek-v4-flash` el 30 de agosto de 2026 verificó también el adaptador y la ruta completa: la API respondió 200, generó una intención válida en español y el plan respetó dos sesiones de 45 minutos, el tope de 90 minutos y cuatro comprobaciones deterministas. Un recorrido automatizado local verificó generación, contenido avanzado, enfoque del campo de aclaración y diseño en escritorio y móvil. No se realizó una importación manual en una aplicación de calendario.
+No se han establecido calidad semántica, precisión del modelo, latencia
+sostenida, coste real, usuarios, validación remota de CI, validación del
+contenedor, operación desplegada ni preparación para producción. Tampoco se
+realizaron llamadas reales al proveedor como parte de este snapshot.
 
-## Límites honestos de la IA
+## Próximas comprobaciones separadas
 
-La demo usa ejemplos deterministas; no es una respuesta de un modelo. La prueba viva anterior es un caso sintético de funcionamiento, no una métrica de precisión, calidad, latencia sostenida o coste. Los límites de horario se introducen en controles; extraerlos de lenguaje libre y solicitar aclaraciones es el siguiente hito.
+1. Mantener los paquetes sintéticos congelados como calibración de controles; sus
+   grados no serían evidencia de calidad del proveedor.
+2. Autorizar por separado una línea base real con un máximo positivo de
+   intentos, registrar solicitudes y fallas, y someter sus respuestas a revisión
+   humana de valor.
+3. Verificar contenedor, autenticación de usuarios, cuotas, apagado y despliegue
+   antes de cualquier uso externo.
 
-La sesión vive sólo en memoria del navegador. El estado se pierde al recargar o cerrar la página. La exportación es una copia, no una sincronización de calendario. El modo vivo permanece desactivado por defecto; antes de abrirlo al público necesita autenticación y límites de uso.
-
-## Siguiente avance
-
-1. Ampliar la evaluación opt-in del modelo real con peticiones ficticias en español y publicar los resultados por separado.
-2. Extraer restricciones desde texto libre y pedir aclaración cuando sean ambiguas.
-3. Probar el flujo con usuarios, corregir fricción y preparar una versión pública con el modo vivo protegido o desactivado.
+Los cambios de esta fase están descritos en [AI-CONTRACT.md](AI-CONTRACT.md),
+[PYTHON-SERVICE.md](PYTHON-SERVICE.md),
+[PYTHON-VALIDATION.md](PYTHON-VALIDATION.md) y la
+[guía de evaluación](../service/evals/README.md). No se generó ningún commit,
+push, despliegue ni llamada real al proveedor para esta entrega.

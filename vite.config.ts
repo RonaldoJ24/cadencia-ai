@@ -20,9 +20,10 @@ const localBindingConfig = {
     ? {
         vars: {
           CADENCIA_ENABLE_LIVE: 'true',
-          DEEPSEEK_MODEL: process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash',
+          CADENCIA_INTENT_SERVICE_URL:
+            process.env.CADENCIA_INTENT_SERVICE_URL || 'http://127.0.0.1:8080',
         },
-        secrets: { required: ['DEEPSEEK_API_KEY'] },
+        secrets: { required: ['CADENCIA_SERVICE_TOKEN'] },
       }
     : {}),
   d1_databases: d1
@@ -55,6 +56,9 @@ export default defineConfig(async () => {
   const { cloudflare } = await import('@cloudflare/vite-plugin');
 
   return {
+    // Runtime/server variables come from the process or platform bindings. Keep
+    // Vite itself from loading dotenv files into client-facing import.meta.env.
+    envDir: false as const,
     css: { postcss: { plugins: [tailwindcss()] } },
     server: isCodexSeatbeltSandbox
       ? { watch: { useFsEvents: false, usePolling: true } }
