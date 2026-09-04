@@ -1,21 +1,12 @@
 import { type RoutinePlan, type Session } from './routine.ts';
+import { copyFor, type Language } from './i18n.ts';
 
 const GOOGLE_CALENDAR_URL = 'https://calendar.google.com/calendar/render';
 const MAX_TIME_ZONE_CHARS = 128;
 const MAX_EVENT_TITLE_CHARS = 160;
 const MAX_EVENT_DETAILS_CHARS = 2_000;
 const MAX_SHARE_CHARS = 8_000;
-const MAX_SHARE_SESSIONS = 32;
-
-const DAY_NAMES = [
-  'lunes',
-  'martes',
-  'miércoles',
-  'jueves',
-  'viernes',
-  'sábado',
-  'domingo',
-];
+const MAX_SHARE_SESSIONS = 7;
 
 function invalid(message: string): never {
   throw new Error(`Datos de calendario inválidos: ${message}`);
@@ -100,23 +91,64 @@ function googleDateTime(value: Date): string {
   return `${year}${month}${day}T${hours}${minutes}00`;
 }
 
-function validTimeZone(timeZone: string): string {
+function validTimeZone(timeZone: string, language: Language = 'en'): string {
+  const message = language === 'en'
+    ? 'Invalid IANA timezone.'
+    : 'Zona horaria IANA inválida.';
   if (
     typeof timeZone !== 'string' ||
     timeZone.length === 0 ||
     Array.from(timeZone).length > MAX_TIME_ZONE_CHARS
   ) {
-    throw new Error('Zona horaria IANA inválida.');
+    throw new Error(message);
   }
   try {
     new Intl.DateTimeFormat('en-US', { timeZone }).format(new Date(0));
   } catch {
-    throw new Error('Zona horaria IANA inválida.');
+    throw new Error(message);
   }
   return timeZone;
 }
 
-function sessionForCalendar(session: Session): {
+function structuredDetails(
+  instructions: string,
+  blocks: Array<{ minutes: number; activity: string }>,
+  deliverable: string,
+  doneWhen: string,
+  maxCharacters: number,
+  language: Language,
+): string {
+  const copy = copyFor(language).export;
+  const lines: Array<{ prefix: string; value?: string }> = [
+    { prefix: `${copy.objective}: `, value: instructions },
+    { prefix: `${copy.agenda}:` },
+    ...blocks.map((block, index) => ({
+      prefix: `${index + 1}. ${block.minutes} min — `,
+      value: block.activity,
+    })),
+    { prefix: `${copy.deliverable}: `, value: deliverable },
+    { prefix: `${copy.doneWhen}: `, value: doneWhen },
+  ];
+  const fixedCharacters = Array.from(lines.map((line) => line.prefix).join('\n')).length;
+  const valued = lines.filter((line) => line.value !== undefined);
+  const available = maxCharacters - fixedCharacters;
+  if (available < valued.length) invalid('el límite no permite representar todos los detalles.');
+  const baseQuota = Math.floor(available / valued.length);
+  let remainder = available % valued.length;
+  return lines
+    .map((line) => {
+      if (line.value === undefined) return line.prefix;
+      const quota = baseQuota + (remainder-- > 0 ? 1 : 0);
+      return `${line.prefix}${bounded(line.value, quota)}`;
+    })
+    .join('\n');
+}
+
+function sessionForCalendar(
+  session: Session,
+  language: Language,
+  detailsLimit = MAX_EVENT_DETAILS_CHARS,
+): {
   date: string;
   title: string;
   minutes: number;
@@ -125,20 +157,42 @@ function sessionForCalendar(session: Session): {
 } {
   if (!session || typeof session !== 'object') invalid('session no es válida.');
   if (session.status === 'missed') {
-    throw new Error('No se puede añadir una sesión perdida al calendario.');
+    throw new Error(
+      language === 'en'
+        ? 'A missed session cannot be added to the calendar.'
+        : 'No se puede añadir una sesión perdida al calendario.',
+    );
   }
   if (session.status !== 'planned' && session.status !== 'done') {
     invalid('session.status no es válido.');
   }
+  const minutes = sourceInteger(session.minutes, 'session.minutes', 1, 1_440);
+  if (!Array.isArray(session.blocks) || session.blocks.length === 0 || session.blocks.length > 8) {
+    invalid('session.blocks no es válido.');
+  }
+  const blocks = session.blocks.map((block, index) => ({
+    minutes: sourceInteger(block?.minutes, `session.blocks[${index}].minutes`, 1, 1_440),
+    activity: sourceText(block?.activity, `session.blocks[${index}].activity`, 500),
+  }));
+  if (blocks.reduce((total, block) => total + block.minutes, 0) !== minutes) {
+    invalid('session.blocks no suma la duración de la sesión.');
+  }
+  const instructions = sourceText(session.instructions, 'session.instructions', 2_000);
+  const deliverable = sourceText(session.deliverable, 'session.deliverable', 600);
+  const doneWhen = sourceText(session.doneWhen, 'session.doneWhen', 600);
+  const details = structuredDetails(
+    instructions,
+    blocks,
+    deliverable,
+    doneWhen,
+    detailsLimit,
+    language,
+  );
   return {
     date: sourceDate(session.date),
     title: sourceText(session.title, 'session.title', MAX_EVENT_TITLE_CHARS),
-    minutes: sourceInteger(session.minutes, 'session.minutes', 1, 1_440),
-    instructions: sourceText(
-      session.instructions,
-      'session.instructions',
-      MAX_EVENT_DETAILS_CHARS,
-    ),
+    minutes,
+    instructions: details,
     status: session.status,
   };
 }
@@ -161,8 +215,8 @@ export function googleCalendarUrl(
   timeZone: string,
 ): string {
   const time = planTime(plan);
-  const zone = validTimeZone(timeZone);
-  const current = sessionForCalendar(session);
+  const zone = validTimeZone(timeZone, plan.input.language);
+  const current = sessionForCalendar(session, plan.input.language);
   const start = localDate(current.date, time);
   const end = localDate(current.date, time, current.minutes);
   const params = new URLSearchParams({
@@ -175,10 +229,17 @@ export function googleCalendarUrl(
   return `${GOOGLE_CALENDAR_URL}?${params.toString()}`;
 }
 
-function shareSession(session: Session, time: string): string {
-  const current = sessionForCalendar(session);
+function shareSession(
+  session: Session,
+  time: string,
+  language: Language,
+  detailsLimit: number,
+): string {
+  const current = sessionForCalendar(session, language, detailsLimit);
+  const copy = copyFor(language).export;
+  const status = copy[current.status];
   return [
-    `- ${current.date} · ${time} · ${current.title} · ${current.minutes} min (${current.status})`,
+    `- ${current.date} · ${time} · ${current.title} · ${current.minutes} min (${status})`,
     `  ${current.instructions}`,
   ].join('\n');
 }
@@ -197,6 +258,8 @@ export function routineShareText(plan: RoutinePlan): string {
     'plan.intent.title',
     MAX_EVENT_TITLE_CHARS,
   );
+  const language = plan.input.language;
+  const copy = copyFor(language).export;
   const time = sourceTime(plan.input.time);
   if (!Array.isArray(plan.input.days) || plan.input.days.length === 0) {
     invalid('plan.input.days no es válido.');
@@ -210,7 +273,8 @@ export function routineShareText(plan: RoutinePlan): string {
     ) {
       invalid('plan.input.days no es válido.');
     }
-    return DAY_NAMES[day];
+    const name = copyFor(language).dayNames[day];
+    return language === 'en' ? name : name.toLocaleLowerCase('es-MX');
   });
   const sessionMinutes = sourceInteger(
     plan.input.sessionMinutes,
@@ -225,18 +289,26 @@ export function routineShareText(plan: RoutinePlan): string {
     10_080,
   );
   if (!Array.isArray(plan.sessions)) invalid('plan.sessions no es válido.');
-  const sessions = plan.sessions
+  const activeSessions = plan.sessions
     .filter((session) => session.status !== 'missed')
     .slice()
     .sort((left, right) => left.date.localeCompare(right.date))
-    .slice(0, MAX_SHARE_SESSIONS)
-    .map((session) => shareSession(session, time));
+    .slice(0, MAX_SHARE_SESSIONS);
+  const detailsLimit = activeSessions.length === 0
+    ? MAX_EVENT_DETAILS_CHARS
+    : Math.max(
+        500,
+        Math.floor((MAX_SHARE_CHARS - 400) / activeSessions.length) - 230,
+      );
+  const sessions = activeSessions.map((session) =>
+    shareSession(session, time, language, detailsLimit),
+  );
   const lines = [
     title,
-    `Cadencia: ${days.join(', ')} · ${time} · ${sessionMinutes} min por sesión · ${weeklyMinutes} min semanales`,
+    `${copy.cadence}: ${days.join(', ')} · ${time} · ${sessionMinutes} ${copy.perSession} · ${weeklyMinutes} ${copy.perWeek}`,
     '',
-    'Sesiones programadas:',
-    ...(sessions.length > 0 ? sessions : ['- No hay sesiones programadas.']),
+    copy.scheduled,
+    ...(sessions.length > 0 ? sessions : [`- ${copy.noScheduled}`]),
   ];
   return bounded(lines.join('\n'), MAX_SHARE_CHARS);
 }

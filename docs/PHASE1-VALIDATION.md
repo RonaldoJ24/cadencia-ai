@@ -166,8 +166,8 @@ Changed-source scans found no private-key/provider-token patterns. Generated rep
 logs, venv and caches remain ignored. These are targeted checks, not proof that no
 secret could ever exist.
 
-The TypeScript scheduler math, calendar, insights, UI, npm lockfile and
-`.openai/hosting.json` remain unchanged. `package.json` changes only the build command
+The TypeScript scheduler math, calendar, insights, UI and npm lockfile remain
+unchanged. `package.json` changes only the build command
 to invoke the versioned dotenv guard. The Phase 1 follow-up additionally changes/adds:
 
 - `service/evals/run.py`, `evidence.py`, `review.py`, `test_evals.py`,

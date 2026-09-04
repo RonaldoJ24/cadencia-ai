@@ -28,6 +28,25 @@ INTENT = {
     "domain": "creative",
     "steps": [{"title": "Boceto", "instructions": "Haz una primera versión pequeña."}],
 }
+ROUTINE_INTENT = {
+    "title": "Practicar acuarela",
+    "goal": "Crear dos muestras breves.",
+    "domain": "creative",
+    "steps": [
+        {
+            "title": f"Muestra {index}",
+            "instructions": "Crea y revisa una muestra concreta.",
+            "blocks": [
+                {"minutes": 5, "activity": "Prepara materiales."},
+                {"minutes": 20, "activity": "Crea la muestra."},
+                {"minutes": 5, "activity": "Revísala y guárdala."},
+            ],
+            "deliverable": f"Muestra fechada {index}.",
+            "done_when": "La muestra existe y tiene una nota de revisión.",
+        }
+        for index in (1, 2)
+    ],
+}
 PADDING = " trama narrativa " * 25
 
 
@@ -143,16 +162,29 @@ def test_valid_provider_response_contract_and_request(monkeypatch: pytest.Monkey
 
     def handler(request: httpx.Request) -> httpx.Response:
         received.append(request)
-        return envelope(usage={"prompt_tokens": 12, "completion_tokens": 20, "total_tokens": 32})
+        return envelope(
+            ROUTINE_INTENT,
+            usage={"prompt_tokens": 12, "completion_tokens": 20, "total_tokens": 32},
+        )
 
     client = mock_client(handler)
     app.state.provider_client = client
-    response = run(app_request(body=json.dumps({"request": "practicar acuarela"})))
+    response = run(
+        app_request(
+            body=json.dumps(
+                {
+                    "request": "practicar acuarela",
+                    "session_count": 2,
+                    "session_minutes": 30,
+                }
+            )
+        )
+    )
     run(client.aclose())
     assert response.status_code == 200
     body = response.json()
     assert set(body) == {"intent", "scope_refused", "meta"}
-    assert body["intent"] == INTENT
+    assert body["intent"] == ROUTINE_INTENT
     assert body["scope_refused"] is False
     assert body["meta"]["prompt_version"] == provider.PROMPT_VERSION
     assert body["meta"]["model"] == MODEL
@@ -165,9 +197,51 @@ def test_valid_provider_response_contract_and_request(monkeypatch: pytest.Monkey
     assert payload["response_format"] == {"type": "json_object"}
     assert payload["thinking"] == {"type": "disabled"}
     assert payload["temperature"] == 0.2
-    assert payload["max_tokens"] == 800
+    assert payload["max_tokens"] == 4_000
     assert payload["stream"] is False
     assert "tools" not in payload
+    assert "session_count=2" in payload["messages"][1]["content"]
+    assert "session_minutes=30" in payload["messages"][1]["content"]
+    assert "language=en" in payload["messages"][1]["content"]
+    assert "done_when" in payload["messages"][0]["content"]
+
+
+@pytest.mark.parametrize(
+    ("language", "prompt_marker"),
+    [("en", "Every user-visible content value must be written in English."),
+     ("es", "Cada valor visible para el usuario debe estar escrito en español.")],
+)
+def test_language_selects_provider_prompt_without_request_text_inference(
+    monkeypatch: pytest.MonkeyPatch,
+    language: str,
+    prompt_marker: str,
+) -> None:
+    configure(monkeypatch)
+    received: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        received.append(request)
+        return envelope(ROUTINE_INTENT)
+
+    client = mock_client(handler)
+    app.state.provider_client = client
+    response = run(
+        app_request(
+            body=json.dumps(
+                {
+                    "request": "learn watercolor",
+                    "language": language,
+                    "session_count": 2,
+                    "session_minutes": 30,
+                }
+            )
+        )
+    )
+    run(client.aclose())
+    assert response.status_code == 200
+    payload = json.loads(received[0].content)
+    assert prompt_marker in payload["messages"][0]["content"]
+    assert f"language={language}" in payload["messages"][1]["content"]
 
 
 def test_scope_refusal_is_exact_and_skips_provider(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -185,7 +259,7 @@ def test_scope_refusal_is_exact_and_skips_provider(monkeypatch: pytest.MonkeyPat
     run(client.aclose())
     assert response.status_code == 200
     body = response.json()
-    assert body["intent"] == provider.scope_intent().model_dump()
+    assert body["intent"] == provider.scope_intent().model_dump(exclude_none=True)
     assert body["scope_refused"] is True
     assert body["meta"]["attempts"] == 0
     assert calls == 0
@@ -262,7 +336,7 @@ def test_mixed_contextual_requests_are_refused_before_provider(
     run(client.aclose())
     body = response.json()
     assert response.status_code == 200
-    assert body["intent"] == provider.scope_intent().model_dump()
+    assert body["intent"] == provider.scope_intent().model_dump(exclude_none=True)
     assert body["scope_refused"] is True
     assert body["meta"]["attempts"] == 0
     assert calls == 0
@@ -295,6 +369,9 @@ def test_contextual_exceptions_do_not_relax_direct_scope_refusals(raw_request: s
         {"request": "😀" * 1_001},
         {"request": 42},
         {"request": "aprender", "extra": True},
+        {"request": "aprender", "language": "fr"},
+        {"request": "aprender", "session_count": 2},
+        {"request": "aprender", "session_minutes": 30},
     ],
 )
 def test_strict_input_validation(monkeypatch: pytest.MonkeyPatch, raw: dict[str, Any]) -> None:
@@ -503,6 +580,25 @@ def test_empty_malformed_and_schema_invalid_provider_output(
     run(client.aclose())
     assert raised.value.attempts == 1
     assert raised.value.SAFE_MESSAGE not in {""}
+
+
+def test_scheduled_output_must_match_count_and_minutes(monkeypatch: pytest.MonkeyPatch) -> None:
+    configure(monkeypatch)
+    client = mock_client(lambda request: envelope(INTENT))
+    with pytest.raises(provider.ProviderError) as raised:
+        run(
+            provider.generate_intent(
+                "practicar acuarela",
+                request_id=REQUEST_ID,
+                session_count=2,
+                session_minutes=30,
+                client=client,
+            )
+        )
+    run(client.aclose())
+    assert raised.value.outcome == "malformed_response"
+    assert raised.value.provider_completed is True
+    assert raised.value.schema_valid is False
 
 
 class OversizedStream(AsyncByteStream):

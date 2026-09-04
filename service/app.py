@@ -42,10 +42,24 @@ except ImportError:  # Allows `uvicorn app:app` from the service directory.
 
 MAX_BODY_BYTES = 32_768
 BODY_TIMEOUT_SECONDS = 5.0
-ERROR_INVALID = "La solicitud no es válida."
-ERROR_UNAUTHORIZED = "No autorizado."
-ERROR_PROVIDER = "No se pudo generar la intención."
-ERROR_INTERNAL = "No se pudo completar la solicitud."
+ERRORS = {
+    "en": {
+        "invalid": "The request is invalid.",
+        "unauthorized": "Not authorized.",
+        "provider": "The AI provider could not generate the intention.",
+        "internal": "The request could not be completed.",
+    },
+    "es": {
+        "invalid": "La solicitud no es válida.",
+        "unauthorized": "No autorizado.",
+        "provider": "No se pudo generar la intención con el proveedor.",
+        "internal": "No se pudo completar la solicitud.",
+    },
+}
+ERROR_INVALID = ERRORS["en"]["invalid"]
+ERROR_UNAUTHORIZED = ERRORS["en"]["unauthorized"]
+ERROR_PROVIDER = ERRORS["en"]["provider"]
+ERROR_INTERNAL = ERRORS["en"]["internal"]
 
 
 class _BodyTooLarge(Exception):
@@ -81,6 +95,15 @@ def _error(message: str, request_id: str, status_code: int) -> JSONResponse:
         status_code=status_code,
         request_id=request_id,
     )
+
+
+def _language(value: Any) -> str:
+    candidate = value.get("language") if isinstance(value, dict) else None
+    return candidate if isinstance(candidate, str) and candidate in ERRORS else "en"
+
+
+def _error_text(language: str, key: str) -> str:
+    return ERRORS.get(language, ERRORS["en"])[key]
 
 
 def _authorized(request: Request) -> bool:
@@ -154,6 +177,7 @@ def _log_client_failure(request_id: str, outcome: str, *, status_category: str =
     )
 
 
+@app.get("/livez")
 @app.get("/healthz")
 async def healthz() -> JSONResponse:
     return _json_response({"status": "ok"}, status_code=200)
@@ -162,35 +186,40 @@ async def healthz() -> JSONResponse:
 @app.post("/v1/intents")
 async def intents(request: Request) -> JSONResponse:
     request_id = _request_id()
+    language = "en"
     if not _authorized(request):
         _log_client_failure(request_id, "unauthorized")
-        return _error(ERROR_UNAUTHORIZED, request_id, 401)
+        return _error(_error_text(language, "unauthorized"), request_id, 401)
 
     try:
         raw = await _read_body(request)
         value = _parse_request_body(raw)
+        language = _language(value)
         intent_request = IntentRequest.model_validate(value, strict=True)
     except _BodyTooLarge:
         _log_client_failure(request_id, "body_too_large")
-        return _error(ERROR_INVALID, request_id, 413)
+        return _error(_error_text(language, "invalid"), request_id, 413)
     except _UnsupportedEncoding:
         _log_client_failure(request_id, "unsupported_encoding")
-        return _error(ERROR_INVALID, request_id, 400)
+        return _error(_error_text(language, "invalid"), request_id, 400)
     except _BodyTimeout:
         _log_client_failure(request_id, "body_timeout")
-        return _error(ERROR_INVALID, request_id, 408)
+        return _error(_error_text(language, "invalid"), request_id, 408)
     except (ValueError, ValidationError, TypeError):
         _log_client_failure(request_id, "invalid_request")
-        return _error(ERROR_INVALID, request_id, 400)
+        return _error(_error_text(language, "invalid"), request_id, 400)
     except Exception:
         _log_client_failure(request_id, "invalid_request")
-        return _error(ERROR_INVALID, request_id, 400)
+        return _error(_error_text(language, "invalid"), request_id, 400)
 
     injected_client = getattr(request.app.state, "provider_client", None)
     try:
         result = await generate_intent(
             intent_request.request,
             request_id=request_id,
+            language=intent_request.language,
+            session_count=intent_request.session_count,
+            session_minutes=intent_request.session_minutes,
             client=injected_client,
         )
     except ProviderError as failure:
@@ -206,10 +235,10 @@ async def intents(request: Request) -> JSONResponse:
             usage=failure.usage,
         )
         status = 503 if failure.outcome == "configuration_error" else 502
-        return _error(ERROR_PROVIDER, request_id, status)
+        return _error(failure.safe_message, request_id, status)
     except Exception:
         _log_client_failure(request_id, "internal_error", status_category="internal")
-        return _error(ERROR_INTERNAL, request_id, 500)
+        return _error(_error_text(language, "internal"), request_id, 500)
 
     log_event(
         logger=LOGGER,
@@ -233,7 +262,11 @@ async def intents(request: Request) -> JSONResponse:
             attempts=result.attempts,
         ),
     )
-    return _json_response(response.model_dump(mode="json"), status_code=200, request_id=request_id)
+    return _json_response(
+        response.model_dump(mode="json", exclude_none=True),
+        status_code=200,
+        request_id=request_id,
+    )
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -242,7 +275,7 @@ async def http_error_handler(request: Request, exception: StarletteHTTPException
     request_id = _request_id()
     _log_client_failure(request_id, "http_error", status_category="client")
     status = exception.status_code if 400 <= exception.status_code < 500 else 500
-    return _error(ERROR_INVALID if status < 500 else ERROR_INTERNAL, request_id, status)
+    return _error(_error_text("en", "invalid" if status < 500 else "internal"), request_id, status)
 
 
 @app.exception_handler(RequestValidationError)
@@ -250,7 +283,7 @@ async def validation_error_handler(request: Request, exception: RequestValidatio
     del request, exception
     request_id = _request_id()
     _log_client_failure(request_id, "invalid_request")
-    return _error(ERROR_INVALID, request_id, 400)
+    return _error(_error_text("en", "invalid"), request_id, 400)
 
 
 @app.exception_handler(Exception)
@@ -258,7 +291,7 @@ async def unexpected_error_handler(request: Request, exception: Exception) -> JS
     del request, exception
     request_id = _request_id()
     _log_client_failure(request_id, "internal_error", status_category="internal")
-    return _error(ERROR_INTERNAL, request_id, 500)
+    return _error(_error_text("en", "internal"), request_id, 500)
 
 
 __all__ = ["MAX_BODY_BYTES", "app", "healthz", "intents"]

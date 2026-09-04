@@ -2,13 +2,15 @@
 
 ![Cadencia — De intención a rutina](public/og.png)
 
-Cadencia is a small Spanish language routine compiler. You describe what you want to keep doing, choose the days and time that are actually available, and receive a weekly plan that can be inspected, adjusted, and downloaded.
+Cadencia is a small bilingual routine compiler. English is the cold-start language; the visible EN/ES control switches the experience to Spanish and remembers only that language preference in the browser. You describe what you want to keep doing, choose the days and time that are actually available, and receive a weekly plan that can be inspected, adjusted, and downloaded.
 
-The product separates two jobs. The optional provider can propose the intent and session content; the deterministic engine checks the selected Monday week, allowed days, session duration, local time, and weekly cap. Values from the controls always win over details in the free text request. The local demo uses no model and carries the label `Demo local · sin modelo`; it must not be read as a successful AI response.
+The product separates two jobs. The optional provider can propose the intent and session content; the deterministic engine checks the selected Monday week, allowed days, session duration, local time, and weekly cap. Values from the controls always win over details in the free text request. The local demo uses no model and carries a localized label; it must not be read as a successful AI response.
 
-The product sample is Spanish even when the goal is English practice:
+The product sample starts in English:
 
-> Practicar inglés para entrevistas de trabajo, con foco en responder con más seguridad.
+> Practice English for job interviews, focusing on answering with more confidence.
+
+Selecting ES changes the sample, deterministic plan copy, insights, dates, and export labels to Spanish. The selected `language` is validated at the shared routine boundary and sent as a separate field to the Python service; it is never inferred from the request text.
 
 You can also load examples for learning TypeScript or writing every week. After generating a plan, Cadencia explains the available capacity, projects four weeks of practice time without promising results, asks for missing context, and defines observable progress signals. You can mark a session complete, replan a missed session, add the selected session to Google Calendar, export the whole routine for Apple or Outlook, or share a plain-text copy with someone you trust.
 
@@ -38,15 +40,26 @@ CADENCIA_ENABLE_LIVE=false npm run dev
 ```
 
 The browser demo calls `buildPlan` locally without Python, credentials, or a model
-request. Its label remains `Demo local · sin modelo`. The API demo path is also
-local. The optional availability check is not a provider health check.
+request. Its label is localized (`Local demo · no model` in English or `Demo local · sin modelo` in Spanish). The API demo path is also local. The optional availability check is not a provider health check.
 
 ## Live service mode
 
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and Python 3.12+.
 Keep secrets in server-side process environments or a secret manager. The Python
 service does not read dotenv files. Do not put any key in `NEXT_PUBLIC_*` or `VITE_*`.
-`.env.example` documents names and safe defaults; `.env.local` remains ignored.
+`.env.example` documents names and safe defaults; dotenv files remain ignored.
+
+For local owner-only use, put `DEEPSEEK_API_KEY` in `service/.env.local` and
+start both servers with one command:
+
+```bash
+npm run dev:live
+```
+
+The launcher creates an ephemeral internal service token, sends the DeepSeek key
+only to Python, and enables the frontend's live route on loopback. This command
+uses Vinext's local Node runtime; Cloudflare remains in the build/deploy path.
+Choose `Connected AI` explicitly in the app. Stop both servers with `Ctrl+C`.
 
 | Environment variable | Where | Purpose |
 | --- | --- | --- |
@@ -57,7 +70,8 @@ service does not read dotenv files. Do not put any key in `NEXT_PUBLIC_*` or `VI
 | `DEEPSEEK_MODEL` | Python only | Optional model override; default `deepseek-v4-flash` |
 | `PORT` | Python container | Listening port; defaults to 8080 |
 
-After securely injecting the Python key and shared token, start Python:
+For separate terminals or non-local environments, securely inject the Python key
+and shared token, then start Python:
 
 ```bash
 uv sync --project service --frozen --python 3.12
@@ -72,8 +86,9 @@ CADENCIA_INTENT_SERVICE_URL=http://127.0.0.1:8080 \
 CLOUDFLARE_INCLUDE_PROCESS_ENV=true npm run dev
 ```
 
-Choose `IA conectada` explicitly. Only the request text crosses into Python and
-DeepSeek; scheduling controls stay in TypeScript. Avoid sensitive information.
+Choose `Connected AI` explicitly. The request text and validated language cross
+into Python and DeepSeek; scheduling controls stay in TypeScript. Avoid sensitive
+information.
 Read the provider's current pricing and data terms before enabling paid calls.
 The internal token authenticates the frontend server, not end users. Keep the
 frontend local or owner-only until authentication, quotas, and abuse controls

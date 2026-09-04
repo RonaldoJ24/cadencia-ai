@@ -189,8 +189,8 @@ process are described in [Deploy container images](https://docs.cloud.google.com
 Configure the returned HTTPS base URL as `CADENCIA_INTENT_SERVICE_URL`, the same
 token as the frontend server's secret `CADENCIA_SERVICE_TOKEN`, and
 `CADENCIA_ENABLE_LIVE=true` only in an approved owner-only frontend runtime. No
-DeepSeek key is needed there. For this Sites-managed frontend, runtime settings
-and publishing belong to its existing hosting workflow; no hosting changes were
+DeepSeek key is needed there. For the local frontend, runtime settings and
+publishing belong to its existing workflow; no frontend hosting changes were
 made here. Verify health, unauthorized rejection, and an explicitly authorized
 synthetic intent call through the frontend. Save revision, timestamp, safe
 request ID and result metadata; do not publish secret values or model text.

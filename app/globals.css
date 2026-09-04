@@ -174,6 +174,43 @@ textarea:focus-visible {
   font-size: 11px;
 }
 
+.language-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 2px;
+  border: 1px solid rgb(122 155 128 / 42%);
+  border-radius: 999px;
+  background: #f4f8ee;
+}
+
+.language-option {
+  min-width: 28px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #6c8877;
+  cursor: pointer;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.language-option:hover,
+.language-option.is-selected {
+  background: #dcebd3;
+  color: var(--foreground);
+}
+
+.language-option:focus-visible {
+  outline: 2px solid rgb(110 154 118 / 65%);
+  outline-offset: 1px;
+}
+
 .mode-pill {
   display: inline-flex;
   align-items: center;
@@ -1312,6 +1349,63 @@ textarea:focus-visible {
   line-height: 1.45;
 }
 
+.session-objective {
+  max-width: 68ch;
+}
+
+.session-agenda {
+  display: grid;
+  gap: 0;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: agenda;
+}
+
+.session-agenda li {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 10px;
+  padding: 9px 0;
+  border-top: 1px solid #dbe7d5;
+}
+
+.session-agenda li > span,
+.session-proof-grid span {
+  color: #688477;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.session-agenda p,
+.session-proof-grid p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.session-proof-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 11px;
+}
+
+.session-proof-grid > div {
+  padding: 10px;
+  border: 1px solid #d6e3d1;
+  border-radius: 4px;
+  background: rgb(255 255 255 / 55%);
+}
+
+.session-proof-grid p {
+  margin-top: 4px;
+}
+
 .detail-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1718,7 +1812,8 @@ textarea:focus-visible {
   }
 
   .insight-metrics,
-  .insight-columns {
+  .insight-columns,
+  .session-proof-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 

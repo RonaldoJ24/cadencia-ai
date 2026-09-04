@@ -12,6 +12,10 @@ import {
   type Intent,
   type RoutineInput,
 } from '../lib/routine.ts';
+import {
+  copyFor,
+  isCurrentRequestGeneration,
+} from '../lib/i18n.ts';
 
 const baseInput: RoutineInput = {
   request: 'aprender TypeScript',
@@ -20,6 +24,7 @@ const baseInput: RoutineInput = {
   weeklyMinutes: 90,
   startDate: '2026-08-31',
   time: '18:00',
+  language: 'es',
 };
 
 const input = (overrides: Partial<RoutineInput> = {}): RoutineInput => ({
@@ -32,7 +37,17 @@ const providerIntent: Intent = {
   title: 'Intención validada',
   goal: 'Practicar con pasos observables.',
   domain: 'general',
-  steps: [{ title: 'Paso validado', instructions: 'Completa una práctica breve.' }],
+  steps: Array.from({ length: 3 }, (_, index) => ({
+    title: `Paso validado ${index + 1}`,
+    instructions: 'Completa una práctica breve.',
+    blocks: [
+      { minutes: 5, activity: 'Prepara la evidencia.' },
+      { minutes: 20, activity: 'Completa la práctica.' },
+      { minutes: 5, activity: 'Revisa el resultado.' },
+    ],
+    deliverable: `Evidencia ${index + 1}.`,
+    doneWhen: 'La evidencia existe y fue revisada.',
+  })),
 };
 
 const pythonScopeIntent: Intent = {
@@ -76,7 +91,32 @@ void test('validates intent shape and accepts Unicode content', () => {
   assert.throws(() => validateIntent({ ...intent, steps: [] }));
 });
 
-void test('demo output is deterministic, Spanish first, and preserves request', () => {
+void test('live intent validation requires one exact timed agenda per session', () => {
+  assert.doesNotThrow(() =>
+    validateIntent(providerIntent, { sessionCount: 3, sessionMinutes: 30 }),
+  );
+  assert.throws(() =>
+    validateIntent(
+      { ...providerIntent, steps: providerIntent.steps.slice(0, 2) },
+      { sessionCount: 3, sessionMinutes: 30 },
+    ),
+  );
+  assert.throws(() =>
+    validateIntent(
+      {
+        ...providerIntent,
+        steps: providerIntent.steps.map((step, index) =>
+          index === 0
+            ? { ...step, blocks: [{ minutes: 29, activity: 'Agenda incompleta.' }] }
+            : step,
+        ),
+      },
+      { sessionCount: 3, sessionMinutes: 30 },
+    ),
+  );
+});
+
+void test('demo output is deterministic, preserves request, and follows the selected locale', () => {
   const first = buildPlan(input());
   const second = buildPlan(input());
   assert.deepEqual(first, second);
@@ -84,6 +124,99 @@ void test('demo output is deterministic, Spanish first, and preserves request', 
   assert.equal(first.mode, 'demo');
   assert.match(first.explanation, /determinista/u);
   assert.equal(first.sessions.length, 3);
+  assert.ok(first.sessions.every(
+    (session) => session.blocks.reduce((sum, block) => sum + block.minutes, 0) === 30,
+  ));
+  assert.ok(first.sessions.every((session) => session.deliverable && session.doneWhen));
+});
+
+void test('English is the default and Spanish localizes deterministic plan primitives', () => {
+  const defaultInput = validateInput({ ...baseInput, language: undefined });
+  assert.equal(defaultInput.language, 'en');
+  assert.equal(copyFor(defaultInput.language).ui.createRoutine, 'Create my routine');
+
+  const english = buildPlan(input({ language: 'en' }));
+  assert.equal(english.input.language, 'en');
+  assert.match(english.intent.title, /^Learning:/u);
+  assert.match(english.sessions[0].instructions, /Complete session/u);
+  assert.match(english.checks.map((check) => check.label).join(' '), /Selected days/u);
+  assert.match(toMarkdown(english), /## Sessions/u);
+  assert.match(toICS(english), /Weekly plan/u);
+
+  const spanish = buildPlan(input({ language: 'es' }));
+  assert.equal(spanish.input.language, 'es');
+  assert.match(spanish.intent.title, /^Aprendizaje:/u);
+  assert.match(spanish.sessions[0].instructions, /Completa la sesión/u);
+  assert.match(spanish.checks.map((check) => check.label).join(' '), /Días elegidos/u);
+  assert.match(toMarkdown(spanish), /## Sesiones/u);
+  assert.match(toICS(spanish), /Plan semanal/u);
+  assert.equal(copyFor('es').ui.createRoutine, 'Crear mi rutina');
+  assert.equal(copyFor('en').ui.downloadMarkdownFilename, 'cadencia-routine.md');
+  assert.equal(copyFor('en').ui.downloadIcsFilename, 'cadencia-routine.ics');
+  assert.equal(copyFor('es').ui.downloadMarkdownFilename, 'cadencia-rutina.md');
+  assert.equal(copyFor('es').ui.downloadIcsFilename, 'cadencia-rutina.ics');
+});
+
+void test('session count copy pluralizes Spanish without regressing English', () => {
+  assert.equal(copyFor('es').ui.sessionCount(1, 30), '1 sesión · 30 min');
+  assert.equal(copyFor('es').ui.sessionCount(4, 120), '4 sesiones · 120 min');
+  assert.equal(copyFor('en').ui.sessionCount(1, 30), '1 session · 30 min');
+  assert.equal(copyFor('en').ui.sessionCount(4, 120), '4 sessions · 120 min');
+});
+
+void test('the first edit starts from the currently displayed localized input', () => {
+  const englishSample = input({
+    language: 'en',
+    request: 'Practice English for job interviews.',
+    days: [0, 1, 2, 3, 4],
+    sessionMinutes: 30,
+    weeklyMinutes: 90,
+    time: '07:30',
+  });
+  const spanishSample = input({
+    ...englishSample,
+    language: 'es',
+    request: 'Practicar inglés para entrevistas de trabajo.',
+  });
+
+  const edited = {
+    ...spanishSample,
+    weeklyMinutes: 60,
+    language: spanishSample.language,
+  };
+
+  assert.equal(edited.language, 'es');
+  assert.equal(edited.request, spanishSample.request);
+  assert.deepEqual(edited.days, spanishSample.days);
+  assert.equal(edited.sessionMinutes, spanishSample.sessionMinutes);
+  assert.equal(edited.weeklyMinutes, 60);
+  assert.notEqual(edited.request, englishSample.request);
+});
+
+void test('only the current request generation may commit', () => {
+  let committed = '';
+  const commit = (currentGeneration: number, requestGeneration: number, value: string) => {
+    if (isCurrentRequestGeneration(currentGeneration, requestGeneration)) committed = value;
+  };
+
+  commit(1, 1, 'first');
+  commit(2, 2, 'current');
+  commit(2, 1, 'stale response');
+  commit(2, 1, 'stale error');
+
+  assert.equal(committed, 'current');
+});
+
+void test('internal UI failures map to safe locale-specific copy', () => {
+  const internalMessage = 'Entrada inválida: secret validation details';
+  assert.equal(copyFor('en').ui.createError, 'We could not create this routine.');
+  assert.equal(copyFor('es').ui.createError, 'No pudimos crear esta rutina.');
+  assert.equal(copyFor('en').ui.updateError, 'We could not update this routine.');
+  assert.equal(copyFor('es').ui.updateError, 'No pudimos actualizar esta rutina.');
+  assert.equal(copyFor('en').ui.calendarError, 'We could not prepare the calendar event.');
+  assert.equal(copyFor('es').ui.calendarError, 'No pudimos preparar el evento de calendario.');
+  assert.doesNotMatch(copyFor('en').ui.createError, new RegExp(internalMessage, 'u'));
+  assert.doesNotMatch(copyFor('es').ui.updateError, new RegExp(internalMessage, 'u'));
 });
 
 void test('fixture cases cover the three supported domains without model claims', () => {
@@ -136,7 +269,13 @@ void test('long valid step titles remain valid after session prefixing', () => {
     title: 'Título',
     goal: 'Objetivo',
     domain: 'general',
-    steps: [{ title: longTitle, instructions: 'Instrucciones.' }],
+    steps: [{
+      title: longTitle,
+      instructions: 'Instrucciones.',
+      blocks: [{ minutes: 30, activity: 'Completa la práctica.' }],
+      deliverable: 'Evidencia terminada.',
+      doneWhen: 'La evidencia existe.',
+    }],
   };
   const plan = buildPlan(input({ days: [0] }), intent);
   assert.equal(plan.sessions[0].title.length, 160);
@@ -261,7 +400,13 @@ void test('ICS is local floating, namespaced, escaped, folded, and excludes miss
     title: '<Rutina>,;\\',
     goal: 'Objetivo',
     domain: 'general',
-    steps: [{ title: 'Paso [x],;', instructions: 'Línea 1,;\\\nLínea 2 con una cadena muy larga para comprobar el plegado de líneas Unicode: café 🎨.' }],
+    steps: Array.from({ length: 2 }, () => ({
+      title: 'Paso [x],;',
+      instructions: 'Línea 1,;\\\nLínea 2 con una cadena muy larga para comprobar el plegado de líneas Unicode: café 🎨.',
+      blocks: [{ minutes: 30, activity: 'Completa la pieza,;\\ y guarda café 🎨.' }],
+      deliverable: 'Pieza,;\\ terminada.',
+      doneWhen: 'La pieza existe y fue revisada.',
+    })),
   };
   const plan = buildPlan(input({ request: 'escribir una pieza', days: [0, 1], weeklyMinutes: 60 }), intent);
   const missed = replan(plan, plan.sessions[0].id);
@@ -283,7 +428,13 @@ void test('Markdown exports generated content as text, including escaped session
     title: '<Título>',
     goal: 'Objetivo',
     domain: 'general',
-    steps: [{ title: '[paso] *', instructions: '<script>alert(1)</script>' }],
+    steps: [{
+      title: '[paso] *',
+      instructions: '<script>alert(1)</script>',
+      blocks: [{ minutes: 30, activity: '<script>práctica</script>' }],
+      deliverable: '<entregable>',
+      doneWhen: '<criterio> listo',
+    }],
   };
   const markdown = toMarkdown(buildPlan(input({ days: [0] }), intent));
   assert.match(markdown, /&lt;Título&gt;/u);

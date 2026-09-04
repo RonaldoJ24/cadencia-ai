@@ -1,14 +1,34 @@
 import { buildPlan, validateInput, validateIntent } from '../../../lib/routine.ts';
+import type { RoutineInput } from '../../../lib/routine.ts';
+import { copyFor, languageFrom } from '../../../lib/i18n.ts';
 
 const MAX_BODY_BYTES = 32_768;
 const MAX_RESPONSE_BYTES = 32_768;
 const SERVICE_TIMEOUT_MS = 25_000;
 const SERVICE_PATH = '/v1/intents';
-const SERVICE_ERROR = 'El proveedor de IA no está disponible.';
+const RUNTIME_ENV_KEY = '__cadencia_runtime_env_v1';
 const REQUEST_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 type Dict = Record<string, unknown>;
+type RuntimeEnv = {
+  CADENCIA_ENABLE_LIVE?: unknown;
+  CADENCIA_INTENT_SERVICE_URL?: unknown;
+  CADENCIA_SERVICE_TOKEN?: unknown;
+};
+
+function configuredRuntimeEnv(value: unknown): RuntimeEnv | null {
+  const source = dict(value);
+  if (
+    !source ||
+    typeof source.CADENCIA_ENABLE_LIVE !== 'string' ||
+    typeof source.CADENCIA_INTENT_SERVICE_URL !== 'string' ||
+    typeof source.CADENCIA_SERVICE_TOKEN !== 'string'
+  ) {
+    return null;
+  }
+  return source as RuntimeEnv;
+}
 
 function dict(value: unknown): Dict | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -28,16 +48,76 @@ function json(body: unknown, status = 200, requestId?: string): Response {
   });
 }
 
-async function runtimeEnv(): Promise<Record<string, unknown>> {
+function errorResponse(
+  message: string,
+  status: number,
+  reason: string,
+  requestId?: string,
+  diagnostic?: Dict,
+): Response {
+  const reference = crypto.randomUUID();
+  console.error(
+    JSON.stringify({
+      event: 'cadencia_routine_failure',
+      reference,
+      reason,
+      status,
+      ...(requestId ? { request_id: requestId } : {}),
+      ...(diagnostic ? { diagnostic } : {}),
+    }),
+  );
+  return json({ error: message, reference }, status, requestId);
+}
+
+function fetchDiagnostic(error: unknown): Dict {
+  if (!(error instanceof Error)) return { error_type: typeof error };
+  // Preserve only a coarse transport category. Never persist an upstream
+  // exception message: it could include configuration or credentials.
+  const message = error.message.toLowerCase();
+  const category = message.includes('redirect')
+    ? 'redirect'
+    : message.includes('header')
+      ? 'header'
+      : message.includes('private network')
+        ? 'private_network'
+        : message.includes('network') || message.includes('connect')
+          ? 'network'
+          : message.includes('tls') || message.includes('certificate')
+            ? 'tls'
+            : message.includes('url')
+              ? 'url'
+              : message.includes('abort')
+                ? 'abort'
+                : message.includes('fetch')
+                  ? 'fetch'
+                  : 'other';
+  return { error_name: error.name, category };
+}
+
+async function runtimeEnv(): Promise<RuntimeEnv> {
+  // Vinext's top-level Worker receives bindings as fetch's second argument.
+  // The custom entry stores only this route's three required strings under a
+  // non-enumerable server-side key; it is never sent in a response or logged.
+  const bridged = configuredRuntimeEnv(
+    (globalThis as Record<string, unknown>)[RUNTIME_ENV_KEY],
+  );
+  if (bridged) return bridged;
+
+  // With nodejs_compat, Cloudflare populates process.env from text and secret
+  // bindings. Prefer it here: Vinext's request-time dynamic module import can
+  // resolve successfully without exposing this route's binding map.
+  const processSource = typeof process === 'undefined' ? undefined : process.env;
+  const processBindings = configuredRuntimeEnv(processSource);
+  if (processBindings) return processBindings;
   try {
     const worker = await import('cloudflare:workers');
-    return worker.env as Record<string, unknown>;
+    return configuredRuntimeEnv(worker.env) ?? {};
   } catch {
-    return process.env;
+    return processSource ?? {};
   }
 }
 
-function env(source: Record<string, unknown>, name: string): string {
+function env(source: RuntimeEnv, name: keyof RuntimeEnv): string {
   const value = source[name];
   return typeof value === 'string' ? value.trim() : '';
 }
@@ -151,13 +231,34 @@ async function bodyJson(request: Request): Promise<unknown> {
   }
 }
 
+type ServiceFailureReason =
+  | 'invalid_authorization_header'
+  | 'upstream_redirect'
+  | 'upstream_timeout'
+  | 'upstream_fetch_failed'
+  | 'upstream_invalid_response'
+  | 'backend_rejected';
+
 class ServiceFailure extends Error {
   readonly requestId?: string;
+  readonly backendRejected: boolean;
+  readonly reason: ServiceFailureReason;
+  readonly diagnostic?: Dict;
 
-  constructor(requestId?: string) {
-    super(SERVICE_ERROR);
+  constructor(
+    requestId?: string,
+    backendRejected = false,
+    reason: ServiceFailureReason = backendRejected
+      ? 'backend_rejected'
+      : 'upstream_invalid_response',
+    diagnostic?: Dict,
+  ) {
+    super('service-failure');
     this.name = 'ServiceFailure';
     this.requestId = requestId;
+    this.backendRejected = backendRejected;
+    this.reason = reason;
+    this.diagnostic = diagnostic;
   }
 }
 
@@ -178,6 +279,10 @@ function requestIdFromBody(raw: string): string | undefined {
 
 function safeRequestId(value: string | undefined, token: string): string | undefined {
   return value && value.toLowerCase() !== token.toLowerCase() ? value : undefined;
+}
+
+function redirectDiagnostic(response: Response): Dict {
+  return { redirect_status: response.status };
 }
 
 function timed<T>(
@@ -249,7 +354,6 @@ async function readLimitedText(
       chunks.push(part.value);
     }
   } catch (error) {
-    controller.abort();
     void reader.cancel().catch(() => undefined);
     throw error;
   }
@@ -263,30 +367,58 @@ async function readLimitedText(
 }
 
 async function requestIntent(
-  input: string,
+  input: RoutineInput,
   config: LiveConfig,
   fetcher: typeof fetch = globalThis.fetch,
 ): Promise<{ intent: unknown; scopeRefused: boolean; requestId?: string }> {
+  let headers: Headers;
+  try {
+    headers = new Headers({
+      authorization: `Bearer ${config.token}`,
+      'content-type': 'application/json',
+    });
+  } catch {
+    throw new ServiceFailure(undefined, false, 'invalid_authorization_header');
+  }
+
   const controller = new AbortController();
   const deadline = Date.now() + SERVICE_TIMEOUT_MS;
   let responseRequestId: string | undefined;
   let response: Response;
+  let phase: 'fetch' | 'response' = 'fetch';
   try {
     response = await timed(
       () =>
-        fetcher(config.serviceUrl, {
+        // Workers' native fetch is host-backed. Preserve its global receiver
+        // instead of calling a detached function from the route module.
+        fetcher.call(globalThis, config.serviceUrl, {
           method: 'POST',
-          headers: {
-            authorization: `Bearer ${config.token}`,
-            'content-type': 'application/json',
-          },
-          body: JSON.stringify({ request: input }),
-          redirect: 'error',
+          headers,
+          body: JSON.stringify({
+            request: input.request,
+            language: input.language,
+            session_count: Math.min(
+              input.days.length,
+              Math.floor(input.weeklyMinutes / input.sessionMinutes),
+            ),
+            session_minutes: input.sessionMinutes,
+          }),
+          // Inspect redirects before any token could be sent to a new origin.
+          redirect: 'manual',
           signal: controller.signal,
         }),
       controller,
       deadline,
     );
+    phase = 'response';
+    if (response.status >= 300 && response.status < 400) {
+      throw new ServiceFailure(
+        undefined,
+        false,
+        'upstream_redirect',
+        redirectDiagnostic(response),
+      );
+    }
     const headerRequestId = requestId(response.headers.get('x-request-id'));
     responseRequestId = safeRequestId(headerRequestId, config.token);
     const raw = await readLimitedText(response, controller, deadline);
@@ -295,7 +427,7 @@ async function requestIntent(
       responseRequestId ??
       safeRequestId(bodyRequestId, config.token);
     responseRequestId = serviceRequestId;
-    if (!response.ok) throw new ServiceFailure(serviceRequestId);
+    if (!response.ok) throw new ServiceFailure(serviceRequestId, true, 'backend_rejected');
     const root = dict(JSON.parse(raw));
     if (!root || !('intent' in root) || typeof root.scope_refused !== 'boolean') {
       throw new Error('service-response-json');
@@ -306,9 +438,20 @@ async function requestIntent(
       requestId: serviceRequestId,
     };
   } catch (error) {
+    const timedOut = controller.signal.aborted;
     controller.abort();
     if (error instanceof ServiceFailure) throw error;
-    throw new ServiceFailure(responseRequestId);
+    const reason: ServiceFailureReason = timedOut
+      ? 'upstream_timeout'
+      : phase === 'fetch'
+        ? 'upstream_fetch_failed'
+        : 'upstream_invalid_response';
+    throw new ServiceFailure(
+      responseRequestId,
+      false,
+      reason,
+      reason === 'upstream_fetch_failed' ? fetchDiagnostic(error) : undefined,
+    );
   }
 }
 
@@ -317,49 +460,63 @@ export async function GET(): Promise<Response> {
 }
 
 export async function POST(request: Request): Promise<Response> {
-  if (!sameOrigin(request)) return json({ error: 'Origen no permitido.' }, 403);
+  if (!sameOrigin(request)) return errorResponse(copyFor('en').api.invalidOrigin, 403, 'invalid_origin');
 
   let value: Dict | null;
   try {
     value = dict(await bodyJson(request));
   } catch {
-    return json(
-      { error: 'El cuerpo JSON no es válido o supera el límite.' },
-      400,
-    );
+    return errorResponse(copyFor('en').api.invalidBody, 400, 'invalid_body');
   }
-  if (!value) return json({ error: 'El cuerpo JSON debe ser un objeto.' }, 400);
+  if (!value) return errorResponse(copyFor('en').api.bodyObject, 400, 'invalid_body');
+
+  const language = languageFrom(dict(value.input)?.language);
+  const apiCopy = copyFor(language).api;
 
   let input;
   try {
     input = validateInput(value.input);
   } catch {
-    return json({ error: 'Los datos de la rutina no son válidos.' }, 400);
+    return errorResponse(apiCopy.invalidInput, 400, 'invalid_input');
   }
   const mode = value.mode === undefined ? 'demo' : value.mode;
   if (mode !== 'demo' && mode !== 'deepseek') {
-    return json({ error: 'El modo de rutina no es válido.' }, 400);
+    return errorResponse(apiCopy.invalidMode, 400, 'invalid_mode');
   }
   if (mode === 'demo')
     return json({ plan: buildPlan(input, undefined, 'demo') });
 
   const config = await liveConfig();
-  if (!config) return json({ error: 'La IA real no está configurada.' }, 503);
+  if (!config) return errorResponse(apiCopy.notConfigured, 503, 'live_not_configured');
   let serviceRequestId: string | undefined;
   try {
-    const serviceResult = await requestIntent(input.request, config);
+    const serviceResult = await requestIntent(input, config);
     serviceRequestId = serviceResult.requestId;
-    const intent = validateIntent(serviceResult.intent);
+    const sessionCount = Math.min(
+      input.days.length,
+      Math.floor(input.weeklyMinutes / input.sessionMinutes),
+    );
+    const intent = validateIntent(
+      serviceResult.intent,
+      serviceResult.scopeRefused
+        ? undefined
+        : { sessionCount, sessionMinutes: input.sessionMinutes },
+    );
     return json(
       { plan: buildPlan(input, intent, 'deepseek', serviceResult.scopeRefused) },
       200,
       serviceRequestId,
     );
   } catch (error) {
-    return json(
-      { error: SERVICE_ERROR },
+    const failure = error instanceof ServiceFailure ? error : null;
+    const reason = failure?.reason ?? 'upstream_invalid_response';
+    const reqId = failure?.requestId ?? serviceRequestId;
+    return errorResponse(
+      apiCopy.providerError,
       502,
-      error instanceof ServiceFailure ? error.requestId ?? serviceRequestId : serviceRequestId,
+      reason,
+      reqId,
+      failure?.diagnostic,
     );
   }
 }

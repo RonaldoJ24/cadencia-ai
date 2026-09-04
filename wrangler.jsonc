@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cadencia-ai",
+  "compatibility_date": "2026-09-02",
+  "compatibility_flags": [
+    "nodejs_compat",
+    "nodejs_compat_populate_process_env"
+  ],
+  "main": "./worker/index.ts",
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "CADENCIA_ENABLE_LIVE": "true",
+    "CADENCIA_INTENT_SERVICE_URL": "https://cadencia-intents-675488596560.us-central1.run.app"
+  },
+  "secrets": {
+    "required": [
+      "CADENCIA_SERVICE_TOKEN"
+    ]
+  }
+}

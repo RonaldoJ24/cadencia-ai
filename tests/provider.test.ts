@@ -17,13 +17,37 @@ const input = {
   weeklyMinutes: 90,
   startDate: '2026-08-31',
   time: '18:00',
+  language: 'es',
 };
 
 const intent = {
   title: 'Aprender TypeScript',
   goal: 'Construir una pequeña función tipada.',
   domain: 'learning',
-  steps: [{ title: 'Practica tipos', instructions: 'Escribe y revisa una función.' }],
+  steps: [
+    {
+      title: 'Practica tipos',
+      instructions: 'Escribe y revisa una función.',
+      blocks: [
+        { minutes: 5, activity: 'Define el caso.' },
+        { minutes: 20, activity: 'Implementa la función.' },
+        { minutes: 5, activity: 'Comprueba el tipo.' },
+      ],
+      deliverable: 'Una función tipada.',
+      doneWhen: 'La función compila y tiene un ejemplo.',
+    },
+    {
+      title: 'Usa el tipo',
+      instructions: 'Aplica la función en un caso distinto.',
+      blocks: [
+        { minutes: 5, activity: 'Recupera la firma.' },
+        { minutes: 20, activity: 'Resuelve el caso nuevo.' },
+        { minutes: 5, activity: 'Anota el error principal.' },
+      ],
+      deliverable: 'Un segundo caso funcionando.',
+      doneWhen: 'El caso funciona sin copiar el primero.',
+    },
+  ],
 } as const;
 
 const scopeIntent = {
@@ -38,6 +62,22 @@ const scopeIntent = {
 
 const requestId = '123e4567-e89b-12d3-a456-426614174000';
 const padding = ' trama narrativa '.repeat(25);
+const REFERENCE_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const RUNTIME_ENV_KEY = '__cadencia_runtime_env_v1';
+
+function assertFailureReference(payload: unknown): asserts payload is {
+  error: string;
+  reference: string;
+} {
+  assert.equal(typeof payload, 'object');
+  assert.notEqual(payload, null);
+  const value = payload as { error?: unknown; reference?: unknown };
+  assert.deepEqual(Object.keys(value).sort(), ['error', 'reference']);
+  if (typeof value.error !== 'string') assert.fail('failure error must be a string');
+  if (typeof value.reference !== 'string') assert.fail('failure reference must be a string');
+  assert.match(value.reference, REFERENCE_PATTERN);
+}
 
 function serviceResponse(
   body: unknown,
@@ -82,6 +122,23 @@ async function withEnvironment<T>(
   }
 }
 
+async function withWorkerBindings<T>(
+  value: Record<string, string>,
+  callback: () => Promise<T>,
+): Promise<T> {
+  const prior = Object.getOwnPropertyDescriptor(globalThis, RUNTIME_ENV_KEY);
+  Object.defineProperty(globalThis, RUNTIME_ENV_KEY, {
+    value: Object.freeze(value),
+    configurable: true,
+  });
+  try {
+    return await callback();
+  } finally {
+    if (prior) Object.defineProperty(globalThis, RUNTIME_ENV_KEY, prior);
+    else delete (globalThis as Record<string, unknown>)[RUNTIME_ENV_KEY];
+  }
+}
+
 async function withFetch<T>(fetcher: typeof fetch, callback: () => Promise<T>): Promise<T> {
   const previous = globalThis.fetch;
   globalThis.fetch = fetcher;
@@ -89,6 +146,17 @@ async function withFetch<T>(fetcher: typeof fetch, callback: () => Promise<T>): 
     return await callback();
   } finally {
     globalThis.fetch = previous;
+  }
+}
+
+async function withErrorLogs<T>(callback: () => Promise<T>): Promise<{ value: T; logs: unknown[][] }> {
+  const previous = console.error;
+  const logs: unknown[][] = [];
+  console.error = (...values: unknown[]) => logs.push(values);
+  try {
+    return { value: await callback(), logs };
+  } finally {
+    console.error = previous;
   }
 }
 
@@ -148,7 +216,28 @@ void test('GET reports readiness only for a valid authenticated service config',
   }
 });
 
-void test('live mode calls the normalized Python endpoint with only the request and server auth', async () => {
+void test('GET accepts the private Worker binding bridge when process.env is unavailable', async () => {
+  await withEnvironment(
+    {
+      CADENCIA_ENABLE_LIVE: undefined,
+      CADENCIA_INTENT_SERVICE_URL: undefined,
+      CADENCIA_SERVICE_TOKEN: undefined,
+    },
+    () =>
+      withWorkerBindings(
+        {
+          CADENCIA_ENABLE_LIVE: 'true',
+          CADENCIA_INTENT_SERVICE_URL: 'https://intent.example',
+          CADENCIA_SERVICE_TOKEN: 'server-secret',
+        },
+        async () => {
+          assert.deepEqual(await (await GET()).json(), { liveAvailable: true });
+        },
+      ),
+  );
+});
+
+void test('live mode sends the deterministic session contract and server auth', async () => {
   await withEnvironment(
     {
       CADENCIA_ENABLE_LIVE: 'true',
@@ -162,12 +251,19 @@ void test('live mode calls the normalized Python endpoint with only the request 
       const fetcher: typeof fetch = async (url, init) => {
         receivedUrl = typeof url === 'string' ? url : url instanceof URL ? url.href : url.url;
         receivedInit = init;
+        const serviceIntent = {
+          ...intent,
+          steps: intent.steps.map(({ doneWhen, ...step }) => ({
+            ...step,
+            done_when: doneWhen,
+          })),
+        };
         return serviceResponse({
-          intent,
+          intent: serviceIntent,
           scope_refused: false,
           meta: {
             request_id: requestId,
-            prompt_version: 'cadencia-intent-v1',
+            prompt_version: 'cadencia-routine-v2',
             model: 'deepseek-v4-flash',
             latency_ms: 4,
             attempts: 1,
@@ -181,12 +277,17 @@ void test('live mode calls the normalized Python endpoint with only the request 
       assert.deepEqual(payload.plan.intent, intent);
       assert.equal(receivedUrl, 'http://127.0.0.1:8787/base/v1/intents');
       assert.equal(receivedInit?.method, 'POST');
-      assert.equal(receivedInit?.redirect, 'error');
+      assert.equal(receivedInit?.redirect, 'manual');
       assert.ok(receivedInit?.signal instanceof AbortSignal);
-      const headers = receivedInit?.headers as Record<string, string>;
-      assert.equal(headers.authorization, 'Bearer server-secret');
-      assert.equal(headers['content-type'], 'application/json');
-      assert.deepEqual(JSON.parse(receivedInit?.body as string), { request: input.request });
+      const headers = new Headers(receivedInit?.headers);
+      assert.equal(headers.get('authorization'), 'Bearer server-secret');
+      assert.equal(headers.get('content-type'), 'application/json');
+      assert.deepEqual(JSON.parse(receivedInit?.body as string), {
+        request: input.request,
+        language: input.language,
+        session_count: 2,
+        session_minutes: 30,
+      });
       assert.equal(result.headers.get('x-request-id'), requestId);
     },
   );
@@ -326,8 +427,9 @@ void test('service errors stay generic and expose at most an opaque request ID h
         );
       const result = await withFetch(fetcher, () => POST(routeRequest({ input, mode: 'deepseek' })));
       assert.equal(result.status, 502);
-      const payload = await result.json() as { error: string };
-      assert.deepEqual(payload, { error: 'El proveedor de IA no está disponible.' });
+      const payload = await result.json();
+      assertFailureReference(payload);
+      assert.equal(payload.error, 'El proveedor de IA no está disponible.');
       assert.equal(result.headers.get('x-request-id'), requestId);
       assert.equal(JSON.stringify(payload).includes('server-secret'), false);
     },
@@ -359,11 +461,64 @@ void test('invalid service output is rejected before a plan is built', async () 
       CADENCIA_SERVICE_TOKEN: 'server-secret',
     },
     async () => {
-      const fetcher: typeof fetch = async () =>
-        serviceResponse({ intent: { ...intent, domain: 'medical' } });
-      const result = await withFetch(fetcher, () => POST(routeRequest({ input, mode: 'deepseek' })));
-      assert.equal(result.status, 502);
-      assert.deepEqual(await result.json(), { error: 'El proveedor de IA no está disponible.' });
+      const invalidIntents = [
+        { ...intent, domain: 'medical' },
+        { ...intent, steps: intent.steps.slice(0, 1) },
+        {
+          ...intent,
+          steps: intent.steps.map((step, index) =>
+            index === 0
+              ? { ...step, blocks: [{ minutes: 29, activity: 'No cubre la sesión.' }] }
+              : step,
+          ),
+        },
+      ];
+      for (const invalidIntent of invalidIntents) {
+        const fetcher: typeof fetch = async () =>
+          serviceResponse({ intent: invalidIntent, scope_refused: false });
+        const result = await withFetch(fetcher, () =>
+          POST(routeRequest({ input, mode: 'deepseek' })),
+        );
+        assert.equal(result.status, 502);
+        const payload = await result.json();
+        assertFailureReference(payload);
+        assert.equal(payload.error, 'El proveedor de IA no está disponible.');
+      }
+    },
+  );
+});
+
+void test('manual redirects are never followed with the service token', async () => {
+  await withEnvironment(
+    {
+      CADENCIA_ENABLE_LIVE: 'true',
+      CADENCIA_INTENT_SERVICE_URL: 'https://intent.example',
+      CADENCIA_SERVICE_TOKEN: 'server-secret',
+    },
+    async () => {
+      let calls = 0;
+      const fetcher: typeof fetch = async () => {
+        calls += 1;
+        return new Response(null, {
+          status: 307,
+          headers: { location: 'https://untrusted.example/v1/intents' },
+        });
+      };
+      const captured = await withErrorLogs(() =>
+        withFetch(fetcher, () => POST(routeRequest({ input, mode: 'deepseek' }))),
+      );
+      assert.equal(captured.value.status, 502);
+      assert.equal(calls, 1);
+      const payload = await captured.value.json();
+      assertFailureReference(payload);
+      assert.equal(payload.error, 'El proveedor de IA no está disponible.');
+      const log = JSON.parse(String(captured.logs[0]?.[0])) as {
+        reason?: unknown;
+        diagnostic?: { redirect_status?: unknown };
+      };
+      assert.equal(log.reason, 'upstream_redirect');
+      assert.equal(log.diagnostic?.redirect_status, 307);
+      assert.equal(JSON.stringify(captured.logs).includes('server-secret'), false);
     },
   );
 });
@@ -401,7 +556,38 @@ void test('unavailable, malformed, truncated, and oversized service responses ar
       for (const [label, fetcher] of cases) {
         const result = await withFetch(fetcher, () => POST(routeRequest({ input, mode: 'deepseek' })));
         assert.equal(result.status, 502, label);
-        assert.deepEqual(await result.json(), { error: 'El proveedor de IA no está disponible.' }, label);
+        const payload = await result.json();
+        assertFailureReference(payload);
+        assert.equal(payload.error, 'El proveedor de IA no está disponible.', label);
+      }
+    },
+  );
+});
+
+void test('upstream failure logs use safe, specific categories', async () => {
+  await withEnvironment(
+    {
+      CADENCIA_ENABLE_LIVE: 'true',
+      CADENCIA_INTENT_SERVICE_URL: 'https://intent.example',
+      CADENCIA_SERVICE_TOKEN: 'server-secret',
+    },
+    async () => {
+      const cases: Array<[string, typeof fetch, string]> = [
+        ['fetch', async () => { throw new Error('private server-secret network detail'); }, 'upstream_fetch_failed'],
+        ['response', async () => new Response('{not-json', { status: 200 }), 'upstream_invalid_response'],
+      ];
+      for (const [label, fetcher, expectedReason] of cases) {
+        const captured = await withErrorLogs(() =>
+          withFetch(fetcher, () => POST(routeRequest({ input, mode: 'deepseek' }))),
+        );
+        assert.equal(captured.value.status, 502, label);
+        assertFailureReference(await captured.value.json());
+        assert.equal(captured.logs.length, 1, label);
+        const [entry] = captured.logs[0] ?? [];
+        assert.equal(typeof entry, 'string', label);
+        const log = JSON.parse(entry as string) as { reason?: unknown };
+        assert.equal(log.reason, expectedReason, label);
+        assert.equal(JSON.stringify(captured.logs).includes('server-secret'), false, label);
       }
     },
   );
@@ -426,6 +612,7 @@ void test('fetch and slow response body timeouts abort within the route deadline
         mock.timers.tick(25_001);
         const timeoutResult = await pending;
         assert.equal(timeoutResult.status, 502);
+        assertFailureReference(await timeoutResult.json());
 
         let streamController: ReadableStreamDefaultController<Uint8Array> | undefined;
         const slowBody: typeof fetch = async () =>
@@ -443,6 +630,7 @@ void test('fetch and slow response body timeouts abort within the route deadline
         mock.timers.tick(25_001);
         const slowResult = await slow;
         assert.equal(slowResult.status, 502);
+        assertFailureReference(await slowResult.json());
         streamController?.error(new Error('closed'));
       } finally {
         mock.timers.reset();
@@ -477,6 +665,9 @@ void test('origin, body, and mode checks remain enforced', async () => {
       assert.equal(oversized.status, 400);
       const invalidMode = await POST(routeRequest({ input, mode: 'provider' }));
       assert.equal(invalidMode.status, 400);
+      for (const response of [crossOrigin, referer, malformed, oversized, invalidMode]) {
+        assertFailureReference(await response.json());
+      }
     },
   );
 });

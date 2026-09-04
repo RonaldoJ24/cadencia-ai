@@ -311,6 +311,6 @@ The added held-out corpus is revealed and therefore regression-only; it is never
 independent evidence. Local `outputs/` reports and validation logs are generated
 evidence, not committed source files.
 
-The deterministic scheduler, calendar/insight libraries, UI, npm lockfile, and
-`.openai/hosting.json` remain unchanged. The manifest above includes every visible
+The deterministic scheduler, calendar/insight libraries, UI, and npm lockfile
+remain unchanged. The manifest above includes every visible
 modified, added, and removed path; the status totals sum to 37.

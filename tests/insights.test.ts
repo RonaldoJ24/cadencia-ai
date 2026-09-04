@@ -10,6 +10,7 @@ const baseInput: RoutineInput = {
   weeklyMinutes: 90,
   startDate: '2026-08-31',
   time: '18:00',
+  language: 'es',
 };
 
 function plan(overrides: Partial<RoutineInput> = {}) {
@@ -35,7 +36,8 @@ void test('explica una cadencia de aprendizaje y pide horizonte y nivel cuando f
   assert.match(insights.clarifyingQuestions.join(' '), /puedes hacer ya/u);
   assert.match(insights.clarifyingQuestions.join(' '), /evidencia/u);
   assert.equal(insights.successSignals.length, 3);
-  assert.match(insights.recommendation, /check-in/u);
+  assert.match(insights.recommendation, /revisión/u);
+  assert.doesNotMatch(insights.recommendation, /check-in/u);
 });
 
 void test('no repite preguntas de horizonte y nivel ya escritos en la solicitud', () => {
@@ -85,4 +87,21 @@ void test('trata con honestidad un plan fuera de alcance sin sesiones', () => {
   assert.equal(insights.successSignals.length, 2);
   assert.match(insights.successSignals.join(' '), /No hay sesiones/u);
   assert.match(insights.recommendation, /dentro del alcance/u);
+  assert.doesNotMatch(insights.recommendation, /check-in/u);
+});
+
+void test('English insights use English capacity, questions, and progress signals', () => {
+  const insights = buildInsights(
+    plan({
+      language: 'en',
+      request: 'learn TypeScript',
+    }),
+  );
+  assert.match(insights.capacity, /You chose 3 days.*3 scheduled sessions.*90 weekly min/u);
+  assert.match(insights.fourWeekProjection, /360 min.*practice time available.*not a promise of success/u);
+  assert.match(insights.clarifyingQuestions.join(' '), /What horizon/u);
+  assert.match(insights.clarifyingQuestions.join(' '), /What can you already do/u);
+  assert.match(insights.successSignals.join(' '), /You can explain/u);
+  assert.match(insights.recommendation, /check-in/u);
+  assert.doesNotMatch(insights.capacity, /Elegiste|sesiones programadas/u);
 });
