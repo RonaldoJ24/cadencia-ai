@@ -1,38 +1,36 @@
-# Recorrido de Cadencia
+# Cadencia walkthrough
 
-Cadencia parte de una situación cotidiana: quieres practicar algo con constancia,
-pero tu disponibilidad cambia. La página permite observar un reajuste antes de
-configurar una rutina propia.
+Cadencia starts with an everyday situation: you want to practice consistently,
+but your availability changes. The page lets you observe replanning before
+configuring a routine of your own. English is the default; the language control
+switches the experience to Spanish.
 
-## Una semana en acción
+## A week in action
 
-El ejemplo contiene tres sesiones de inglés de 30 minutos. El lunes ya está
-completado. Al marcar el martes como perdido, se ejecuta `replan`:
+The example contains three 30-minute English sessions. Monday is complete. When
+Tuesday is marked missed, it runs `replan`:
 
-- Con disponibilidad de lunes a jueves, el miércoles está ocupado y el jueves
-  queda libre: la sesión se reubica allí y el total activo sigue en 90 minutos.
-- Con disponibilidad solo de lunes a miércoles, no existe otro hueco permitido:
-  se conserva lo hecho, se muestra el límite y el total activo queda en 60 minutos.
+- With Monday-through-Thursday availability, Wednesday is occupied and Thursday
+  is free, so the session moves there and active time remains 90 minutes.
+- With availability only through Wednesday, no later allowed opening exists.
+  Completed work remains visible and active time becomes 60 minutes.
 
-El contenido de las prácticas está preparado. La planificación y sus
-comprobaciones usan las mismas funciones del producto. La semana fija del
-31 de agosto de 2026 permite reproducir ambos resultados y está identificada
-en los detalles. No se ejecuta un modelo ni se guarda el estado al recargar.
+The practice content is authored. Planning and checks use the same product
+functions. The fixed week of August 31, 2026 makes both outcomes reproducible and
+is identified in the details. No model runs and reload does not preserve state.
 
-## Planificar con tus datos
+## Plan with your data
 
-El formulario conserva objetivos, días, duración, tope, hora local y semana.
-Al cargar la página selecciona el lunes de la semana local actual. Cambiar un
-ejemplo mantiene la semana elegida. El resultado permite completar y reajustar
-sesiones, revisar comprobaciones y exportar una copia.
+The form keeps the goal, days, duration, weekly limit, local time, and week. On
+load, it selects the current local Monday. Changing an example preserves the
+chosen week. The result supports completion, replanning, checks, and exports.
 
-## Entender las decisiones
+## Understand the decisions
 
-«Cómo funciona» explica tres decisiones: respetar el tiempo disponible, separar
-la propuesta de contenido de las reglas del calendario y conservar el trabajo
-completado durante un reajuste. Cada explicación ofrece detalles y un enlace
-a la implementación o sus pruebas.
+“How it works” explains three choices: respecting available time, separating
+content proposals from calendar rules, and preserving completed work during
+replanning. Each explanation links to the implementation or its tests.
 
-El alcance visible coincide con el producto: sesión local, copias de calendario
-y generación conectada opcional. Persistencia, sincronización y recordatorios
-automáticos siguen fuera del alcance actual.
+The visible scope matches the product: browser-session state, calendar copies,
+and optional connected generation. Persistence, synchronization, and automatic
+reminders remain outside the current scope.

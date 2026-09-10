@@ -1,10 +1,11 @@
 # Cadencia
 
-![Cadencia — De intención a rutina](public/og.png)
+![Cadencia — from intention to routine](public/og.png)
 
 A goal needs room in a real week. Cadencia turns an intention into short sessions,
 respects the time available, and helps find the next opening when a day is missed.
-The interface is in Spanish. Product and experience design by Ronaldo.
+English is the default interface language, with an always-available control to
+switch the full experience to Spanish. Product and experience design by Ronaldo.
 
 ## Try a week
 
@@ -20,7 +21,7 @@ This example runs the same `buildPlan`, `markDone`, and `replan` functions as th
 full planner. Its practice content is authored sample data, not model output.
 The fixed week is labelled in the example's details; reload resets the interaction.
 
-Continue to **Planificar** to use your own goal, days, session duration, and weekly
+Continue to **Plan** to use your own goal, days, session duration, and weekly
 limit. Complete or replan a session, inspect the checks, download Markdown or ICS,
 or prepare a single event for Google Calendar. The planner starts on the current
 local Monday after the page loads.

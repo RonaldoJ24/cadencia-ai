@@ -76,7 +76,7 @@ void test('validates intent shape and accepts Unicode content', () => {
   assert.throws(() => validateIntent({ ...intent, steps: [] }));
 });
 
-void test('demo output is deterministic, Spanish first, and preserves request', () => {
+void test('legacy planner calls keep deterministic Spanish output and preserve the request', () => {
   const first = buildPlan(input());
   const second = buildPlan(input());
   assert.deepEqual(first, second);

@@ -1,4 +1,4 @@
-import { type RoutinePlan, type Session } from './routine.ts';
+import { type Locale, type RoutinePlan, type Session } from './routine.ts';
 
 const GOOGLE_CALENDAR_URL = 'https://calendar.google.com/calendar/render';
 const MAX_TIME_ZONE_CHARS = 128;
@@ -15,6 +15,15 @@ const DAY_NAMES = [
   'viernes',
   'sábado',
   'domingo',
+];
+const DAY_NAMES_EN = [
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
 ];
 
 function invalid(message: string): never {
@@ -175,15 +184,26 @@ export function googleCalendarUrl(
   return `${GOOGLE_CALENDAR_URL}?${params.toString()}`;
 }
 
-function shareSession(session: Session, time: string): string {
+function shareSession(session: Session, time: string, locale: Locale): string {
   const current = sessionForCalendar(session);
+  const status =
+    locale === 'en'
+      ? current.status
+      : current.status === 'done'
+        ? 'completada'
+        : current.status === 'missed'
+          ? 'perdida'
+          : 'pendiente';
   return [
-    `- ${current.date} · ${time} · ${current.title} · ${current.minutes} min (${current.status})`,
+    `- ${current.date} · ${time} · ${current.title} · ${current.minutes} min (${status})`,
     `  ${current.instructions}`,
   ].join('\n');
 }
 
-export function routineShareText(plan: RoutinePlan): string {
+export function routineShareText(
+  plan: RoutinePlan,
+  locale: Locale = plan.locale ?? 'es',
+): string {
   if (
     !plan ||
     typeof plan !== 'object' ||
@@ -210,7 +230,7 @@ export function routineShareText(plan: RoutinePlan): string {
     ) {
       invalid('plan.input.days no es válido.');
     }
-    return DAY_NAMES[day];
+    return (locale === 'en' ? DAY_NAMES_EN : DAY_NAMES)[day];
   });
   const sessionMinutes = sourceInteger(
     plan.input.sessionMinutes,
@@ -230,13 +250,21 @@ export function routineShareText(plan: RoutinePlan): string {
     .slice()
     .sort((left, right) => left.date.localeCompare(right.date))
     .slice(0, MAX_SHARE_SESSIONS)
-    .map((session) => shareSession(session, time));
+    .map((session) => shareSession(session, time, locale));
   const lines = [
     title,
-    `Cadencia: ${days.join(', ')} · ${time} · ${sessionMinutes} min por sesión · ${weeklyMinutes} min semanales`,
+    locale === 'en'
+      ? `Cadence: ${days.join(', ')} · ${time} · ${sessionMinutes} min per session · ${weeklyMinutes} min per week`
+      : `Cadencia: ${days.join(', ')} · ${time} · ${sessionMinutes} min por sesión · ${weeklyMinutes} min semanales`,
     '',
-    'Sesiones programadas:',
-    ...(sessions.length > 0 ? sessions : ['- No hay sesiones programadas.']),
+    locale === 'en' ? 'Scheduled sessions:' : 'Sesiones programadas:',
+    ...(sessions.length > 0
+      ? sessions
+      : [
+          locale === 'en'
+            ? '- No scheduled sessions.'
+            : '- No hay sesiones programadas.',
+        ]),
   ];
   return bounded(lines.join('\n'), MAX_SHARE_CHARS);
 }

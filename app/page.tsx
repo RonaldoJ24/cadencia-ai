@@ -26,6 +26,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { googleCalendarUrl, routineShareText } from '@/lib/calendar';
+import {
+  DAY_NAMES,
+  DAY_SHORT,
+  EXAMPLES,
+  PAGE_COPY,
+  getLocalWeekStart,
+  getServerWeekStart,
+  subscribeToWeekStart,
+} from '@/lib/page-copy';
 import { buildInsights } from '@/lib/insights';
 import {
   buildPlan,
@@ -33,92 +42,26 @@ import {
   replan,
   toICS,
   toMarkdown,
+  type Locale,
   type RoutineInput,
   type RoutinePlan,
   type Session,
 } from '@/lib/routine';
 
-const DAY_NAMES = [
-  'Lunes',
-  'Martes',
-  'Miércoles',
-  'Jueves',
-  'Viernes',
-  'Sábado',
-  'Domingo',
-];
-const DAY_SHORT = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
-const DEFAULT_START_DATE = '2026-08-31';
-
-function subscribeToWeekStart() {
-  return () => {};
-}
-
-function getServerWeekStart() {
-  return DEFAULT_START_DATE;
-}
-
-function getLocalWeekStart() {
-  const monday = new Date();
-  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
-  return [
-    monday.getFullYear(),
-    String(monday.getMonth() + 1).padStart(2, '0'),
-    String(monday.getDate()).padStart(2, '0'),
-  ].join('-');
-}
-
-const EXAMPLES: Array<{ label: string; input: RoutineInput }> = [
-  {
-    label: 'Inglés para entrevistas',
-    input: {
-      request:
-        'Practicar inglés para entrevistas de trabajo, con foco en responder con más seguridad.',
-      days: [0, 1, 2, 3, 4],
-      sessionMinutes: 30,
-      weeklyMinutes: 90,
-      startDate: DEFAULT_START_DATE,
-      time: '07:30',
-    },
-  },
-  {
-    label: 'Aprender TypeScript',
-    input: {
-      request:
-        'Aprender TypeScript construyendo un pequeño proyecto lateral y entendiendo sus tipos.',
-      days: [1, 3, 5],
-      sessionMinutes: 45,
-      weeklyMinutes: 135,
-      startDate: DEFAULT_START_DATE,
-      time: '19:00',
-    },
-  },
-  {
-    label: 'Escribir cada semana',
-    input: {
-      request:
-        'Escribir una pieza breve cada semana, empezando por un esquema y una primera versión.',
-      days: [0, 2, 5],
-      sessionMinutes: 35,
-      weeklyMinutes: 105,
-      startDate: DEFAULT_START_DATE,
-      time: '08:00',
-    },
-  },
-];
-
 type RequestState = 'idle' | 'loading' | 'error';
 
-function sessionStatusLabel(status: Session['status']) {
-  if (status === 'done') return 'Completada';
-  if (status === 'missed') return 'Perdida';
-  return 'Pendiente';
+function sessionStatusLabel(status: Session['status'], locale: Locale) {
+  const copy = PAGE_COPY[locale];
+  if (status === 'done') return copy.completed;
+  if (status === 'missed') return copy.missed;
+  return copy.planned;
 }
 
-function domainLabel(domain: RoutinePlan['intent']['domain']) {
-  if (domain === 'learning') return 'Aprendizaje';
-  if (domain === 'creative') return 'Práctica creativa';
-  return 'General';
+function domainLabel(domain: RoutinePlan['intent']['domain'], locale: Locale) {
+  const copy = PAGE_COPY[locale];
+  if (domain === 'learning') return copy.learning;
+  if (domain === 'creative') return copy.creative;
+  return copy.general;
 }
 
 function sameInput(left: RoutineInput, right: RoutineInput) {
@@ -132,8 +75,8 @@ function sameInput(left: RoutineInput, right: RoutineInput) {
   );
 }
 
-function formatSessionDate(date: string) {
-  return new Intl.DateTimeFormat('es-MX', {
+function formatSessionDate(date: string, locale: Locale) {
+  return new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'es-MX', {
     weekday: 'short',
     day: '2-digit',
     month: 'short',
@@ -158,17 +101,20 @@ function downloadText(filename: string, text: string, type: string) {
 function RhythmMap({
   sessions,
   input,
+  locale,
 }: {
   sessions: Session[];
   input: RoutineInput;
+  locale: Locale;
 }) {
+  const copy = PAGE_COPY[locale];
   return (
-    <div className="rhythm-map" aria-label="Mapa semanal de sesiones">
-      {DAY_NAMES.map((name, index) => {
+    <div className="rhythm-map" aria-label={copy.map}>
+      {DAY_NAMES[locale].map((name, index) => {
         const session = sessions.find((item) => item.dayIndex === index);
         return (
           <div className="rhythm-day" key={name}>
-            <span className="rhythm-day-label">{DAY_SHORT[index]}</span>
+            <span className="rhythm-day-label">{DAY_SHORT[locale][index]}</span>
             <div className="rhythm-track" aria-hidden="true">
               <span
                 className={`rhythm-bar ${session ? 'is-on' : ''} ${
@@ -186,7 +132,8 @@ function RhythmMap({
         );
       })}
       <span className="sr-only">
-        {sessions.length} sesiones en {input.days.length} días disponibles.
+        {sessions.length} {copy.sessionsIn} {input.days.length}{' '}
+        {copy.availableDays}.
       </span>
     </div>
   );
@@ -194,6 +141,7 @@ function RhythmMap({
 
 function RoutinePreview({
   plan,
+  locale,
   stale,
   controlsDisabled,
   selectedSessionId,
@@ -209,6 +157,7 @@ function RoutinePreview({
   shareStatus,
 }: {
   plan: RoutinePlan;
+  locale: Locale;
   stale: boolean;
   controlsDisabled: boolean;
   selectedSessionId: string | null;
@@ -223,6 +172,7 @@ function RoutinePreview({
   onRefine: () => void;
   shareStatus: string | null;
 }) {
+  const copy = PAGE_COPY[locale];
   const selectedSession =
     plan.sessions.find((session) => session.id === selectedSessionId) ??
     plan.sessions[0];
@@ -235,10 +185,12 @@ function RoutinePreview({
   const totalMinutes = plan.sessions
     .filter((session) => session.status !== 'missed')
     .reduce((total, session) => total + session.minutes, 0);
-  const noReplacementWarning = plan.warnings.some((warning) =>
-    warning.startsWith('No hay un día permitido y libre después'),
+  const noReplacementWarning = plan.warnings.some(
+    (warning) =>
+      warning.startsWith('No hay un día permitido y libre después') ||
+      warning.startsWith('There is no later allowed free day'),
   );
-  const insights = buildInsights(plan);
+  const insights = buildInsights(plan, locale);
 
   return (
     <div className={`preview-card routine-card${stale ? ' is-stale' : ''}`}>
@@ -246,9 +198,7 @@ function RoutinePreview({
         <div>
           <span className="sample-kicker">
             <span className="sample-marker" aria-hidden="true" />
-            {plan.mode === 'deepseek'
-              ? 'IA real · servidor'
-              : 'Demo local · sin modelo'}
+            {plan.mode === 'deepseek' ? copy.live : copy.demo}
           </span>
           <h2 id="preview-title">{plan.intent.title}</h2>
           <p>{plan.intent.goal}</p>
@@ -260,26 +210,23 @@ function RoutinePreview({
           disabled={controlsDisabled}
         >
           <RotateCcw size={14} aria-hidden="true" />
-          <span className="sr-only">Volver al ejemplo</span>
+          <span className="sr-only">{copy.reset}</span>
         </button>
       </div>
 
       {stale ? (
         <output className="stale-banner">
-          <span>
-            Cambiaste una condición. Esta vista conserva el plan anterior hasta
-            que lo regeneres.
-          </span>
+          <span>{copy.stale}</span>
         </output>
       ) : null}
 
       <div className="rhythm-header">
-        <span>Cadencia semanal</span>
+        <span>{copy.weeklyCadence}</span>
         <span>
-          {plannedCount} sesiones · {totalMinutes} min
+          {plannedCount} {copy.sessions} · {totalMinutes} min
         </span>
       </div>
-      <RhythmMap input={plan.input} sessions={plan.sessions} />
+      <RhythmMap input={plan.input} sessions={plan.sessions} locale={locale} />
 
       {plan.warnings.length > 0 ? (
         <output className="warning-box">
@@ -287,7 +234,7 @@ function RoutinePreview({
             !
           </span>
           <div>
-            <strong>Hay algo que revisar</strong>
+            <strong>{copy.review}</strong>
             {plan.warnings.map((warning) => (
               <p key={warning}>{warning}</p>
             ))}
@@ -298,23 +245,23 @@ function RoutinePreview({
       <section className="insight-panel" aria-labelledby="insight-title">
         <div className="insight-heading">
           <div>
-            <span className="decision-label">Lectura avanzada</span>
-            <h3 id="insight-title">Lo que este ritmo permite</h3>
+            <span className="decision-label">{copy.advanced}</span>
+            <h3 id="insight-title">{copy.allows}</h3>
           </div>
-          <span className="insight-horizon">4 semanas</span>
+          <span className="insight-horizon">{copy.fourWeeks}</span>
         </div>
         <div className="insight-metrics">
           <p>{insights.capacity}</p>
           <p>{insights.fourWeekProjection}</p>
         </div>
         <div className="insight-recommendation">
-          <strong>Siguiente decisión</strong>
+          <strong>{copy.nextDecision}</strong>
           <p>{insights.recommendation}</p>
         </div>
         <div className="insight-columns">
           {insights.clarifyingQuestions.length > 0 ? (
             <div>
-              <strong>Para afinar el plan</strong>
+              <strong>{copy.refine}</strong>
               <ul>
                 {insights.clarifyingQuestions.map((question) => (
                   <li key={question}>{question}</li>
@@ -325,12 +272,12 @@ function RoutinePreview({
                 type="button"
                 onClick={onRefine}
               >
-                Responder en mi petición
+                {copy.answer}
               </button>
             </div>
           ) : null}
           <div>
-            <strong>Señales de avance</strong>
+            <strong>{copy.signals}</strong>
             <ul>
               {insights.successSignals.map((signal) => (
                 <li key={signal}>{signal}</li>
@@ -342,15 +289,18 @@ function RoutinePreview({
 
       <div className="plan-summary" aria-live="polite">
         <span>
-          {doneCount} de {plan.sessions.length} completadas
+          {doneCount} {locale === 'en' ? 'of' : 'de'} {plan.sessions.length}{' '}
+          {copy.completedOf}
         </span>
         <span className="plan-summary-line" aria-hidden="true" />
-        <span>{plan.input.time} · hora local</span>
+        <span>
+          {plan.input.time} · {copy.localTime}
+        </span>
       </div>
 
       <div
         className="session-list dynamic-session-list"
-        aria-label="Sesiones de la rutina"
+        aria-label={copy.sessionList}
       >
         {plan.sessions.map((session) => (
           <button
@@ -368,9 +318,9 @@ function RoutinePreview({
             <div className="session-tone tone-lime" aria-hidden="true" />
             <div className="session-main">
               <div className="session-meta">
-                <span>{formatSessionDate(session.date)}</span>
+                <span>{formatSessionDate(session.date, locale)}</span>
                 <span className="session-separator">/</span>
-                <span>{sessionStatusLabel(session.status)}</span>
+                <span>{sessionStatusLabel(session.status, locale)}</span>
               </div>
               <h3>{session.title}</h3>
             </div>
@@ -387,28 +337,27 @@ function RoutinePreview({
           noReplacementWarning={noReplacementWarning}
           onMarkDone={onMarkDone}
           onReplan={onReplan}
+          locale={locale}
         />
       ) : (
-        <div className="empty-plan">
-          No hay sesiones compatibles con estos límites todavía.
-        </div>
+        <div className="empty-plan">{copy.emptySessions}</div>
       )}
 
       <details className="decision-details">
         <summary>
-          <span>Cómo se decidió</span>
+          <span>{copy.decided}</span>
           <ChevronDown size={15} aria-hidden="true" />
         </summary>
         <div className="decision-content">
           <div className="decision-block">
-            <span className="decision-label">Intención entendida</span>
+            <span className="decision-label">{copy.intent}</span>
             <p>{plan.intent.goal}</p>
             <span className="intent-domain">
-              {domainLabel(plan.intent.domain)}
+              {domainLabel(plan.intent.domain, locale)}
             </span>
           </div>
           <div className="decision-block">
-            <span className="decision-label">Comprobaciones deterministas</span>
+            <span className="decision-label">{copy.checks}</span>
             <ul className="check-list">
               {plan.checks.map((check) => (
                 <li
@@ -430,51 +379,49 @@ function RoutinePreview({
           </div>
           <p className="decision-explanation">{plan.explanation}</p>
           <p className="decision-honesty">
-            {plan.mode === 'deepseek'
-              ? 'La IA propuso la intención; Cadencia comprobó las fechas, los días y el tiempo antes de mostrarla.'
-              : 'Esta salida se construyó localmente con reglas deterministas. No es una respuesta de IA.'}
+            {plan.mode === 'deepseek' ? copy.deepseekHonesty : copy.demoHonesty}
           </p>
         </div>
       </details>
 
       <div className="export-row integration-row">
         <span>
-          Calendario y acompañamiento
-          <small>Copias puntuales; no sincronizan cambios.</small>
+          {copy.calendar}
+          <small>{copy.copies}</small>
         </span>
         <div className="export-actions">
           <button
             type="button"
             onClick={() => selectedSession && onAddToGoogle(selectedSession)}
-            title="Añadir la sesión seleccionada a Google Calendar"
+            title={copy.googleTitle}
             disabled={
               stale || !selectedSession || selectedSession.status === 'missed'
             }
           >
             <CalendarPlus size={13} aria-hidden="true" />
-            Google · sesión
+            {copy.google}
           </button>
           <button
             type="button"
             onClick={onDownloadMarkdown}
             disabled={stale}
-            title="Descargar un resumen de la rutina"
+            title={copy.summaryTitle}
           >
             <Download size={13} aria-hidden="true" />
-            Resumen .md
+            {copy.summary}
           </button>
           <button
             type="button"
             onClick={onDownloadICS}
             disabled={stale}
-            title="Descargar toda la rutina en formato ICS"
+            title={copy.icsTitle}
           >
             <Download size={13} aria-hidden="true" />
-            Apple / Outlook · rutina
+            {copy.ics}
           </button>
           <button type="button" onClick={onShare} disabled={stale}>
             <Share2 size={13} aria-hidden="true" />
-            Compartir
+            {copy.share}
           </button>
         </div>
         {shareStatus ? (
@@ -487,6 +434,7 @@ function RoutinePreview({
 
 function SessionDetail({
   session,
+  locale,
   stale,
   disabled,
   noReplacementWarning,
@@ -494,18 +442,20 @@ function SessionDetail({
   onReplan,
 }: {
   session: Session;
+  locale: Locale;
   stale: boolean;
   disabled: boolean;
   noReplacementWarning: boolean;
   onMarkDone: (id: string) => void;
   onReplan: (id: string) => void;
 }) {
+  const copy = PAGE_COPY[locale];
   return (
     <div className="session-detail" aria-live="polite">
       <div className="detail-heading">
-        <span className="detail-kicker">Sesión seleccionada</span>
+        <span className="detail-kicker">{copy.selected}</span>
         <span className={`detail-status status-${session.status}`}>
-          {sessionStatusLabel(session.status)}
+          {sessionStatusLabel(session.status, locale)}
         </span>
       </div>
       <h3>{session.title}</h3>
@@ -521,7 +471,7 @@ function SessionDetail({
               disabled={disabled}
             >
               <Check size={14} aria-hidden="true" />
-              Marcar completada
+              {copy.mark}
             </Button>
             <button
               className="missed-button"
@@ -529,32 +479,28 @@ function SessionDetail({
               onClick={() => onReplan(session.id)}
               disabled={disabled}
             >
-              No pude, reajustar
+              {copy.replan}
             </button>
           </>
         ) : session.status === 'done' ? (
           <span className="done-copy">
             <CheckCircle2 size={14} aria-hidden="true" />
-            Hecha. Tu objetivo sigue intacto.
+            {copy.doneCopy}
           </span>
         ) : (
           <span className="missed-copy">
-            {noReplacementWarning
-              ? 'Marcada como perdida; revisa el aviso del plan.'
-              : 'Se reajustó conservando las sesiones completadas.'}
+            {noReplacementWarning ? copy.missedNoSlot : copy.missedMoved}
           </span>
         )}
       </div>
-      {stale ? (
-        <p className="stale-detail-note">
-          Regenera la rutina para editar una sesión con tus nuevos límites.
-        </p>
-      ) : null}
+      {stale ? <p className="stale-detail-note">{copy.staleDetail}</p> : null}
     </div>
   );
 }
 
 export default function Home() {
+  const [locale, setLocale] = useState<Locale>('en');
+  const copy = PAGE_COPY[locale];
   // Keep the server snapshot stable; resolve the local week after hydration.
   const localWeekStart = useSyncExternalStore(
     subscribeToWeekStart,
@@ -563,7 +509,7 @@ export default function Home() {
   );
   const [draftInput, setInput] = useState<
     Omit<RoutineInput, 'startDate'> & { startDate: string | null }
-  >({ ...EXAMPLES[0].input, startDate: null });
+  >({ ...EXAMPLES.en[0].input, startDate: null });
   const input: RoutineInput = {
     ...draftInput,
     startDate: draftInput.startDate ?? localWeekStart,
@@ -604,15 +550,14 @@ export default function Home() {
   const stale = plan !== null && !sameInput(plan.input, input);
   const selectedDaysCount = input.days.length;
   const configuredMinutes = selectedDaysCount * input.sessionMinutes;
-  const availableModeLabel =
-    mode === 'live' ? 'IA real · servidor' : 'Demo local · sin modelo';
+  const availableModeLabel = mode === 'live' ? copy.live : copy.demo;
   const controlsDisabled = requestState === 'loading';
 
   const updateInput = (patch: Partial<RoutineInput>) => {
     setInput((current) => ({ ...current, ...patch }));
   };
 
-  const applyExample = (example: (typeof EXAMPLES)[number]) => {
+  const applyExample = (example: (typeof EXAMPLES.en)[number]) => {
     setInput((current) => ({
       ...example.input,
       startDate: current.startDate,
@@ -625,7 +570,28 @@ export default function Home() {
     setShareStatus(null);
   };
 
-  const resetSample = () => applyExample(EXAMPLES[0]);
+  const resetSample = () => applyExample(EXAMPLES[locale][0]);
+
+  const changeLocale = (nextLocale: Locale) => {
+    if (nextLocale === locale || controlsDisabled) return;
+    const exampleIndex = EXAMPLES[locale].findIndex(
+      (example) => example.input.request === input.request,
+    );
+    setLocale(nextLocale);
+    document.documentElement.lang = nextLocale;
+    document.title = PAGE_COPY[nextLocale].metaTitle;
+    document
+      .querySelector('meta[name="description"]')
+      ?.setAttribute('content', PAGE_COPY[nextLocale].metaDescription);
+    if (exampleIndex >= 0) {
+      setInput((current) => ({
+        ...current,
+        request: EXAMPLES[nextLocale][exampleIndex].input.request,
+      }));
+    }
+    setError(null);
+    setShareStatus(null);
+  };
 
   const handleGenerate = async () => {
     setError(null);
@@ -636,7 +602,7 @@ export default function Home() {
         const response = await fetch('/api/routine', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ input, mode: 'deepseek' }),
+          body: JSON.stringify({ input, mode: 'deepseek', locale }),
         });
         const payload = (await response.json()) as {
           plan?: RoutinePlan;
@@ -644,12 +610,14 @@ export default function Home() {
         };
         if (!response.ok || !payload.plan) {
           throw new Error(
-            payload.error ?? 'No pudimos conectar con el proveedor de IA.',
+            locale === 'en'
+              ? copy.providerError
+              : (payload.error ?? copy.providerError),
           );
         }
         nextPlan = payload.plan;
       } else {
-        nextPlan = buildPlan(input, undefined, 'demo');
+        nextPlan = buildPlan(input, undefined, 'demo', undefined, locale);
       }
       setPlan(nextPlan);
       setSelectedSessionId(nextPlan.sessions[0]?.id ?? null);
@@ -658,9 +626,9 @@ export default function Home() {
     } catch (cause) {
       setRequestState('error');
       setError(
-        cause instanceof Error
+        locale === 'es' && cause instanceof Error
           ? cause.message
-          : 'No pudimos crear esta rutina.',
+          : copy.createError,
       );
     }
   };
@@ -673,9 +641,9 @@ export default function Home() {
         return updater(current);
       } catch (cause) {
         setError(
-          cause instanceof Error
+          locale === 'es' && cause instanceof Error
             ? cause.message
-            : 'No pudimos actualizar esta rutina.',
+            : copy.updateError,
         );
         return current;
       }
@@ -685,7 +653,7 @@ export default function Home() {
   const handleDownloadMarkdown = () => {
     if (!plan || stale) return;
     downloadText(
-      'cadencia-rutina.md',
+      locale === 'en' ? 'cadencia-routine.md' : 'cadencia-rutina.md',
       toMarkdown(plan),
       'text/markdown;charset=utf-8',
     );
@@ -694,7 +662,7 @@ export default function Home() {
   const handleDownloadICS = () => {
     if (!plan || stale) return;
     downloadText(
-      'cadencia-rutina.ics',
+      locale === 'en' ? 'cadencia-routine.ics' : 'cadencia-rutina.ics',
       toICS(plan),
       'text/calendar;charset=utf-8',
     );
@@ -711,27 +679,27 @@ export default function Home() {
       link.click();
     } catch (cause) {
       setError(
-        cause instanceof Error
+        locale === 'es' && cause instanceof Error
           ? cause.message
-          : 'No pudimos preparar el evento de calendario.',
+          : copy.calendarError,
       );
     }
   };
 
   const handleShare = async () => {
     if (!plan || stale) return;
-    const text = routineShareText(plan);
+    const text = routineShareText(plan, locale);
     try {
       if (typeof navigator.share === 'function') {
         await navigator.share({ title: plan.intent.title, text });
-        setShareStatus('Rutina compartida.');
+        setShareStatus(copy.shareDone);
       } else {
         await navigator.clipboard.writeText(text);
-        setShareStatus('Rutina copiada para compartir.');
+        setShareStatus(copy.shareCopied);
       }
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError') return;
-      setError('No pudimos compartir la rutina en este navegador.');
+      setError(copy.shareError);
     }
   };
 
@@ -742,30 +710,52 @@ export default function Home() {
   };
 
   const sampleCountLabel = useMemo(() => {
-    if (selectedDaysCount === 0) return 'ningún día';
-    return `${selectedDaysCount} ${selectedDaysCount === 1 ? 'día' : 'días'}`;
-  }, [selectedDaysCount]);
+    if (selectedDaysCount === 0) return copy.none;
+    return `${selectedDaysCount} ${selectedDaysCount === 1 ? copy.day : copy.days}`;
+  }, [copy, selectedDaysCount]);
 
   return (
-    <main className="cadencia-shell" id="inicio">
-      <a className="skip-link" href="#planificador">
-        Ir al planificador
+    <main className="cadencia-shell" id="home">
+      <a className="skip-link" href="#planner">
+        {copy.skip}
       </a>
       <header className="topbar">
-        <a className="brand" href="#inicio" aria-label="Cadencia, inicio">
+        <a className="brand" href="#home" aria-label={copy.home}>
           <span className="brand-mark" aria-hidden="true">
             <span />
             <span />
             <span />
           </span>
           <span className="brand-word">cadencia</span>
-          <span className="brand-note">tu semana, a tu ritmo</span>
+          <span className="brand-note">{copy.brand}</span>
         </a>
 
-        <nav className="product-nav" aria-label="Navegación principal">
-          <a href="#planificador">Planificar</a>
-          <a href="#como-funciona">Cómo funciona</a>
+        <nav
+          className="product-nav"
+          aria-label={
+            locale === 'en' ? 'Main navigation' : 'Navegación principal'
+          }
+        >
+          <a href="#planner">{copy.navPlan}</a>
+          <a href="#how-it-works">{copy.navHow}</a>
         </nav>
+        <fieldset className="language-switch" disabled={controlsDisabled}>
+          <legend className="sr-only">{copy.language}</legend>
+          <button
+            type="button"
+            aria-pressed={locale === 'en'}
+            onClick={() => changeLocale('en')}
+          >
+            EN
+          </button>
+          <button
+            type="button"
+            aria-pressed={locale === 'es'}
+            onClick={() => changeLocale('es')}
+          >
+            ES
+          </button>
+        </fieldset>
         <div className="topbar-meta">
           <span className="mode-pill">
             <span className="status-dot" aria-hidden="true" />
@@ -774,17 +764,14 @@ export default function Home() {
         </div>
       </header>
 
-      <ProductStory />
+      <ProductStory locale={locale} />
 
-      <div className="workspace" id="planificador" tabIndex={-1}>
+      <div className="workspace" id="planner" tabIndex={-1}>
         <section className="editor-column" aria-labelledby="editor-title">
           <div className="planner-heading">
-            <p className="product-kicker">Ahora, con tu semana</p>
-            <h2 id="editor-title">Haz espacio para lo que quieres sostener.</h2>
-            <p className="intro-copy">
-              Elige un objetivo y tus límites. Puedes probar, reajustar y
-              llevarte una copia del plan.
-            </p>
+            <p className="product-kicker">{copy.now}</p>
+            <h2 id="editor-title">{copy.plannerTitle}</h2>
+            <p className="intro-copy">{copy.plannerLead}</p>
           </div>
 
           <div className="editor-form" aria-busy={requestState === 'loading'}>
@@ -794,7 +781,7 @@ export default function Home() {
               </div>
               <div className="section-body">
                 <label className="field-label" htmlFor="goal">
-                  ¿Qué quieres volver constante?
+                  {copy.question}
                 </label>
                 <Textarea
                   id="goal"
@@ -809,11 +796,11 @@ export default function Home() {
                   className="goal-input"
                 />
                 <p className="field-help" id="goal-help">
-                  Puedes escribirlo como se lo contarías a una persona.
+                  {copy.questionHelp}
                 </p>
-                <div className="example-row" aria-label="Ejemplos de intención">
-                  <span className="example-label">Prueba con</span>
-                  {EXAMPLES.slice(1).map((example) => (
+                <div className="example-row" aria-label={copy.examples}>
+                  <span className="example-label">{copy.try}</span>
+                  {EXAMPLES[locale].slice(1).map((example) => (
                     <button
                       className="example-chip"
                       key={example.label}
@@ -836,16 +823,14 @@ export default function Home() {
               <div className="section-body">
                 <div className="section-heading">
                   <div>
-                    <p className="field-label">Elige tus pulsos</p>
-                    <p className="field-help">
-                      Tus días tienen la última palabra.
-                    </p>
+                    <p className="field-label">{copy.pulses}</p>
+                    <p className="field-help">{copy.daysRule}</p>
                   </div>
                   <span className="constraint-value">{sampleCountLabel}</span>
                 </div>
                 <fieldset className="day-toggle-row">
-                  <legend className="sr-only">Días disponibles</legend>
-                  {DAY_NAMES.map((name, index) => {
+                  <legend className="sr-only">{copy.daysLegend}</legend>
+                  {DAY_NAMES[locale].map((name, index) => {
                     const selected = input.days.includes(index);
                     return (
                       <button
@@ -862,7 +847,9 @@ export default function Home() {
                           })
                         }
                       >
-                        <span className="day-short">{DAY_SHORT[index]}</span>
+                        <span className="day-short">
+                          {DAY_SHORT[locale][index]}
+                        </span>
                         <span className="day-name">{name}</span>
                         {selected ? (
                           <Check size={12} aria-hidden="true" />
@@ -881,7 +868,7 @@ export default function Home() {
               <div className="section-body">
                 <div className="field-grid">
                   <label className="control-field" htmlFor="session-minutes">
-                    <span className="field-label">Minutos por sesión</span>
+                    <span className="field-label">{copy.perSession}</span>
                     <span className="input-with-suffix">
                       <Input
                         id="session-minutes"
@@ -900,7 +887,7 @@ export default function Home() {
                     </span>
                   </label>
                   <label className="control-field" htmlFor="weekly-minutes">
-                    <span className="field-label">Tope semanal</span>
+                    <span className="field-label">{copy.weeklyLimit}</span>
                     <span className="input-with-suffix">
                       <Input
                         id="weekly-minutes"
@@ -921,9 +908,7 @@ export default function Home() {
                 </div>
                 <div className="field-grid field-grid-second">
                   <label className="control-field" htmlFor="start-date">
-                    <span className="field-label">
-                      Semana que empieza (lunes)
-                    </span>
+                    <span className="field-label">{copy.weekStarts}</span>
                     <span className="input-with-icon">
                       <CalendarDays size={15} aria-hidden="true" />
                       <Input
@@ -938,7 +923,7 @@ export default function Home() {
                     </span>
                   </label>
                   <label className="control-field" htmlFor="start-time">
-                    <span className="field-label">Hora local</span>
+                    <span className="field-label">{copy.localTime}</span>
                     <span className="input-with-icon">
                       <Clock3 size={15} aria-hidden="true" />
                       <Input
@@ -955,38 +940,27 @@ export default function Home() {
                 </div>
                 <p className="capacity-note">
                   {configuredMinutes > input.weeklyMinutes ? (
-                    <>
-                      Tus días configurarían {configuredMinutes} min; el tope
-                      puede reducir sesiones.
-                    </>
+                    <>{copy.capacityOver(configuredMinutes)}</>
                   ) : (
-                    <>
-                      Hay espacio para {configuredMinutes} min con esta
-                      selección.
-                    </>
+                    <>{copy.capacityFits(configuredMinutes)}</>
                   )}
                 </p>
-                <p className="authority-note">
-                  Los días, minutos, hora y tope elegidos prevalecen sobre el
-                  texto; la semana debe empezar en lunes.
-                </p>
+                <p className="authority-note">{copy.authority}</p>
               </div>
             </div>
 
             <div className="mode-section">
               <div className="mode-section-heading">
                 <div>
-                  <p className="field-label">Quién propone el contenido</p>
-                  <p className="field-help">
-                    Los días y minutos que elegiste siguen mandando.
-                  </p>
+                  <p className="field-label">{copy.who}</p>
+                  <p className="field-help">{copy.rulesLead}</p>
                 </div>
                 <span className="mode-selection-label">
                   {availableModeLabel}
                 </span>
               </div>
               <fieldset className="mode-options">
-                <legend className="sr-only">Modo de generación</legend>
+                <legend className="sr-only">{copy.generation}</legend>
                 <button
                   className={`mode-option${mode === 'demo' ? ' is-selected' : ''}`}
                   type="button"
@@ -994,8 +968,8 @@ export default function Home() {
                   disabled={controlsDisabled}
                   onClick={() => setMode('demo')}
                 >
-                  <span className="mode-option-title">Demo local</span>
-                  <span>Salida determinista, sin modelo.</span>
+                  <span className="mode-option-title">{copy.localDemo}</span>
+                  <span>{copy.deterministic}</span>
                 </button>
                 <button
                   className={`mode-option${mode === 'live' ? ' is-selected' : ''}`}
@@ -1003,31 +977,21 @@ export default function Home() {
                   aria-pressed={mode === 'live'}
                   disabled={!liveAvailable || controlsDisabled}
                   onClick={() => setMode('live')}
-                  title={
-                    !liveAvailable
-                      ? 'El modo conectado no está disponible en esta versión.'
-                      : undefined
-                  }
+                  title={!liveAvailable ? copy.unavailableTitle : undefined}
                 >
-                  <span className="mode-option-title">IA conectada</span>
+                  <span className="mode-option-title">{copy.connected}</span>
                   <span>
                     {availabilityKnown && liveAvailable
-                      ? 'DeepSeek opcional.'
-                      : 'No disponible aquí.'}
+                      ? copy.optional
+                      : copy.unavailable}
                   </span>
                 </button>
               </fieldset>
               {!liveAvailable ? (
-                <p className="mode-help">
-                  Puedes explorar todo el planificador con contenido de ejemplo,
-                  sin llamadas a IA. El modo conectado se habilita por separado.
-                </p>
+                <p className="mode-help">{copy.modeHelp}</p>
               ) : null}
               {mode === 'live' && liveAvailable ? (
-                <p className="live-warning">
-                  Al crear, tu petición se enviará a DeepSeek; evita datos
-                  sensibles y considera posibles costes.
-                </p>
+                <p className="live-warning">{copy.liveWarning}</p>
               ) : null}
             </div>
 
@@ -1047,7 +1011,7 @@ export default function Home() {
                 ) : (
                   <WandSparkles size={17} aria-hidden="true" />
                 )}
-                {requestState === 'loading' ? 'Creando…' : 'Crear mi rutina'}
+                {requestState === 'loading' ? copy.creating : copy.create}
               </Button>
             </div>
             {error ? (
@@ -1056,7 +1020,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => setError(null)}
-                  aria-label="Cerrar error"
+                  aria-label={copy.closeError}
                 >
                   <X size={15} aria-hidden="true" />
                 </button>
@@ -1067,9 +1031,9 @@ export default function Home() {
 
         <aside className="preview-column" aria-labelledby="preview-title">
           <div className="preview-label-row">
-            <p className="eyebrow">Vista de la semana</p>
+            <p className="eyebrow">{copy.weekView}</p>
             <span className="preview-index">
-              {plan ? 'TU PLAN' : 'POR CREAR'}
+              {plan ? copy.yourPlan : copy.toCreate}
             </span>
           </div>
           {plan ? (
@@ -1086,6 +1050,7 @@ export default function Home() {
               onReset={resetSample}
               onSelectSession={setSelectedSessionId}
               plan={plan}
+              locale={locale}
               selectedSessionId={selectedSessionId}
               shareStatus={shareStatus}
               stale={stale}
@@ -1094,26 +1059,20 @@ export default function Home() {
           ) : (
             <div className="preview-card planner-empty">
               <CalendarDays size={30} aria-hidden="true" />
-              <h2 id="preview-title">Tu semana empieza aquí.</h2>
-              <p>
-                Al crear tu rutina verás las sesiones, el tiempo que ocupan y
-                las comprobaciones del plan.
-              </p>
+              <h2 id="preview-title">{copy.emptyTitle}</h2>
+              <p>{copy.emptyText}</p>
               <ol>
-                <li>Un objetivo que quieras sostener.</li>
-                <li>Los días y minutos que tienes.</li>
-                <li>Un plan que puedes ajustar.</li>
+                <li>{copy.empty1}</li>
+                <li>{copy.empty2}</li>
+                <li>{copy.empty3}</li>
               </ol>
-              <p className="planner-empty-note">
-                La demo usa contenido de ejemplo y se reinicia al recargar.
-                Puedes descargar el resultado.
-              </p>
+              <p className="planner-empty-note">{copy.emptyNote}</p>
             </div>
           )}
         </aside>
       </div>
-      <ProductNotes />
-      <ProductFooter />
+      <ProductNotes locale={locale} />
+      <ProductFooter locale={locale} />
     </main>
   );
 }

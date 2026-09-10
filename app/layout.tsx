@@ -15,9 +15,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Cadencia · Haz que una meta tenga ritmo',
+  title: 'Cadencia · Give your goal a rhythm',
   description:
-    'Convierte una intención en sesiones que caben en tu semana. Prueba cómo Cadencia reajusta un día perdido y conserva lo que ya hiciste.',
+    'Turn an intention into sessions that fit your week. See how Cadencia replans a missed day while preserving completed work.',
 };
 
 export default function RootLayout({
@@ -26,7 +26,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es">
+    <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
         {children}
       </body>

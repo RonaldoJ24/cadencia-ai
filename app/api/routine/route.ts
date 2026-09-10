@@ -340,8 +340,14 @@ export async function POST(request: Request): Promise<Response> {
   if (mode !== 'demo' && mode !== 'deepseek') {
     return json({ error: 'El modo de rutina no es válido.' }, 400);
   }
+  const locale = value.locale === undefined ? 'es' : value.locale;
+  if (locale !== 'en' && locale !== 'es') {
+    return json({ error: 'Invalid language.' }, 400);
+  }
   if (mode === 'demo')
-    return json({ plan: buildPlan(input, undefined, 'demo') });
+    return json({
+      plan: buildPlan(input, undefined, 'demo', undefined, locale),
+    });
 
   const config = await liveConfig();
   if (!config) return json({ error: 'La IA real no está configurada.' }, 503);
@@ -351,7 +357,15 @@ export async function POST(request: Request): Promise<Response> {
     serviceRequestId = serviceResult.requestId;
     const intent = validateIntent(serviceResult.intent);
     return json(
-      { plan: buildPlan(input, intent, 'deepseek', serviceResult.scopeRefused) },
+      {
+        plan: buildPlan(
+          input,
+          intent,
+          'deepseek',
+          serviceResult.scopeRefused,
+          locale,
+        ),
+      },
       200,
       serviceRequestId,
     );

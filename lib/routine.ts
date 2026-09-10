@@ -7,6 +7,8 @@ export type RoutineInput = {
   time: string;
 };
 
+export type Locale = 'en' | 'es';
+
 export type Intent = {
   title: string;
   goal: string;
@@ -32,6 +34,7 @@ export type RoutinePlan = {
   checks: { label: string; passed: boolean; detail: string }[];
   warnings: string[];
   explanation: string;
+  locale?: Locale;
 };
 
 const MAX_REQUEST_CHARS = 2_000;
@@ -57,7 +60,13 @@ function invalid(message: string): never {
 function hasControl(value: string): boolean {
   for (const character of value) {
     const code = character.codePointAt(0) ?? 0;
-    if (code <= 8 || code === 11 || code === 12 || (code >= 14 && code <= 31) || code === 127) {
+    if (
+      code <= 8 ||
+      code === 11 ||
+      code === 12 ||
+      (code >= 14 && code <= 31) ||
+      code === 127
+    ) {
       return true;
     }
   }
@@ -77,8 +86,17 @@ function text(value: unknown, label: string, max: number): string {
   return value;
 }
 
-function integer(value: unknown, label: string, min: number, max: number): number {
-  if (typeof value !== 'number' || !Number.isFinite(value) || !Number.isInteger(value)) {
+function integer(
+  value: unknown,
+  label: string,
+  min: number,
+  max: number,
+): number {
+  if (
+    typeof value !== 'number' ||
+    !Number.isFinite(value) ||
+    !Number.isInteger(value)
+  ) {
     invalid(`${label} debe ser un entero finito.`);
   }
   if (value < min || value > max) {
@@ -122,7 +140,9 @@ function addDays(start: string, offset: number): string {
 }
 
 function dayOffset(start: string, date: string): number {
-  return Math.round((dateValue(date).getTime() - dateValue(start).getTime()) / 86_400_000);
+  return Math.round(
+    (dateValue(date).getTime() - dateValue(start).getTime()) / 86_400_000,
+  );
 }
 
 function mondayIndex(date: string): number {
@@ -149,22 +169,38 @@ function compact(value: string): string {
   return value.replace(/\s+/gu, ' ').trim();
 }
 
-const RESTRICTED_REQUEST = /\b(?:diagnos(?:is|tico|tica|ticos|ticas|ticar)?|sintom(?:a|as)?|tratamiento(?:s)?|medicamento(?:s)?|dosis|enfermedad(?:es)?|lesion(?:es)?|dolor(?:es)?|ejercicio(?:s)?|entrenamiento(?:s)?|fitness|calorias|dieta(?:s)?|nutricion|perder peso|ganar musculo|symptom(?:s)?|medical|medicine|medication|dosage|disease(?:s)?|injur(?:y|ies)|pain|exercise|workout|calorie(?:s)?|diet(?:s)?|weight loss|muscle gain|invertir|inversion(?:es)?|acciones|cripto(?:moneda)?|trading|prestamo(?:s)?|credito|hipoteca|impuesto(?:s)?|finanzas personales|asesoria financiera|ganar dinero|invest(?:ment|ing)?|stocks?|crypto(?:currency)?|loan|credit|mortgage|tax(?:es)?|personal finance|financial advice|make money|abogado(?:s)?|asesoria legal|demanda(?:s)?|contrato(?:s)?|litigio|derechos legales|divorcio|visa|inmigracion|testamento|lawyer|legal advice|lawsuit|contract|litigation|legal rights|divorce|immigration)\b/u;
+const RESTRICTED_REQUEST =
+  /\b(?:diagnos(?:is|tico|tica|ticos|ticas|ticar)?|sintom(?:a|as)?|tratamiento(?:s)?|medicamento(?:s)?|dosis|enfermedad(?:es)?|lesion(?:es)?|dolor(?:es)?|ejercicio(?:s)?|entrenamiento(?:s)?|fitness|calorias|dieta(?:s)?|nutricion|perder peso|ganar musculo|symptom(?:s)?|medical|medicine|medication|dosage|disease(?:s)?|injur(?:y|ies)|pain|exercise|workout|calorie(?:s)?|diet(?:s)?|weight loss|muscle gain|invertir|inversion(?:es)?|acciones|cripto(?:moneda)?|trading|prestamo(?:s)?|credito|hipoteca|impuesto(?:s)?|finanzas personales|asesoria financiera|ganar dinero|invest(?:ment|ing)?|stocks?|crypto(?:currency)?|loan|credit|mortgage|tax(?:es)?|personal finance|financial advice|make money|abogado(?:s)?|asesoria legal|demanda(?:s)?|contrato(?:s)?|litigio|derechos legales|divorcio|visa|inmigracion|testamento|lawyer|legal advice|lawsuit|contract|litigation|legal rights|divorce|immigration)\b/u;
 const RESTRICTED_REQUEST_GLOBAL = new RegExp(RESTRICTED_REQUEST.source, 'gu');
-const DIRECT_REQUEST_CUE = /\b(?:dime|decime|indica(?:me)?|explica(?:me)?|recomiend(?:a|ame)|aconsej(?:a|ame)|sugier(?:e|eme)|que\s+(?:debo|puedo|tengo\s+que)|como\s+(?:debo|puedo|tengo\s+que)|cuant(?:o|a|os|as)\s+(?:pastill(?:a|as)|tableta(?:s)?|capsul(?:a|as)|comprimid(?:o|os|a|as))|tell\s+me|what\s+should|how\s+(?:much|many)|should\s+i|can\s+i)\b/u;
+const DIRECT_REQUEST_CUE =
+  /\b(?:dime|decime|indica(?:me)?|explica(?:me)?|recomiend(?:a|ame)|aconsej(?:a|ame)|sugier(?:e|eme)|que\s+(?:debo|puedo|tengo\s+que)|como\s+(?:debo|puedo|tengo\s+que)|cuant(?:o|a|os|as)\s+(?:pastill(?:a|as)|tableta(?:s)?|capsul(?:a|as)|comprimid(?:o|os|a|as))|tell\s+me|what\s+should|how\s+(?:much|many)|should\s+i|can\s+i)\b/u;
 const DIRECT_REQUEST_CUE_GLOBAL = new RegExp(DIRECT_REQUEST_CUE.source, 'gu');
-const DIRECT_DOMAIN_ACTION_CUE = /\b(?:pastill(?:a|as)|tableta(?:s)?|capsul(?:a|as)|comprimid(?:o|os|a|as)|tomar|tome|consumir|ingerir|declarar|declare|declar(?:acion|aciones)|testificar|testifique|juez|tribunal|ganar\s+(?:mi|el)\s+caso|defender(?:me)?|presentar\s+(?:ante|al)|pill(?:s)?|tablet(?:s)?|capsule(?:s)?|take|ingest|declare|testify|judge|court|win\s+(?:my|the)\s+case|defend(?:\s+me)?|file\s+(?:with|in))\b/u;
-const DIRECT_DOMAIN_ACTION_CUE_GLOBAL = new RegExp(DIRECT_DOMAIN_ACTION_CUE.source, 'gu');
+const DIRECT_DOMAIN_ACTION_CUE =
+  /\b(?:pastill(?:a|as)|tableta(?:s)?|capsul(?:a|as)|comprimid(?:o|os|a|as)|tomar|tome|consumir|ingerir|declarar|declare|declar(?:acion|aciones)|testificar|testifique|juez|tribunal|ganar\s+(?:mi|el)\s+caso|defender(?:me)?|presentar\s+(?:ante|al)|pill(?:s)?|tablet(?:s)?|capsule(?:s)?|take|ingest|declare|testify|judge|court|win\s+(?:my|the)\s+case|defend(?:\s+me)?|file\s+(?:with|in))\b/u;
+const DIRECT_DOMAIN_ACTION_CUE_GLOBAL = new RegExp(
+  DIRECT_DOMAIN_ACTION_CUE.source,
+  'gu',
+);
 const DOSAGE_MATCH = /\b(?:dosis|dosage)\b/u;
 const LAWYER_MATCH = /\b(?:abogado|abogados|lawyer|lawyers)\b/u;
-const ANALYSIS_ACTION = /\b(?:analiz(?:ar|a|ando|is)|analic(?:e|es|emos|en)|estudi(?:ar|a|ando|o)|examinar|interpretar|identificar|explorar|comprender|comparar|uso|significado|meaning|analy[sz](?:e|ing|is))\b/gu;
-const ANALYSIS_NEGATION = /\b(?:no|nunca|never|not|don't|do not|sin|without|avoid)\b(?:\s+[a-z0-9]+){0,3}\s*$/u;
-const LITERARY_LINGUISTIC_CONTEXT = /\b(?:literari[oa]s?|literatura|poema(?:s)?|poesi(?:a|as)|metafora(?:s)?|figura(?:s)? retorica(?:s)?|linguistic[oa]s?|linguistic|palabra(?:s)?|lenguaje|language|literary|poem(?:s)?|metaphor(?:s)?|novela(?:s)?|cuento(?:s)?|relato(?:s)?|texto(?:s)?|verso(?:s)?|semantica(?:s)?|gramatica(?:s)?|retorica(?:s)?)\b/gu;
-const HEALTH_ADVICE_CONTEXT = /\b(?:salud|health|medic(?:a|o|al)(?:s|es)?|medical|medicine|medication|recomendacion(?:es)?|consejo(?:s)?|orientacion(?:es)?|asesoria(?:s)?|advice|recommendation(?:s)?)\b/u;
-const HEALTH_ADVICE_EXCLUSION = /(?:\b(?:sin|no|nunca|evitar|evitando|excluir|excluyendo|exclude|without|avoid|excluding)\b(?:\s+[a-z0-9]+){0,2}\s+(?:recomendacion(?:es)?|consejo(?:s)?|orientacion(?:es)?|asesoria(?:s)?|advice|recommendation(?:s)?)(?:\s+[a-z0-9]+){0,3}\s+(?:salud|health|medic(?:a|o|al)(?:s|es)?|medical|medicine|medication)\b)|(?:\b(?:sin|no|nunca|evitar|evitando|excluir|excluyendo|exclude|without|avoid|excluding)\b(?:\s+[a-z0-9]+){0,2}\s+(?:salud|health|medic(?:a|o|al)(?:s|es)?|medical|medicine|medication)(?:\s+[a-z0-9]+){0,3}\s+(?:recomendacion(?:es)?|consejo(?:s)?|orientacion(?:es)?|asesoria(?:s)?|advice|recommendation(?:s)?)\b)/u;
-const HEALTH_ADVICE_EXCLUSION_GLOBAL = new RegExp(HEALTH_ADVICE_EXCLUSION.source, 'gu');
-const CREATIVE_ACTION = /\b(?:ficcion|fictici[oa]s?|fiction|creative|escrib(?:ir|e|iendo)|crear|crea|creando|redactar|narrar|imagina|cuento|relato|novela|story|write|writing|create)\b/u;
-const FICTION_TARGET = /\b(?:personaje(?:s)?|escena(?:s)?|dialogo(?:s)?|narrativ[oa]s?|character(?:s)?|scene(?:s)?|dialogue(?:s)?|narrative(?:s)?|historia(?:s)?|story(?:line|lines)?|capitulo(?:s)?)\b/u;
+const ANALYSIS_ACTION =
+  /\b(?:analiz(?:ar|a|ando|is)|analic(?:e|es|emos|en)|estudi(?:ar|a|ando|o)|examinar|interpretar|identificar|explorar|comprender|comparar|uso|significado|meaning|analy[sz](?:e|ing|is))\b/gu;
+const ANALYSIS_NEGATION =
+  /\b(?:no|nunca|never|not|don't|do not|sin|without|avoid)\b(?:\s+[a-z0-9]+){0,3}\s*$/u;
+const LITERARY_LINGUISTIC_CONTEXT =
+  /\b(?:literari[oa]s?|literatura|poema(?:s)?|poesi(?:a|as)|metafora(?:s)?|figura(?:s)? retorica(?:s)?|linguistic[oa]s?|linguistic|palabra(?:s)?|lenguaje|language|literary|poem(?:s)?|metaphor(?:s)?|novela(?:s)?|cuento(?:s)?|relato(?:s)?|texto(?:s)?|verso(?:s)?|semantica(?:s)?|gramatica(?:s)?|retorica(?:s)?)\b/gu;
+const HEALTH_ADVICE_CONTEXT =
+  /\b(?:salud|health|medic(?:a|o|al)(?:s|es)?|medical|medicine|medication|recomendacion(?:es)?|consejo(?:s)?|orientacion(?:es)?|asesoria(?:s)?|advice|recommendation(?:s)?)\b/u;
+const HEALTH_ADVICE_EXCLUSION =
+  /(?:\b(?:sin|no|nunca|evitar|evitando|excluir|excluyendo|exclude|without|avoid|excluding)\b(?:\s+[a-z0-9]+){0,2}\s+(?:recomendacion(?:es)?|consejo(?:s)?|orientacion(?:es)?|asesoria(?:s)?|advice|recommendation(?:s)?)(?:\s+[a-z0-9]+){0,3}\s+(?:salud|health|medic(?:a|o|al)(?:s|es)?|medical|medicine|medication)\b)|(?:\b(?:sin|no|nunca|evitar|evitando|excluir|excluyendo|exclude|without|avoid|excluding)\b(?:\s+[a-z0-9]+){0,2}\s+(?:salud|health|medic(?:a|o|al)(?:s|es)?|medical|medicine|medication)(?:\s+[a-z0-9]+){0,3}\s+(?:recomendacion(?:es)?|consejo(?:s)?|orientacion(?:es)?|asesoria(?:s)?|advice|recommendation(?:s)?)\b)/u;
+const HEALTH_ADVICE_EXCLUSION_GLOBAL = new RegExp(
+  HEALTH_ADVICE_EXCLUSION.source,
+  'gu',
+);
+const CREATIVE_ACTION =
+  /\b(?:ficcion|fictici[oa]s?|fiction|creative|escrib(?:ir|e|iendo)|crear|crea|creando|redactar|narrar|imagina|cuento|relato|novela|story|write|writing|create)\b/u;
+const FICTION_TARGET =
+  /\b(?:personaje(?:s)?|escena(?:s)?|dialogo(?:s)?|narrativ[oa]s?|character(?:s)?|scene(?:s)?|dialogue(?:s)?|narrative(?:s)?|historia(?:s)?|story(?:line|lines)?|capitulo(?:s)?)\b/u;
 
 function directAdviceRequest(normalized: string): boolean {
   const requestCues = [...normalized.matchAll(DIRECT_REQUEST_CUE_GLOBAL)];
@@ -176,9 +212,15 @@ function literaryAnalysisContext(normalized: string): boolean {
   const literaryTerms = [...normalized.matchAll(LITERARY_LINGUISTIC_CONTEXT)];
   return [...normalized.matchAll(ANALYSIS_ACTION)].some((action) => {
     const actionStart = action.index ?? 0;
-    const beforeAction = normalized.slice(Math.max(0, actionStart - 64), actionStart);
-    return !ANALYSIS_NEGATION.test(beforeAction) && literaryTerms.some((term) =>
-      Math.abs(actionStart - (term.index ?? 0)) <= 120,
+    const beforeAction = normalized.slice(
+      Math.max(0, actionStart - 64),
+      actionStart,
+    );
+    return (
+      !ANALYSIS_NEGATION.test(beforeAction) &&
+      literaryTerms.some(
+        (term) => Math.abs(actionStart - (term.index ?? 0)) <= 120,
+      )
     );
   });
 }
@@ -187,13 +229,23 @@ function explicitHealthExclusion(normalized: string): boolean {
   return HEALTH_ADVICE_EXCLUSION.test(normalized);
 }
 
-function explicitlyExcludedHealthTerm(normalized: string, match: RegExpMatchArray): boolean {
+function explicitlyExcludedHealthTerm(
+  normalized: string,
+  match: RegExpMatchArray,
+): boolean {
   const matchStart = match.index ?? -1;
-  return HEALTH_ADVICE_CONTEXT.test(match[0]) &&
-    [...normalized.matchAll(HEALTH_ADVICE_EXCLUSION_GLOBAL)].some((exclusion) => {
-      const exclusionStart = exclusion.index ?? -1;
-      return exclusionStart <= matchStart && matchStart + match[0].length <= exclusionStart + exclusion[0].length;
-    });
+  return (
+    HEALTH_ADVICE_CONTEXT.test(match[0]) &&
+    [...normalized.matchAll(HEALTH_ADVICE_EXCLUSION_GLOBAL)].some(
+      (exclusion) => {
+        const exclusionStart = exclusion.index ?? -1;
+        return (
+          exclusionStart <= matchStart &&
+          matchStart + match[0].length <= exclusionStart + exclusion[0].length
+        );
+      },
+    )
+  );
 }
 
 function restrictedRequest(request: string): boolean {
@@ -205,19 +257,37 @@ function restrictedRequest(request: string): boolean {
   if (matches.length === 0) return false;
   if (directAdviceRequest(normalized)) return true;
 
-  const dosageContext = DOSAGE_MATCH.test(normalized) &&
-    literaryAnalysisContext(normalized) && explicitHealthExclusion(normalized);
-  const fictionContext = CREATIVE_ACTION.test(normalized) && FICTION_TARGET.test(normalized);
+  const dosageContext =
+    DOSAGE_MATCH.test(normalized) &&
+    literaryAnalysisContext(normalized) &&
+    explicitHealthExclusion(normalized);
+  const fictionContext =
+    CREATIVE_ACTION.test(normalized) && FICTION_TARGET.test(normalized);
   for (const match of matches) {
     if (DOSAGE_MATCH.test(match[0]) && dosageContext) continue;
-    if (dosageContext && explicitlyExcludedHealthTerm(normalized, match)) continue;
+    if (dosageContext && explicitlyExcludedHealthTerm(normalized, match))
+      continue;
     if (LAWYER_MATCH.test(match[0]) && fictionContext) continue;
     return true;
   }
   return false;
 }
 
-function scopeIntent(): Intent {
+function scopeIntent(locale: Locale = 'es'): Intent {
+  if (locale === 'en') {
+    return {
+      title: 'Request outside the current scope',
+      goal: 'Cadencia organizes learning, creative practice, and general personal work; it does not provide medical, fitness, financial, or legal guidance.',
+      domain: 'general',
+      steps: [
+        {
+          title: 'Reframe the goal',
+          instructions:
+            'Ask for a learning, creative, or general organization routine without specialized advice.',
+        },
+      ],
+    };
+  }
   return {
     title: 'Solicitud fuera de alcance',
     goal: 'Cadencia organiza aprendizaje, práctica creativa y trabajo personal general; no ofrece orientación médica, de ejercicio, financiera ni legal.',
@@ -233,29 +303,100 @@ function scopeIntent(): Intent {
 }
 
 function domainFor(request: string): Intent['domain'] {
-  if (/(?:aprender|estudiar|idioma|inglés|ingles|curso|lectura|leer|programar|programación|programacion|learn|study|language|course|read|code)/iu.test(request)) {
+  if (
+    /(?:aprender|estudiar|idioma|inglés|ingles|curso|lectura|leer|programar|programación|programacion|learn|study|language|english|typescript|course|read|code)/iu.test(
+      request,
+    )
+  ) {
     return 'learning';
   }
-  if (/(?:dibujar|pintar|acuarela|escribir|música|musica|diseño|diseno|fotografía|fotografia|crear|draw|paint|write|music|design|create)/iu.test(request)) {
+  if (
+    /(?:dibujar|pintar|acuarela|escribir|música|musica|diseño|diseno|fotografía|fotografia|crear|draw|paint|write|music|design|create)/iu.test(
+      request,
+    )
+  ) {
     return 'creative';
   }
   return 'general';
 }
 
-function demoSteps(domain: Intent['domain']): Intent['steps'] {
+function demoSteps(
+  domain: Intent['domain'],
+  locale: Locale = 'es',
+): Intent['steps'] {
+  if (locale === 'en') {
+    if (domain === 'learning') {
+      return [
+        {
+          title: 'Define evidence',
+          instructions:
+            'Write down what you will be able to explain or produce by the end of the week.',
+        },
+        {
+          title: 'Practice in one block',
+          instructions:
+            'Work with one source or exercise and note what challenged you.',
+        },
+        {
+          title: 'Recall and review',
+          instructions:
+            'Finish without checking your notes and record what you will retain for the next session.',
+        },
+      ];
+    }
+    if (domain === 'creative') {
+      return [
+        {
+          title: 'Choose a focus',
+          instructions:
+            'Reduce the idea to one concrete detail you can explore this week.',
+        },
+        {
+          title: 'Create a short version',
+          instructions:
+            'Make a first version without polishing it throughout the entire block.',
+        },
+        {
+          title: 'Observe and save',
+          instructions:
+            'Note one decision that worked and save a sample to compare later.',
+        },
+      ];
+    }
+    return [
+      {
+        title: 'Clarify the next step',
+        instructions:
+          'Write down the small outcome this session will leave finished.',
+      },
+      {
+        title: 'Do the main block',
+        instructions:
+          'Work on one task and set secondary ideas aside for later.',
+      },
+      {
+        title: 'Close with a note',
+        instructions:
+          'Record what moved forward and the first action for the next session.',
+      },
+    ];
+  }
   if (domain === 'learning') {
     return [
       {
         title: 'Define una evidencia',
-        instructions: 'Escribe qué podrás explicar o producir al terminar la semana.',
+        instructions:
+          'Escribe qué podrás explicar o producir al terminar la semana.',
       },
       {
         title: 'Practica en un bloque',
-        instructions: 'Trabaja con una sola fuente o ejercicio y anota la parte que te costó.',
+        instructions:
+          'Trabaja con una sola fuente o ejercicio y anota la parte que te costó.',
       },
       {
         title: 'Recuerda y revisa',
-        instructions: 'Cierra sin consultar tus notas y registra qué conservarás para la próxima sesión.',
+        instructions:
+          'Cierra sin consultar tus notas y registra qué conservarás para la próxima sesión.',
       },
     ];
   }
@@ -263,30 +404,36 @@ function demoSteps(domain: Intent['domain']): Intent['steps'] {
     return [
       {
         title: 'Elige un foco',
-        instructions: 'Reduce la idea a un detalle concreto que puedas explorar esta semana.',
+        instructions:
+          'Reduce la idea a un detalle concreto que puedas explorar esta semana.',
       },
       {
         title: 'Crea una versión breve',
-        instructions: 'Haz una primera versión sin pulirla durante el bloque completo.',
+        instructions:
+          'Haz una primera versión sin pulirla durante el bloque completo.',
       },
       {
         title: 'Observa y guarda',
-        instructions: 'Anota una decisión que funcionó y guarda una muestra para comparar después.',
+        instructions:
+          'Anota una decisión que funcionó y guarda una muestra para comparar después.',
       },
     ];
   }
   return [
     {
       title: 'Aclara el siguiente paso',
-      instructions: 'Escribe el resultado pequeño que dejará esta sesión terminada.',
+      instructions:
+        'Escribe el resultado pequeño que dejará esta sesión terminada.',
     },
     {
       title: 'Haz el bloque principal',
-      instructions: 'Trabaja en una sola tarea y aparta las ideas secundarias para después.',
+      instructions:
+        'Trabaja en una sola tarea y aparta las ideas secundarias para después.',
     },
     {
       title: 'Cierra con una nota',
-      instructions: 'Registra lo que avanzó y el primer movimiento de la próxima sesión.',
+      instructions:
+        'Registra lo que avanzó y el primer movimiento de la próxima sesión.',
     },
   ];
 }
@@ -308,16 +455,32 @@ export function validateInput(input: unknown): RoutineInput {
   if (!value) invalid('input debe ser un objeto.');
 
   const request = text(value.request, 'request', MAX_REQUEST_CHARS);
-  if (!Array.isArray(value.days) || value.days.length === 0 || value.days.length > 7) {
+  if (
+    !Array.isArray(value.days) ||
+    value.days.length === 0 ||
+    value.days.length > 7
+  ) {
     invalid('days debe contener entre 1 y 7 días.');
   }
-  const days = value.days.map((day, index) => integer(day, `days[${index}]`, 0, 6));
+  const days = value.days.map((day, index) =>
+    integer(day, `days[${index}]`, 0, 6),
+  );
   if (new Set(days).size !== days.length) {
     invalid('days no puede contener días repetidos.');
   }
 
-  const sessionMinutes = integer(value.sessionMinutes, 'sessionMinutes', 1, MAX_SESSION_MINUTES);
-  const weeklyMinutes = integer(value.weeklyMinutes, 'weeklyMinutes', 1, MAX_WEEKLY_MINUTES);
+  const sessionMinutes = integer(
+    value.sessionMinutes,
+    'sessionMinutes',
+    1,
+    MAX_SESSION_MINUTES,
+  );
+  const weeklyMinutes = integer(
+    value.weeklyMinutes,
+    'weeklyMinutes',
+    1,
+    MAX_WEEKLY_MINUTES,
+  );
   if (weeklyMinutes < sessionMinutes) {
     invalid('weeklyMinutes debe cubrir al menos una sesión completa.');
   }
@@ -331,7 +494,14 @@ export function validateInput(input: unknown): RoutineInput {
     invalid('La sesión debe terminar antes de cambiar de día.');
   }
 
-  return { request, days: [...days], sessionMinutes, weeklyMinutes, startDate, time };
+  return {
+    request,
+    days: [...days],
+    sessionMinutes,
+    weeklyMinutes,
+    startDate,
+    time,
+  };
 }
 
 export function validateIntent(input: unknown): Intent {
@@ -339,10 +509,18 @@ export function validateIntent(input: unknown): Intent {
   if (!value) invalid('intent debe ser un objeto.');
   const title = text(value.title, 'intent.title', MAX_TITLE_CHARS);
   const goal = text(value.goal, 'intent.goal', MAX_GOAL_CHARS);
-  if (value.domain !== 'learning' && value.domain !== 'creative' && value.domain !== 'general') {
+  if (
+    value.domain !== 'learning' &&
+    value.domain !== 'creative' &&
+    value.domain !== 'general'
+  ) {
     invalid('intent.domain no es válido.');
   }
-  if (!Array.isArray(value.steps) || value.steps.length === 0 || value.steps.length > MAX_INTENT_STEPS) {
+  if (
+    !Array.isArray(value.steps) ||
+    value.steps.length === 0 ||
+    value.steps.length > MAX_INTENT_STEPS
+  ) {
     invalid('intent.steps debe contener entre 1 y 12 pasos.');
   }
   const steps = value.steps.map((step, index) => {
@@ -360,21 +538,39 @@ export function validateIntent(input: unknown): Intent {
   return { title, goal, domain: value.domain, steps };
 }
 
-export function demoIntent(request: string): Intent {
+export function demoIntent(request: string, locale: Locale = 'es'): Intent {
   const safeRequest = text(request, 'request', MAX_REQUEST_CHARS);
-  if (restrictedRequest(safeRequest)) return scopeIntent();
+  if (restrictedRequest(safeRequest)) return scopeIntent(locale);
   const label = compact(safeRequest).slice(0, 96);
   const domain = domainFor(safeRequest);
-  const prefix = domain === 'learning' ? 'Aprendizaje' : domain === 'creative' ? 'Práctica creativa' : 'Trabajo personal';
+  const prefix =
+    locale === 'en'
+      ? domain === 'learning'
+        ? 'Learning'
+        : domain === 'creative'
+          ? 'Creative practice'
+          : 'Personal work'
+      : domain === 'learning'
+        ? 'Aprendizaje'
+        : domain === 'creative'
+          ? 'Práctica creativa'
+          : 'Trabajo personal';
   return {
     title: `${prefix}: ${label}`,
-    goal: `Avanzar en «${label}» con pasos pequeños y comprobables.`,
+    goal:
+      locale === 'en'
+        ? `Move “${label}” forward with small, verifiable steps.`
+        : `Avanzar en «${label}» con pasos pequeños y comprobables.`,
     domain,
-    steps: demoSteps(domain),
+    steps: demoSteps(domain, locale),
   };
 }
 
-function checksFor(input: RoutineInput, sessions: Session[]) {
+function checksFor(
+  input: RoutineInput,
+  sessions: Session[],
+  locale: Locale = 'es',
+) {
   const allowed = new Set(input.days);
   const dates = new Set<string>();
   const validDates = sessions.every((session) => {
@@ -384,43 +580,76 @@ function checksFor(input: RoutineInput, sessions: Session[]) {
     dates.add(session.date);
     return inWeek && dateMatchesIndex && allowed.has(session.dayIndex);
   });
-  const sameDuration = sessions.every((session) => session.minutes === input.sessionMinutes);
+  const sameDuration = sessions.every(
+    (session) => session.minutes === input.sessionMinutes,
+  );
   const activeMinutes = sessions
     .filter((session) => session.status !== 'missed')
     .reduce((total, session) => total + session.minutes, 0);
   return [
     {
-      label: 'Días elegidos',
+      label: locale === 'en' ? 'Selected days' : 'Días elegidos',
       passed: validDates,
-      detail: validDates
-        ? 'Cada sesión cae en un día permitido de la semana seleccionada.'
-        : 'Hay una sesión fuera de los días o de la semana seleccionada.',
+      detail:
+        locale === 'en'
+          ? validDates
+            ? 'Every session falls on an allowed day in the selected week.'
+            : 'A session falls outside the allowed days or selected week.'
+          : validDates
+            ? 'Cada sesión cae en un día permitido de la semana seleccionada.'
+            : 'Hay una sesión fuera de los días o de la semana seleccionada.',
     },
     {
-      label: 'Duración por sesión',
+      label: locale === 'en' ? 'Session length' : 'Duración por sesión',
       passed: sameDuration,
-      detail: `${input.sessionMinutes} min por sesión.`,
+      detail:
+        locale === 'en'
+          ? `${input.sessionMinutes} min per session.`
+          : `${input.sessionMinutes} min por sesión.`,
     },
     {
-      label: 'Tope semanal',
+      label: locale === 'en' ? 'Weekly limit' : 'Tope semanal',
       passed: activeMinutes <= input.weeklyMinutes,
-      detail: `${activeMinutes} de ${input.weeklyMinutes} min en sesiones programadas o hechas.`,
+      detail:
+        locale === 'en'
+          ? `${activeMinutes} of ${input.weeklyMinutes} min in planned or completed sessions.`
+          : `${activeMinutes} de ${input.weeklyMinutes} min en sesiones programadas o hechas.`,
     },
     {
-      label: 'Sin colisiones',
+      label: locale === 'en' ? 'No overlaps' : 'Sin colisiones',
       passed: dates.size === sessions.length,
-      detail: dates.size === sessions.length ? 'Una sesión como máximo por día.' : 'Hay dos sesiones el mismo día.',
+      detail:
+        locale === 'en'
+          ? dates.size === sessions.length
+            ? 'At most one session per day.'
+            : 'Two sessions share the same day.'
+          : dates.size === sessions.length
+            ? 'Una sesión como máximo por día.'
+            : 'Hay dos sesiones el mismo día.',
     },
   ];
 }
 
-function baseExplanation(input: RoutineInput, mode: RoutinePlan['mode'], sessions: Session[]): string {
+function baseExplanation(
+  input: RoutineInput,
+  mode: RoutinePlan['mode'],
+  sessions: Session[],
+  locale: Locale = 'es',
+): string {
   const activeMinutes = sessions
     .filter((session) => session.status !== 'missed')
     .reduce((total, session) => total + session.minutes, 0);
-  const source = mode === 'demo'
-    ? 'El contenido es una salida determinista de demostración.'
-    : 'El contenido fue propuesto por DeepSeek y el calendario fue validado de forma determinista.';
+  if (locale === 'en') {
+    const source =
+      mode === 'demo'
+        ? 'The content is deterministic demo output.'
+        : 'DeepSeek proposed the content and the calendar was validated deterministically.';
+    return `${source} The selected days and time were preserved; ${sessions.length} session(s) use ${activeMinutes} of the ${input.weeklyMinutes} min weekly limit.`;
+  }
+  const source =
+    mode === 'demo'
+      ? 'El contenido es una salida determinista de demostración.'
+      : 'El contenido fue propuesto por DeepSeek y el calendario fue validado de forma determinista.';
   return `${source} Se conservaron los días y la hora indicados; ${sessions.length} sesión(es) usan ${activeMinutes} de ${input.weeklyMinutes} min del tope semanal.`;
 }
 
@@ -434,9 +663,10 @@ function planWithChecks(
     intent: cloneIntent(plan.intent),
     mode: plan.mode,
     sessions: plan.sessions.map(cloneSession),
-    checks: checksFor(plan.input, plan.sessions),
+    checks: checksFor(plan.input, plan.sessions, plan.locale ?? 'es'),
     warnings: [...new Set(warnings)],
     explanation,
+    ...(plan.locale ? { locale: plan.locale } : {}),
   };
 }
 
@@ -445,20 +675,29 @@ export function buildPlan(
   rawIntent?: Intent,
   mode: RoutinePlan['mode'] = 'demo',
   scopeRefused?: boolean,
+  locale: Locale = 'es',
 ): RoutinePlan {
   const input = validateInput(rawInput);
   if (mode !== 'demo' && mode !== 'deepseek') invalid('mode no es válido.');
   if (mode === 'deepseek' && typeof scopeRefused !== 'boolean') {
     invalid('scope_refused debe ser un booleano validado.');
   }
-  const candidate = rawIntent === undefined
-    ? mode === 'demo' ? demoIntent(input.request) : scopeIntent()
-    : validateIntent(rawIntent);
+  const candidate =
+    rawIntent === undefined
+      ? mode === 'demo'
+        ? demoIntent(input.request, locale)
+        : scopeIntent(locale)
+      : validateIntent(rawIntent);
   const warnings: string[] = [];
-  const unsafe = mode === 'demo' ? restrictedRequest(input.request) : scopeRefused === true;
-  const intent = unsafe ? scopeIntent() : candidate;
+  const unsafe =
+    mode === 'demo' ? restrictedRequest(input.request) : scopeRefused === true;
+  const intent = unsafe ? scopeIntent(locale) : candidate;
   if (unsafe) {
-    warnings.push('Esta solicitud queda fuera de alcance; no se ofrece orientación médica, de ejercicio, financiera ni legal.');
+    warnings.push(
+      locale === 'en'
+        ? 'This request is outside the current scope; medical, fitness, financial, and legal guidance is not provided.'
+        : 'Esta solicitud queda fuera de alcance; no se ofrece orientación médica, de ejercicio, financiera ni legal.',
+    );
   }
 
   const capacity = Math.floor(input.weeklyMinutes / input.sessionMinutes);
@@ -466,23 +705,28 @@ export function buildPlan(
   const sessionCount = unsafe ? 0 : Math.min(selectedDays.length, capacity);
   if (!unsafe && sessionCount < selectedDays.length) {
     warnings.push(
-      `El tope semanal permite ${sessionCount} de ${selectedDays.length} días elegidos; se dejaron días sin sesión.`,
+      locale === 'en'
+        ? `The weekly limit allows ${sessionCount} of ${selectedDays.length} selected days; some days were left without a session.`
+        : `El tope semanal permite ${sessionCount} de ${selectedDays.length} días elegidos; se dejaron días sin sesión.`,
     );
   }
-  const sessions = selectedDays.slice(0, sessionCount).map((dayIndex, index) => {
-    const date = addDays(input.startDate, dayIndex);
-    const step = intent.steps[index % intent.steps.length];
-    const prefix = `Paso ${index + 1}: `;
-    return {
-      id: `session-${date}`,
-      date,
-      dayIndex,
-      title: `${prefix}${step.title.slice(0, MAX_TITLE_CHARS - prefix.length)}`,
-      minutes: input.sessionMinutes,
-      instructions: step.instructions,
-      status: 'planned' as const,
-    };
-  });
+  const sessions = selectedDays
+    .slice(0, sessionCount)
+    .map((dayIndex, index) => {
+      const date = addDays(input.startDate, dayIndex);
+      const step = intent.steps[index % intent.steps.length];
+      const prefix =
+        locale === 'en' ? `Step ${index + 1}: ` : `Paso ${index + 1}: `;
+      return {
+        id: `session-${date}`,
+        date,
+        dayIndex,
+        title: `${prefix}${step.title.slice(0, MAX_TITLE_CHARS - prefix.length)}`,
+        minutes: input.sessionMinutes,
+        instructions: step.instructions,
+        status: 'planned' as const,
+      };
+    });
   const plan: RoutinePlan = {
     input: cloneInput(input),
     intent: cloneIntent(intent),
@@ -490,28 +734,55 @@ export function buildPlan(
     sessions,
     checks: [],
     warnings,
-    explanation: baseExplanation(input, mode, sessions),
+    explanation: baseExplanation(input, mode, sessions, locale),
   };
+  if (locale === 'en') plan.locale = 'en';
   return planWithChecks(plan);
 }
 
-function validateSession(input: RoutineInput, value: unknown, index: number): Session {
+function validateSession(
+  input: RoutineInput,
+  value: unknown,
+  index: number,
+): Session {
   const item = dict(value);
   if (!item) invalid(`sessions[${index}] debe ser un objeto.`);
   const id = text(item.id, `sessions[${index}].id`, 160);
-  if (!/^[A-Za-z0-9:_-]+$/u.test(id)) invalid(`sessions[${index}].id no es válido.`);
+  if (!/^[A-Za-z0-9:_-]+$/u.test(id))
+    invalid(`sessions[${index}].id no es válido.`);
   const date = isoDate(item.date, `sessions[${index}].date`);
   const dayIndex = integer(item.dayIndex, `sessions[${index}].dayIndex`, 0, 6);
   if (dayOffset(input.startDate, date) !== dayIndex) {
     invalid(`sessions[${index}] no coincide con su día.`);
   }
-  const minutes = integer(item.minutes, `sessions[${index}].minutes`, 1, MAX_SESSION_MINUTES);
+  const minutes = integer(
+    item.minutes,
+    `sessions[${index}].minutes`,
+    1,
+    MAX_SESSION_MINUTES,
+  );
   const title = text(item.title, `sessions[${index}].title`, MAX_TITLE_CHARS);
-  const instructions = text(item.instructions, `sessions[${index}].instructions`, MAX_INSTRUCTIONS_CHARS);
-  if (item.status !== 'planned' && item.status !== 'done' && item.status !== 'missed') {
+  const instructions = text(
+    item.instructions,
+    `sessions[${index}].instructions`,
+    MAX_INSTRUCTIONS_CHARS,
+  );
+  if (
+    item.status !== 'planned' &&
+    item.status !== 'done' &&
+    item.status !== 'missed'
+  ) {
     invalid(`sessions[${index}].status no es válido.`);
   }
-  return { id, date, dayIndex, title, minutes, instructions, status: item.status };
+  return {
+    id,
+    date,
+    dayIndex,
+    title,
+    minutes,
+    instructions,
+    status: item.status,
+  };
 }
 
 function copyPlan(rawPlan: RoutinePlan): RoutinePlan {
@@ -519,21 +790,30 @@ function copyPlan(rawPlan: RoutinePlan): RoutinePlan {
   if (!source) invalid('plan debe ser un objeto.');
   const input = validateInput(source.input);
   const intent = validateIntent(source.intent);
-  if (source.mode !== 'demo' && source.mode !== 'deepseek') invalid('plan.mode no es válido.');
-  if (!Array.isArray(source.sessions)) invalid('plan.sessions debe ser una lista.');
-  const sessions = source.sessions.map((session, index) => validateSession(input, session, index));
+  if (source.mode !== 'demo' && source.mode !== 'deepseek')
+    invalid('plan.mode no es válido.');
+  if (!Array.isArray(source.sessions))
+    invalid('plan.sessions debe ser una lista.');
+  const sessions = source.sessions.map((session, index) =>
+    validateSession(input, session, index),
+  );
   const ids = new Set<string>();
   const dates = new Set<string>();
   for (const session of sessions) {
     if (ids.has(session.id)) invalid('plan contiene IDs repetidos.');
-    if (dates.has(session.date)) invalid('plan contiene días ocupados repetidos.');
+    if (dates.has(session.date))
+      invalid('plan contiene días ocupados repetidos.');
     ids.add(session.id);
     dates.add(session.date);
   }
-  if (!Array.isArray(source.warnings) || source.warnings.some((warning) => typeof warning !== 'string')) {
+  if (
+    !Array.isArray(source.warnings) ||
+    source.warnings.some((warning) => typeof warning !== 'string')
+  ) {
     invalid('plan.warnings no es válido.');
   }
-  if (typeof source.explanation !== 'string') invalid('plan.explanation no es válido.');
+  if (typeof source.explanation !== 'string')
+    invalid('plan.explanation no es válido.');
   if (!Array.isArray(source.checks)) invalid('plan.checks debe ser una lista.');
   return {
     input,
@@ -542,13 +822,19 @@ function copyPlan(rawPlan: RoutinePlan): RoutinePlan {
     sessions,
     checks: source.checks.map((check, index) => {
       const item = dict(check);
-      if (!item || typeof item.label !== 'string' || typeof item.passed !== 'boolean' || typeof item.detail !== 'string') {
+      if (
+        !item ||
+        typeof item.label !== 'string' ||
+        typeof item.passed !== 'boolean' ||
+        typeof item.detail !== 'string'
+      ) {
         invalid(`plan.checks[${index}] no es válido.`);
       }
       return { label: item.label, passed: item.passed, detail: item.detail };
     }),
     warnings: [...source.warnings],
     explanation: source.explanation,
+    ...(source.locale === 'en' ? { locale: 'en' as const } : {}),
   };
 }
 
@@ -563,12 +849,27 @@ function replacementId(date: string, sessions: Session[]): string {
 
 export function replan(plan: RoutinePlan, missedId: string): RoutinePlan {
   const next = copyPlan(plan);
-  if (typeof missedId !== 'string' || missedId.trim() === '') invalid('missedId debe ser texto.');
+  const locale = next.locale ?? 'es';
+  if (typeof missedId !== 'string' || missedId.trim() === '')
+    invalid('missedId debe ser texto.');
   const index = next.sessions.findIndex((session) => session.id === missedId);
-  if (index < 0) throw new Error('Sesión no encontrada.');
+  if (index < 0)
+    throw new Error(
+      locale === 'en' ? 'Session not found.' : 'Sesión no encontrada.',
+    );
   const missed = next.sessions[index];
-  if (missed.status === 'missed') throw new Error('La sesión ya está marcada como perdida.');
-  if (missed.status === 'done') throw new Error('No se puede reprogramar una sesión hecha.');
+  if (missed.status === 'missed')
+    throw new Error(
+      locale === 'en'
+        ? 'The session is already marked as missed.'
+        : 'La sesión ya está marcada como perdida.',
+    );
+  if (missed.status === 'done')
+    throw new Error(
+      locale === 'en'
+        ? 'A completed session cannot be replanned.'
+        : 'No se puede reprogramar una sesión hecha.',
+    );
 
   next.sessions[index] = { ...missed, status: 'missed' };
   const occupied = new Set(next.sessions.map((session) => session.date));
@@ -576,7 +877,8 @@ export function replan(plan: RoutinePlan, missedId: string): RoutinePlan {
     .filter((session) => session.status !== 'missed')
     .reduce((total, session) => total + session.minutes, 0);
   const missedOffset = dayOffset(next.input.startDate, missed.date);
-  const budgetAllowsReplacement = activeMinutes + missed.minutes <= next.input.weeklyMinutes;
+  const budgetAllowsReplacement =
+    activeMinutes + missed.minutes <= next.input.weeklyMinutes;
   let replacement: Session | undefined;
   if (missedOffset >= 0 && missedOffset < 6 && budgetAllowsReplacement) {
     for (let offset = missedOffset + 1; offset <= 6; offset += 1) {
@@ -596,11 +898,20 @@ export function replan(plan: RoutinePlan, missedId: string): RoutinePlan {
 
   const warnings = [...next.warnings];
   const noSlotReason = budgetAllowsReplacement
-    ? 'No hay un día permitido y libre después de la sesión perdida dentro de esta semana; no se creó una sesión adicional.'
-    : 'El tope semanal no deja minutos para reprogramar la sesión perdida; no se creó una sesión adicional.';
-  const explanation = replacement
-    ? `${next.explanation} Se marcó la sesión del ${missed.date} como perdida y se reprogramó para el ${replacement.date}.`
-    : `${next.explanation} Se marcó la sesión del ${missed.date} como perdida, pero ${noSlotReason.toLowerCase()}`;
+    ? locale === 'en'
+      ? 'There is no later allowed free day in this week; no additional session was created.'
+      : 'No hay un día permitido y libre después de la sesión perdida dentro de esta semana; no se creó una sesión adicional.'
+    : locale === 'en'
+      ? 'The weekly limit has no minutes left to reschedule the missed session; no additional session was created.'
+      : 'El tope semanal no deja minutos para reprogramar la sesión perdida; no se creó una sesión adicional.';
+  const explanation =
+    locale === 'en'
+      ? replacement
+        ? `${next.explanation} The session on ${missed.date} was marked missed and rescheduled to ${replacement.date}.`
+        : `${next.explanation} The session on ${missed.date} was marked missed, but ${noSlotReason.toLowerCase()}`
+      : replacement
+        ? `${next.explanation} Se marcó la sesión del ${missed.date} como perdida y se reprogramó para el ${replacement.date}.`
+        : `${next.explanation} Se marcó la sesión del ${missed.date} como perdida, pero ${noSlotReason.toLowerCase()}`;
   if (!replacement) {
     warnings.push(noSlotReason);
   } else {
@@ -612,11 +923,19 @@ export function replan(plan: RoutinePlan, missedId: string): RoutinePlan {
 
 export function markDone(plan: RoutinePlan, id: string): RoutinePlan {
   const next = copyPlan(plan);
+  const locale = next.locale ?? 'es';
   if (typeof id !== 'string' || id.trim() === '') invalid('id debe ser texto.');
   const index = next.sessions.findIndex((session) => session.id === id);
-  if (index < 0) throw new Error('Sesión no encontrada.');
+  if (index < 0)
+    throw new Error(
+      locale === 'en' ? 'Session not found.' : 'Sesión no encontrada.',
+    );
   if (next.sessions[index].status === 'missed') {
-    throw new Error('No se puede marcar como hecha una sesión perdida.');
+    throw new Error(
+      locale === 'en'
+        ? 'A missed session cannot be marked complete.'
+        : 'No se puede marcar como hecha una sesión perdida.',
+    );
   }
   if (next.sessions[index].status === 'planned') {
     next.sessions[index] = { ...next.sessions[index], status: 'done' };
@@ -634,31 +953,53 @@ function markdownText(value: string): string {
 
 export function toMarkdown(plan: RoutinePlan): string {
   const current = copyPlan(plan);
-  const mode = current.mode === 'demo' ? 'Demo · salida determinista de ejemplo' : 'IA real · proveedor DeepSeek opcional';
+  const locale = current.locale ?? 'es';
+  const mode =
+    locale === 'en'
+      ? current.mode === 'demo'
+        ? 'Local demo · deterministic sample output'
+        : 'Connected AI · optional DeepSeek provider'
+      : current.mode === 'demo'
+        ? 'Demo · salida determinista de ejemplo'
+        : 'IA real · proveedor DeepSeek opcional';
   const lines = [
     `# ${markdownText(current.intent.title)}`,
     '',
-    `**Solicitud:** ${markdownText(current.input.request)}`,
-    `**Objetivo:** ${markdownText(current.intent.goal)}`,
-    `**Modo:** ${mode}`,
+    `**${locale === 'en' ? 'Request' : 'Solicitud'}:** ${markdownText(current.input.request)}`,
+    `**${locale === 'en' ? 'Goal' : 'Objetivo'}:** ${markdownText(current.intent.goal)}`,
+    `**${locale === 'en' ? 'Mode' : 'Modo'}:** ${mode}`,
     '',
     markdownText(current.explanation),
     '',
-    '## Sesiones',
+    locale === 'en' ? '## Sessions' : '## Sesiones',
     '',
   ];
   for (const session of current.sessions) {
-    const marker = session.status === 'done' ? 'x' : session.status === 'missed' ? '-' : ' ';
-    lines.push(`- [${marker}] ${session.date} · ${markdownText(session.title)} · ${session.minutes} min (${session.status})`);
+    const marker =
+      session.status === 'done' ? 'x' : session.status === 'missed' ? '-' : ' ';
+    const status =
+      locale === 'en'
+        ? session.status
+        : session.status === 'done'
+          ? 'completada'
+          : session.status === 'missed'
+            ? 'perdida'
+            : 'pendiente';
+    lines.push(
+      `- [${marker}] ${session.date} · ${markdownText(session.title)} · ${session.minutes} min (${status})`,
+    );
     lines.push(`  ${markdownText(session.instructions)}`);
   }
-  lines.push('', '## Comprobaciones', '');
+  lines.push('', locale === 'en' ? '## Checks' : '## Comprobaciones', '');
   for (const check of current.checks) {
-    lines.push(`- [${check.passed ? 'x' : ' '}] ${markdownText(check.label)}: ${markdownText(check.detail)}`);
+    lines.push(
+      `- [${check.passed ? 'x' : ' '}] ${markdownText(check.label)}: ${markdownText(check.detail)}`,
+    );
   }
   if (current.warnings.length > 0) {
-    lines.push('', '## Avisos', '');
-    for (const warning of current.warnings) lines.push(`- ${markdownText(warning)}`);
+    lines.push('', locale === 'en' ? '## Warnings' : '## Avisos', '');
+    for (const warning of current.warnings)
+      lines.push(`- ${markdownText(warning)}`);
   }
   return `${lines.join('\n')}\n`;
 }
@@ -689,7 +1030,9 @@ function foldLine(line: string): string {
     chunk += character;
   }
   if (chunk) chunks.push(chunk);
-  return chunks.map((part, index) => (index === 0 ? part : ` ${part}`)).join('\r\n');
+  return chunks
+    .map((part, index) => (index === 0 ? part : ` ${part}`))
+    .join('\r\n');
 }
 
 function icsDateTime(date: string, time: string): string {
@@ -730,7 +1073,9 @@ export function toICS(plan: RoutinePlan): string {
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Cadencia//Plan semanal//ES',
+    current.locale === 'en'
+      ? 'PRODID:-//Cadencia//Weekly plan//EN'
+      : 'PRODID:-//Cadencia//Plan semanal//ES',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
   ];

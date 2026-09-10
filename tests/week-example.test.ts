@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { routineShareText } from '../lib/calendar.ts';
+import { toMarkdown } from '../lib/routine.ts';
 import { createWeekExample, missExampleTuesday } from '../lib/week-example.ts';
 
 void test('the interactive example moves Tuesday to Thursday without losing completed work or adding time', () => {
@@ -47,4 +49,20 @@ void test('the full-week example reports no replacement rather than inventing an
   assert.deepEqual(after.sessions[2], before.sessions[2]);
   assert.ok(after.checks.every((check) => check.passed));
   assert.throws(() => missExampleTuesday(after));
+});
+
+void test('the English example localizes planner output and replanning evidence', () => {
+  const before = createWeekExample('with-room', 'en');
+  const after = missExampleTuesday(before);
+  assert.equal(before.locale, 'en');
+  assert.equal(before.intent.title, 'English for interviews');
+  assert.match(before.sessions[0].title, /^Step 1: /u);
+  assert.deepEqual(
+    before.checks.map((check) => check.label),
+    ['Selected days', 'Session length', 'Weekly limit', 'No overlaps'],
+  );
+  assert.match(after.explanation, /marked missed and rescheduled/u);
+  assert.ok(after.checks.every((check) => check.passed));
+  assert.match(toMarkdown(after), /## Sessions/u);
+  assert.match(routineShareText(after), /Scheduled sessions:/u);
 });
