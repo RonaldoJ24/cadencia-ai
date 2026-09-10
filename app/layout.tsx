@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 
 import './globals.css';
+import './product.css';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -14,9 +15,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Cadencia · Convierte intención en ritmo',
+  title: 'Cadencia · Haz que una meta tenga ritmo',
   description:
-    'Un compilador local de rutinas para hacer espacio a lo que quieres sostener.',
+    'Convierte una intención en sesiones que caben en tu semana. Prueba cómo Cadencia reajusta un día perdido y conserva lo que ya hiciste.',
 };
 
 export default function RootLayout({
