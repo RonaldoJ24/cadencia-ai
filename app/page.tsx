@@ -12,12 +12,16 @@ import {
   LoaderCircle,
   RotateCcw,
   Share2,
-  Sparkles,
   WandSparkles,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 
+import {
+  ProductFooter,
+  ProductNotes,
+  ProductStory,
+} from '@/components/product-story';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -45,6 +49,24 @@ const DAY_NAMES = [
 ];
 const DAY_SHORT = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 const DEFAULT_START_DATE = '2026-08-31';
+
+function subscribeToWeekStart() {
+  return () => {};
+}
+
+function getServerWeekStart() {
+  return DEFAULT_START_DATE;
+}
+
+function getLocalWeekStart() {
+  const monday = new Date();
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  return [
+    monday.getFullYear(),
+    String(monday.getMonth() + 1).padStart(2, '0'),
+    String(monday.getDate()).padStart(2, '0'),
+  ].join('-');
+}
 
 const EXAMPLES: Array<{ label: string; input: RoutineInput }> = [
   {
@@ -82,37 +104,6 @@ const EXAMPLES: Array<{ label: string; input: RoutineInput }> = [
       startDate: DEFAULT_START_DATE,
       time: '08:00',
     },
-  },
-];
-
-const SAMPLE_SESSIONS = [
-  {
-    day: 'Lun 31',
-    kind: 'Warm-up',
-    title: 'Presentarte con claridad',
-    minutes: 25,
-    tone: 'lime',
-  },
-  {
-    day: 'Mar 01',
-    kind: 'Practice',
-    title: 'Historias con método STAR',
-    minutes: 30,
-    tone: 'cream',
-  },
-  {
-    day: 'Jue 03',
-    kind: 'Review',
-    title: 'Listening: preguntas difíciles',
-    minutes: 25,
-    tone: 'mint',
-  },
-  {
-    day: 'Sáb 05',
-    kind: 'Simulation',
-    title: 'Una entrevista completa',
-    minutes: 40,
-    tone: 'blue',
   },
 ];
 
@@ -197,79 +188,6 @@ function RhythmMap({
       <span className="sr-only">
         {sessions.length} sesiones en {input.days.length} días disponibles.
       </span>
-    </div>
-  );
-}
-
-function SamplePreview() {
-  const selectedDays = [0, 1, 3, 5];
-  return (
-    <div className="preview-card">
-      <div className="preview-card-header">
-        <div>
-          <span className="sample-kicker">
-            <span className="sample-marker" aria-hidden="true" />
-            Muestra local
-          </span>
-          <h2 id="preview-title">English for interviews</h2>
-          <p>Confianza para responder sin traducir cada frase.</p>
-        </div>
-        <span className="demo-tag">Demo</span>
-      </div>
-
-      <div className="rhythm-header">
-        <span>Cadencia semanal</span>
-        <span>4 sesiones · 120 min</span>
-      </div>
-      <div
-        className="rhythm-map"
-        aria-label="Mapa semanal de sesiones de ejemplo"
-      >
-        {DAY_NAMES.map((name, index) => (
-          <div className="rhythm-day" key={name}>
-            <span className="rhythm-day-label">{DAY_SHORT[index]}</span>
-            <div className="rhythm-track" aria-hidden="true">
-              <span
-                className={`rhythm-bar ${selectedDays.includes(index) ? 'is-on' : ''}`}
-                style={{ height: `${32 + ((index * 13) % 35)}%` }}
-              />
-            </div>
-            <span className="rhythm-day-name">{name.slice(0, 3)}</span>
-          </div>
-        ))}
-      </div>
-
-      <div className="sample-disclaimer">
-        <span className="sample-disclaimer-mark" aria-hidden="true" />
-        <span>
-          Ejemplo de estructura. Genera una rutina para verla con tus datos.
-        </span>
-      </div>
-
-      <div className="session-list" aria-label="Sesiones de ejemplo">
-        {SAMPLE_SESSIONS.map((session) => (
-          <article className="session-row" key={session.title}>
-            <div
-              className={`session-tone tone-${session.tone}`}
-              aria-hidden="true"
-            />
-            <div className="session-main">
-              <div className="session-meta">
-                <span>{session.day}</span>
-                <span className="session-separator">/</span>
-                <span>{session.kind}</span>
-              </div>
-              <h3>{session.title}</h3>
-            </div>
-            <span className="session-minutes">{session.minutes}m</span>
-          </article>
-        ))}
-      </div>
-
-      <div className="preview-card-footer">
-        <span>4 sesiones cortas, un objetivo claro.</span>
-        <span className="footer-line" aria-hidden="true" />
-      </div>
     </div>
   );
 }
@@ -637,7 +555,19 @@ function SessionDetail({
 }
 
 export default function Home() {
-  const [input, setInput] = useState<RoutineInput>(EXAMPLES[0].input);
+  // Keep the server snapshot stable; resolve the local week after hydration.
+  const localWeekStart = useSyncExternalStore(
+    subscribeToWeekStart,
+    getLocalWeekStart,
+    getServerWeekStart,
+  );
+  const [draftInput, setInput] = useState<
+    Omit<RoutineInput, 'startDate'> & { startDate: string | null }
+  >({ ...EXAMPLES[0].input, startDate: null });
+  const input: RoutineInput = {
+    ...draftInput,
+    startDate: draftInput.startDate ?? localWeekStart,
+  };
   const [plan, setPlan] = useState<RoutinePlan | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
     null,
@@ -683,7 +613,11 @@ export default function Home() {
   };
 
   const applyExample = (example: (typeof EXAMPLES)[number]) => {
-    setInput({ ...example.input, days: [...example.input.days] });
+    setInput((current) => ({
+      ...example.input,
+      startDate: current.startDate,
+      days: [...example.input.days],
+    }));
     setPlan(null);
     setSelectedSessionId(null);
     setError(null);
@@ -813,7 +747,10 @@ export default function Home() {
   }, [selectedDaysCount]);
 
   return (
-    <main className="cadencia-shell">
+    <main className="cadencia-shell" id="inicio">
+      <a className="skip-link" href="#planificador">
+        Ir al planificador
+      </a>
       <header className="topbar">
         <a className="brand" href="#inicio" aria-label="Cadencia, inicio">
           <span className="brand-mark" aria-hidden="true">
@@ -822,9 +759,13 @@ export default function Home() {
             <span />
           </span>
           <span className="brand-word">cadencia</span>
-          <span className="brand-note">compilador de rutinas</span>
+          <span className="brand-note">tu semana, a tu ritmo</span>
         </a>
 
+        <nav className="product-nav" aria-label="Navegación principal">
+          <a href="#planificador">Planificar</a>
+          <a href="#como-funciona">Cómo funciona</a>
+        </nav>
         <div className="topbar-meta">
           <span className="mode-pill">
             <span className="status-dot" aria-hidden="true" />
@@ -833,20 +774,16 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="workspace" id="inicio">
+      <ProductStory />
+
+      <div className="workspace" id="planificador" tabIndex={-1}>
         <section className="editor-column" aria-labelledby="editor-title">
-          <div className="hero-copy">
-            <p className="eyebrow">
-              <Sparkles size={14} aria-hidden="true" />
-              Tu intención → una semana posible
-            </p>
-            <h1 id="editor-title">
-              Haz que una meta
-              <span>tenga ritmo.</span>
-            </h1>
+          <div className="planner-heading">
+            <p className="product-kicker">Ahora, con tu semana</p>
+            <h2 id="editor-title">Haz espacio para lo que quieres sostener.</h2>
             <p className="intro-copy">
-              Escribe lo que quieres sostener. Cadencia lo convierte en sesiones
-              que caben de verdad en tu semana.
+              Elige un objetivo y tus límites. Puedes probar, reajustar y
+              llevarte una copia del plan.
             </p>
           </div>
 
@@ -1041,7 +978,7 @@ export default function Home() {
                 <div>
                   <p className="field-label">Quién propone el contenido</p>
                   <p className="field-help">
-                    Tus límites siguen siendo deterministas.
+                    Los días y minutos que elegiste siguen mandando.
                   </p>
                 </div>
                 <span className="mode-selection-label">
@@ -1068,7 +1005,7 @@ export default function Home() {
                   onClick={() => setMode('live')}
                   title={
                     !liveAvailable
-                      ? 'Conecta el backend opcional y configura una clave para activar IA real.'
+                      ? 'El modo conectado no está disponible en esta versión.'
                       : undefined
                   }
                 >
@@ -1076,14 +1013,14 @@ export default function Home() {
                   <span>
                     {availabilityKnown && liveAvailable
                       ? 'DeepSeek opcional.'
-                      : 'Proveedor no habilitado.'}
+                      : 'No disponible aquí.'}
                   </span>
                 </button>
               </fieldset>
               {!liveAvailable ? (
                 <p className="mode-help">
-                  IA conectada está desactivada: el proveedor no está habilitado
-                  o configurado aquí.
+                  Puedes explorar todo el planificador con contenido de ejemplo,
+                  sin llamadas a IA. El modo conectado se habilita por separado.
                 </p>
               ) : null}
               {mode === 'live' && liveAvailable ? (
@@ -1132,7 +1069,7 @@ export default function Home() {
           <div className="preview-label-row">
             <p className="eyebrow">Vista de la semana</p>
             <span className="preview-index">
-              {plan ? 'PLAN / 01' : 'MUESTRA / 01'}
+              {plan ? 'TU PLAN' : 'POR CREAR'}
             </span>
           </div>
           {plan ? (
@@ -1155,10 +1092,28 @@ export default function Home() {
               controlsDisabled={controlsDisabled}
             />
           ) : (
-            <SamplePreview />
+            <div className="preview-card planner-empty">
+              <CalendarDays size={30} aria-hidden="true" />
+              <h2 id="preview-title">Tu semana empieza aquí.</h2>
+              <p>
+                Al crear tu rutina verás las sesiones, el tiempo que ocupan y
+                las comprobaciones del plan.
+              </p>
+              <ol>
+                <li>Un objetivo que quieras sostener.</li>
+                <li>Los días y minutos que tienes.</li>
+                <li>Un plan que puedes ajustar.</li>
+              </ol>
+              <p className="planner-empty-note">
+                La demo usa contenido de ejemplo y se reinicia al recargar.
+                Puedes descargar el resultado.
+              </p>
+            </div>
           )}
         </aside>
       </div>
+      <ProductNotes />
+      <ProductFooter />
     </main>
   );
 }
