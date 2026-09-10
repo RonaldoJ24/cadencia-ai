@@ -42,7 +42,7 @@ This guide documents the deployment procedures for Cadencia's owner-only pilot a
 - **Fail-Closed**: If `CADENCIA_ENABLE_LIVE` is not `"true"`, or if the service URL or token is missing, `/api/routine` falls back or returns 503 without invoking external endpoints.
 - **Deterministic Demo**: The browser's demo mode executes entirely client-side without calling either server or AI provider.
 - **No Tracked Secrets**: All secrets reside strictly in platform secret stores (Cloudflare Worker Secrets, GCP Secret Manager).
-- **Private Bootstrap**: `workers_dev` and preview URLs remain disabled in `wrangler.jsonc` until the owner-only Access policy exists.
+- **Private Routes**: `workers_dev` is `true` and `preview_urls` is `false` in `wrangler.jsonc`. The exact path `/api/routine` is served through a public Access bypass with strict D1 quotas; every other `/api/*` route stays behind the owner-only Access policy and Worker-side JWT verification.
 
 ---
 
@@ -53,6 +53,8 @@ This guide documents the deployment procedures for Cadencia's owner-only pilot a
 | Worker Runtime | `CADENCIA_ENABLE_LIVE` | `wrangler.jsonc` / Worker var | Kill switch: `"false"` (default) or `"true"` |
 | Worker Runtime | `CADENCIA_INTENT_SERVICE_URL` | `wrangler.jsonc` / Worker var | Base URL of Cloud Run backend (e.g. `https://<service>.run.app`) |
 | Worker Secret | `CADENCIA_SERVICE_TOKEN` | Cloudflare Worker Secret | Shared high-entropy bearer token sent to Cloud Run |
+| Worker Runtime | `CADENCIA_ACCESS_TEAM_DOMAIN` | `wrangler.jsonc` / Worker var | Access team domain, e.g. `https://<team>.cloudflareaccess.com`; empty fails closed |
+| Worker Runtime | `CADENCIA_ACCESS_AUD` | `wrangler.jsonc` / Worker var | Access application AUD tag; empty fails closed |
 | Cloud Run Secret | `CADENCIA_SERVICE_TOKEN` | GCP Secret Manager | Shared token verified against incoming Bearer header |
 | Cloud Run Secret | `DEEPSEEK_API_KEY` | GCP Secret Manager | API key for DeepSeek API completions |
 | Cloud Run Env | `DEEPSEEK_MODEL` | Cloud Run Environment Variable | Optional model alias (default `deepseek-v4-flash`) |
@@ -145,9 +147,12 @@ Execute the deployment helper script:
 ./scripts/deploy.sh --dry-run
 ```
 
-### 4.2 Private Worker Bootstrap
-The checked-in configuration uploads the Worker without any public route. On the first
-deployment, use a permission-600 secrets file outside the repository containing only
+### 4.2 Worker Secret Rotation
+
+The checked-in configuration sets `workers_dev: true` with `preview_urls: false`.
+The exact path `/api/routine` is intentionally public behind D1 quotas (see §9);
+it is not a bootstrap accident. On the first deployment, use a permission-600
+secrets file outside the repository containing only
 `CADENCIA_SERVICE_TOKEN=<value>`:
 
 ```bash
@@ -156,8 +161,9 @@ npx wrangler deploy --config dist/server/wrangler.json \
   --secrets-file "<path-to-worker-only-secrets-file>"
 ```
 
-After this succeeds, delete the temporary secrets file. The Worker exists, but its
-`workers.dev` URL returns 404 because no public target is enabled.
+After this succeeds, delete the temporary secrets file. The Worker serves its
+`workers.dev` URL with `preview_urls` disabled; `/api/routine` answers the
+public bypass while `/api/routines/*` and all private routes require Access.
 
 ### 4.3 Worker Secret Rotation
 For later rotations, update the shared token interactively (it must match the token stored in Secret Manager):
@@ -178,15 +184,17 @@ Protect the Worker before enabling live AI. Worker-level Access covers its produ
 2. Select **Protect this Worker behind Access** and choose **All traffic**.
 3. Create an allow policy for only `<owner-email@example.com>` using One-Time PIN or the configured identity provider.
 4. Apply Access and verify an unauthenticated browser receives the Access login page.
+5. Copy the application's **Application Audience (AUD) Tag** (Zero Trust -> Access -> Applications -> Configure -> Additional settings) and set `CADENCIA_ACCESS_TEAM_DOMAIN` plus `CADENCIA_ACCESS_AUD` on the Worker. The Worker verifies the RS256 `Cf-Access-Jwt-Assertion` signature against the team JWKS endpoint, pins issuer to the team domain and audience to the AUD tag, enforces expiration, and derives identity only from verified `sub`/`email` claims. Missing configuration, missing/expired bearer tokens, or wrong issuer/audience all fail closed with generic 401 responses. Test identities (`x-test-user-*`) work only when `CADENCIA_ALLOW_TEST_IDENTITY=true`, which stays `false` in deployed configuration.
 
 Any browser navigating to `https://cadencia-ai.<your-subdomain>.workers.dev` will now require Cloudflare Access authentication before requests reach the Worker.
 
 ### 5.1 Configure Live Service Routing
 After Cloud Run and Access are verified, deploy the already-built Worker artifact with
-the backend URL and live kill switch enabled:
+the backend URL and live kill switch enabled (`workers_dev` is already `true` in
+`wrangler.jsonc`; keep `preview_urls` `false`):
 
 ```bash
-# First change workers_dev to true in wrangler.jsonc. Keep preview_urls false.
+# workers_dev is already true; keep preview_urls false.
 npm run build
 npx wrangler deploy --config dist/server/wrangler.json \
   --var CADENCIA_INTENT_SERVICE_URL:"$CLOUD_RUN_URL" \
@@ -288,3 +296,61 @@ gcloud run revisions list   --service "$CADENCIA_RUN_SERVICE"   --region "$CADEN
 # Route traffic to the previous healthy revision:
 gcloud run services update-traffic "$CADENCIA_RUN_SERVICE"   --region "$CADENCIA_GCP_REGION"   --to-revisions "<prior-revision-name>=100"
 ```
+
+---
+
+## 9. Public API Abuse Controls & Cloudflare Access Activation
+
+### 9.1 Public Limits & Budget Protection
+Public generation on `/api/routine` is guarded by a single unified D1 batch transaction with conditional reservation and upserts:
+
+| Control | Value | Enforcement Mechanism |
+|---|---|---|
+| Minute Rate Limit | 2 req/min | Atomic conditional insert in `rate_hits` with `Retry-After` |
+| Visitor Daily Quota | 5 generations/day | Atomic conditional reservation + `WHERE EXISTS` counter upsert in D1 batch |
+| Global Daily Hard Cap | 50 generations/day | Atomic conditional reservation + `WHERE EXISTS` counter upsert in D1 batch |
+| Visitor Concurrency | 1 in-flight generation | Unique index on `public_concurrency.ip_hash` |
+| Global Concurrency | 10 in-flight generations | Atomic conditional reservation in D1 batch |
+| Concurrency Lease | 40 seconds | Auto-reclaimed; covers 25s Worker timeout |
+| Quota Reset Time | 00:00:00 UTC | Dynamic `Retry-After` seconds until next UTC midnight |
+| Request Body Cap | 32,768 bytes | Bounded `bodyJson`; request text $\le$ 2,000 UTF-16 units |
+| Provider Max Tokens | 4,000 (routine) / 800 (intent) | Enforced in DeepSeek payload (`service/provider.py`) |
+| Retries & Attempts | 0 Worker retries; max 1 Cloud Run retry | Max 2 provider attempts/gen $\implies$ max 100 provider calls/day |
+
+*Note*: Private beta routes (`/api/routines/*`, `/api/sessions/*`, `/api/quota`, `/api/feedback`, `/api/account`) maintain separate authenticated quotas and remain outside the public budget. No Analytics Engine dataset is configured and no analytics writer ships: the former `BETA_EVENTS` code path was removed rather than left unprovisioned.
+
+### 9.2 Keyed Identity Privacy
+Client identity is strictly derived from the Cloudflare edge header `cf-connecting-ip` (never trusting `x-real-ip`). It is transformed into a non-reversible, daily-rotating 256-bit hash via `HMAC-SHA256(CADENCIA_SERVICE_TOKEN, "cadencia_identity:<YYYY-MM-DD>:<IP>")`. Raw IP addresses are never logged or persisted. Cookie clearing does not reset quota. Missing IP rejects with HTTP 400.
+
+### 9.3 Deployment Status & Manual Cloudflare Access Steps
+- **Remote D1 Database**: `cadencia_beta` (`1e26d779-9aaf-4785-96c7-ab55d8e8032a`).
+- **Applied Migrations**: `0001_beta_loop.sql`, `0002_rate_limits.sql`, `0003_public_limits.sql` applied successfully.
+- **Deployed Worker Version**: `efc4a8bb-8e3a-413a-b924-cd4903a292c5`.
+- **Remaining Blocker**: Automated API creation was blocked because the local Wrangler OAuth token lacks `Access: Apps and Policies: Edit` permission (HTTP 403 `1010 auth.forbidden`). Public generation on `/api/routine` remains gated behind Access until this manual dashboard step is performed:
+
+> Historical deployment record — unverified. The database ID, worker version,
+> and Access application IDs below were recorded during a prior manual
+> deployment and have not been re-verified from this working tree. They are
+> operational notes, not evidence of current production state, and no
+> production-ready claim follows from them.
+
+**Manual Cloudflare Zero Trust Dashboard Instructions**:
+1. In Cloudflare Zero Trust Dashboard, go to **Access** -> **Applications**.
+2. Retain existing application `Cadencia Worker Access` (id `7b4364fd-41f8-40c9-92c8-a2aac28efa28`) on `cadencia-ai.ronaldo-jesus-alvarez.workers.dev/api/*` (Owner Only).
+3. Click **Add an application** -> **Self-hosted**.
+4. Set Application Name: `Cadencia Public Routine Bypass`.
+5. Set Application Domain: `cadencia-ai.ronaldo-jesus-alvarez.workers.dev`, Path: `api/routine`.
+6. Add Policy: Policy name `Public Bypass`, Action **Bypass**, Rule: **Everyone**.
+7. Save Application. Cloudflare longest-prefix route matching routes `/api/routine` to the bypass application, while `/api/routines/*` and all private routes remain strictly owner-only.
+
+### 9.4 Schedule Proof (deployed 2026-09-09)
+- **Remote migration**: `migrations/0004_schedule_proof.sql` applied to `cadencia_beta` (additive: 4 new tables, verified present). Prior 0001–0003 confirmed applied.
+- **Worker versions**: `76966a3d` (initial Schedule Proof) → `809d9488` (Workflow binding wired) → `7b373d0e` (current; Workflow `get()` await fix).
+- **Workflow**: `adaptation-workflow` registered on the Worker; two real instances ran end-to-end (derive → wait → settle → Completed), candidate `470e98…` bit-identical to local evidence.
+- **Remote journey proof**: POST start (201, Secure/HttpOnly/SameSite, `private, no-store`) → R1 with inputHash `e76e…`/scheduleHash `8ae3…` matching local bytes → PATCH replay (202, R1 unchanged, Tue→Thu move) → PATCH approve (200, committed R2) → GET readback R2. Found and fixed live: route used local-fallback (binding unwired) and `sendEvent` on un-awaited `get()`; both fixed, retested (`notified:true`), regression-tested.
+- **Local evidence**: `outputs/validation/schedule-proof/`. Test sandboxes revoked after verification. No production-ready claim beyond what was exercised.
+
+### 9.5 Schedule Proof correction attempt 1 (NOT deployed)
+- Local-only follow-up addressing an independent audit. Adds `migrations/0005_schedule_proof_invariants.sql` (one-active partial index, decision table, trace columns).
+- Binding release order: apply 0005 BEFORE deploying the accompanying code (the code answers 503 while the schema is absent).
+- Production remains `7b373d0e` + 0004 until separately authorized.

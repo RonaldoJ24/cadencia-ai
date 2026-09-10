@@ -233,8 +233,12 @@ y consentimiento reversible.
 
 ## Persistencia e identidad
 
-La persistencia futura puede usar D1 o un equivalente relacional. La siguiente
-lista es un modelo mínimo de diseño, no un esquema de migración:
+La persistencia D1 del beta ya existe (`migrations/0001_beta_loop.sql`:
+`beta_users`, `routines`, `routine_versions`, `sessions`,
+`generation_requests` con idempotencia, `feedback`, `usage_windows`; más
+`rate_hits` y límites públicos). La lista siguiente sigue siendo el modelo de
+diseño para piezas aún no implementadas (metas, check-ins, conexiones,
+adaptadores OAuth de calendario), no el esquema de migración vigente:
 
 | Entidad        | Campos mínimos                                                                                                                                                                    | Relación e invariantes                                                                                                                 |
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
@@ -306,8 +310,9 @@ Se conserva el flujo V0: intake explícito, propuesta de contenido, planificador
 determinista, replanificación, exportación ICS y explicación de checks. Esta
 entrega añade un enlace de Google Calendar para la sesión seleccionada y texto
 compartible, ambos sin cuenta ni token y claramente marcados como copias. No hay
-OAuth, sincronización en segundo plano, cuentas persistentes ni mensajes a
-terceros.
+OAuth, sincronización en segundo plano ni mensajes a
+terceros. El beta autenticado con Access sí tiene cuentas persistentes en D1
+(rutinas versionadas, sesiones, cuotas e idempotencia) con borrado en cascada.
 
 Puerta de salida: con solicitudes ficticias en español, cada rutina respeta días,
 hora local, duración y tope; el usuario puede inspeccionar y corregir la

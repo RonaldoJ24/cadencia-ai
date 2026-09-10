@@ -4,6 +4,17 @@ interface __BaseEnv_Env {
 	CADENCIA_ENABLE_LIVE: string;
 	CADENCIA_INTENT_SERVICE_URL: string;
 	CADENCIA_SERVICE_TOKEN: string;
+	CADENCIA_ALLOW_TEST_IDENTITY: string;
+	CADENCIA_DAILY_LIVE_QUOTA: string;
+	CADENCIA_PUBLIC_DAILY_QUOTA: string;
+	CADENCIA_PUBLIC_GLOBAL_DAILY_CAP: string;
+	CADENCIA_PUBLIC_VISITOR_CONCURRENCY: string;
+	CADENCIA_PUBLIC_GLOBAL_CONCURRENCY: string;
+	CADENCIA_PUBLIC_MINUTE_LIMIT: string;
+	CADENCIA_ACCESS_TEAM_DOMAIN: string;
+	CADENCIA_ACCESS_AUD: string;
+	DB: D1Database;
+	ADAPTATION_WORKFLOW: Workflow;
 }
 declare namespace Cloudflare {
 	interface Env extends __BaseEnv_Env {}
@@ -13,5 +24,5 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "CADENCIA_ENABLE_LIVE" | "CADENCIA_INTENT_SERVICE_URL" | "CADENCIA_SERVICE_TOKEN">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "CADENCIA_ENABLE_LIVE" | "CADENCIA_INTENT_SERVICE_URL" | "CADENCIA_SERVICE_TOKEN" | "CADENCIA_ALLOW_TEST_IDENTITY" | "CADENCIA_DAILY_LIVE_QUOTA" | "CADENCIA_PUBLIC_DAILY_QUOTA" | "CADENCIA_PUBLIC_GLOBAL_DAILY_CAP" | "CADENCIA_PUBLIC_VISITOR_CONCURRENCY" | "CADENCIA_PUBLIC_GLOBAL_CONCURRENCY" | "CADENCIA_PUBLIC_MINUTE_LIMIT" | "CADENCIA_ACCESS_TEAM_DOMAIN" | "CADENCIA_ACCESS_AUD">> {}
 }

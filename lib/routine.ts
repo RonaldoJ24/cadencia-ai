@@ -58,6 +58,38 @@ export type RoutinePlan = {
   explanation: string;
 };
 
+/**
+ * Planner decision events, emitted by buildPlan/replan AT the branch that
+ * decides — never reconstructed from a finished plan. A sink collects them
+ * during execution; lib/trace.ts turns the recorded events into the typed
+ * compiler trace and refuses to build one when events and output diverge.
+ */
+export type PlannerEvent =
+  | { type: 'intent_validated'; scopeRefused: boolean; sessionCount: number; domain: Intent['domain'] }
+  | { type: 'constraints_normalized'; days: number[]; weekStart: string; time: string; sessionMinutes: number; weeklyMinutes: number }
+  | { type: 'weekly_cap_applied'; capacity: number; selectedDays: number; scheduledSessions: number }
+  | { type: 'session_placed'; sessionId: string; activityId: string; date: string; dayIndex: number; minutes: number; budgetBefore: number; budgetAfter: number }
+  | { type: 'schedule_completed'; sessionCount: number; weeklyUsedMinutes: number }
+  | { type: 'adaptation_missed_marked'; sessionId: string; date: string }
+  | { type: 'adaptation_replacement_placed'; fromSessionId: string; fromDate: string; replacementId: string; replacementDate: string; budgetBefore: number; budgetAfter: number }
+  | { type: 'adaptation_infeasible'; missedSessionId: string; reason: 'no_free_day' | 'budget_exhausted' }
+  | {
+    type: 'adaptation_candidate_confirmed';
+    missedSessionId: string;
+    replacementId: string | null;
+    sessions: Array<{
+      sessionId: string;
+      date: string;
+      dayIndex: number;
+      minutes: number;
+      budgetBefore: number;
+      budgetAfter: number;
+      disposition: 'preserved' | 'missed' | 'replacement';
+    }>;
+  };
+
+export type PlannerEventSink = (event: PlannerEvent) => void;
+
 const MAX_REQUEST_CHARS = 2_000;
 const MAX_WEEKLY_MINUTES = 10_080;
 const MAX_SESSION_MINUTES = 1_440;
@@ -653,6 +685,7 @@ export function buildPlan(
   rawIntent?: Intent,
   mode: RoutinePlan['mode'] = 'demo',
   scopeRefused?: boolean,
+  sink?: PlannerEventSink,
 ): RoutinePlan {
   const input = validateInput(rawInput);
   if (mode !== 'demo' && mode !== 'deepseek') invalid('mode no es válido.');
@@ -662,6 +695,14 @@ export function buildPlan(
   const capacity = Math.floor(input.weeklyMinutes / input.sessionMinutes);
   const selectedDays = [...input.days].sort((a, b) => a - b);
   const sessionCount = scopeRefused === true ? 0 : Math.min(selectedDays.length, capacity);
+  sink?.({
+    type: 'constraints_normalized',
+    days: [...selectedDays],
+    weekStart: input.startDate,
+    time: input.time,
+    sessionMinutes: input.sessionMinutes,
+    weeklyMinutes: input.weeklyMinutes,
+  });
   const unsafe = mode === 'demo' ? restrictedRequest(input.request) : scopeRefused === true;
   if (mode === 'deepseek' && !unsafe && rawIntent === undefined) {
     invalid('intent es obligatorio para una rutina generada por IA.');
@@ -678,6 +719,12 @@ export function buildPlan(
       );
   const warnings: string[] = [];
   const intent = unsafe ? scopeIntent(input.language) : candidate;
+  sink?.({
+    type: 'intent_validated',
+    scopeRefused: unsafe,
+    sessionCount: unsafe ? 0 : sessionCount,
+    domain: intent.domain,
+  });
   if (unsafe) {
     warnings.push(copyFor(input.language).routine.scopeWarning);
   }
@@ -686,6 +733,13 @@ export function buildPlan(
   if (!unsafe && scheduledCount < selectedDays.length) {
     warnings.push(copyFor(input.language).routine.capacityWarning(scheduledCount, selectedDays.length));
   }
+  sink?.({
+    type: 'weekly_cap_applied',
+    capacity,
+    selectedDays: selectedDays.length,
+    scheduledSessions: scheduledCount,
+  });
+  let placedBudgetUsed = 0;
   const sessions = selectedDays.slice(0, scheduledCount).map((dayIndex, index) => {
     const date = addDays(input.startDate, dayIndex);
     const step = intent.steps[index];
@@ -697,8 +751,21 @@ export function buildPlan(
     if (blockMinutes !== input.sessionMinutes) {
       invalid(`intent.steps[${index}].blocks debe sumar ${input.sessionMinutes} minutos.`);
     }
+    const sessionId = `session-${date}`;
+    const budgetBefore = input.weeklyMinutes - placedBudgetUsed;
+    placedBudgetUsed += input.sessionMinutes;
+    sink?.({
+      type: 'session_placed',
+      sessionId,
+      activityId: `intent-step-${index + 1}`,
+      date,
+      dayIndex,
+      minutes: input.sessionMinutes,
+      budgetBefore,
+      budgetAfter: budgetBefore - input.sessionMinutes,
+    });
     return {
-      id: `session-${date}`,
+      id: sessionId,
       date,
       dayIndex,
       title: `${prefix}${step.title.slice(0, MAX_TITLE_CHARS - prefix.length)}`,
@@ -723,6 +790,11 @@ export function buildPlan(
     warnings,
     explanation: baseExplanation(input, mode, sessions),
   };
+  sink?.({
+    type: 'schedule_completed',
+    sessionCount: sessions.length,
+    weeklyUsedMinutes: sessions.reduce((total, session) => total + session.minutes, 0),
+  });
   return planWithChecks(plan);
 }
 
@@ -836,7 +908,7 @@ function replacementId(date: string, sessions: Session[]): string {
   return `${base}-${suffix}`;
 }
 
-export function replan(plan: RoutinePlan, missedId: string): RoutinePlan {
+export function replan(plan: RoutinePlan, missedId: string, sink?: PlannerEventSink): RoutinePlan {
   const next = copyPlan(plan);
   const routine = copyFor(next.input.language).routine;
   if (typeof missedId !== 'string' || missedId.trim() === '') invalid('missedId debe ser texto.');
@@ -847,6 +919,7 @@ export function replan(plan: RoutinePlan, missedId: string): RoutinePlan {
   if (missed.status === 'done') throw new Error(routine.cannotReplanDone);
 
   next.sessions[index] = { ...missed, status: 'missed' };
+  sink?.({ type: 'adaptation_missed_marked', sessionId: missed.id, date: missed.date });
   const occupied = new Set(next.sessions.map((session) => session.date));
   const activeMinutes = next.sessions
     .filter((session) => session.status !== 'missed')
@@ -866,6 +939,15 @@ export function replan(plan: RoutinePlan, missedId: string): RoutinePlan {
         dayIndex: offset,
         status: 'planned',
       };
+      sink?.({
+        type: 'adaptation_replacement_placed',
+        fromSessionId: missed.id,
+        fromDate: missed.date,
+        replacementId: replacement.id,
+        replacementDate: date,
+        budgetBefore: next.input.weeklyMinutes - activeMinutes,
+        budgetAfter: next.input.weeklyMinutes - activeMinutes - missed.minutes,
+      });
       break;
     }
   }
@@ -879,10 +961,43 @@ export function replan(plan: RoutinePlan, missedId: string): RoutinePlan {
     : `${next.explanation} ${routine.replanNoReplacement(missed.date, noSlotReason)}`;
   if (!replacement) {
     warnings.push(noSlotReason);
+    sink?.({
+      type: 'adaptation_infeasible',
+      missedSessionId: missed.id,
+      reason: budgetAllowsReplacement ? 'no_free_day' : 'budget_exhausted',
+    });
   } else {
     next.sessions.push(replacement);
   }
   next.sessions.sort((a, b) => a.date.localeCompare(b.date));
+  // Confirmation walk over the executed result: every final session is
+  // confirmed here, while this operation runs, with its budget arithmetic.
+  // The adaptation layer builds the candidate trace from THESE events.
+  let confirmedUsed = 0;
+  const confirmed = next.sessions.map((session) => {
+    const countsAgainstCap = session.status !== 'missed';
+    const budgetBefore = next.input.weeklyMinutes - confirmedUsed;
+    if (countsAgainstCap) confirmedUsed += session.minutes;
+    return {
+      sessionId: session.id,
+      date: session.date,
+      dayIndex: session.dayIndex,
+      minutes: session.minutes,
+      budgetBefore,
+      budgetAfter: countsAgainstCap ? budgetBefore - session.minutes : budgetBefore,
+      disposition: (session.id === missed.id
+        ? 'missed'
+        : replacement && session.id === replacement.id
+          ? 'replacement'
+          : 'preserved') as 'preserved' | 'missed' | 'replacement',
+    };
+  });
+  sink?.({
+    type: 'adaptation_candidate_confirmed',
+    missedSessionId: missed.id,
+    replacementId: replacement ? replacement.id : null,
+    sessions: confirmed,
+  });
   return planWithChecks(next, warnings, explanation);
 }
 

@@ -39,6 +39,12 @@ export type Copy = {
     invalidMode: string;
     notConfigured: string;
     providerError: string;
+    rateLimited: (retryAfterSec?: number) => string;
+    visitorQuotaExceeded: string;
+    globalQuotaExceeded: string;
+    visitorConcurrentLimit: string;
+    globalConcurrentLimit: string;
+    limitsNotConfigured: string;
   };
   routine: {
     scopeTitle: string;
@@ -167,6 +173,7 @@ export type Copy = {
     shareSuccess: string;
     copySuccess: string;
     shareError: string;
+    waitSeconds?: (seconds: string | number) => string;
   };
   export: {
     objective: string;
@@ -204,6 +211,15 @@ const english: Copy = {
     invalidMode: 'The routine mode is invalid.',
     notConfigured: 'Live AI is not configured.',
     providerError: 'The AI provider is not available.',
+    rateLimited: (retryAfterSec?: number) =>
+      retryAfterSec
+        ? `Too many requests. Please wait ${retryAfterSec} second${retryAfterSec === 1 ? '' : 's'} before trying again.`
+        : 'Too many requests. Please wait a moment before trying again.',
+    visitorQuotaExceeded: 'Daily Connected AI limit reached (5 routines/day). You can continue using Local Demo mode.',
+    globalQuotaExceeded: 'Daily global capacity reached for Connected AI. Please try again tomorrow or use Local Demo mode.',
+    visitorConcurrentLimit: 'A generation is already in progress for your connection. Please wait for it to finish.',
+    globalConcurrentLimit: 'Service is temporarily busy with too many requests. Please try again shortly.',
+    limitsNotConfigured: 'Service rate limits are not configured.',
   },
   routine: {
     scopeTitle: 'Out-of-scope request',
@@ -332,6 +348,7 @@ const english: Copy = {
     shareSuccess: 'Routine shared.',
     copySuccess: 'Routine copied to share.',
     shareError: 'We could not share the routine in this browser.',
+    waitSeconds: (seconds: string | number) => `Wait ${seconds}s before retrying.`,
   },
   export: {
     objective: 'Objective',
@@ -369,6 +386,15 @@ const spanish: Copy = {
     invalidMode: 'El modo de rutina no es válido.',
     notConfigured: 'La IA real no está configurada.',
     providerError: 'El proveedor de IA no está disponible.',
+    rateLimited: (retryAfterSec?: number) =>
+      retryAfterSec
+        ? `Demasiadas solicitudes. Espera ${retryAfterSec} segundo${retryAfterSec === 1 ? '' : 's'} antes de volver a intentar.`
+        : 'Demasiadas solicitudes. Espera un momento antes de volver a intentar.',
+    visitorQuotaExceeded: 'Límite diario de IA conectada alcanzado (5 rutinas/día). Puedes seguir usando el modo Demo local.',
+    globalQuotaExceeded: 'Capacidad global diaria alcanzada para IA conectada. Vuelve a intentar mañana o usa el modo Demo local.',
+    visitorConcurrentLimit: 'Ya hay una generación en curso para tu conexión. Espera a que termine.',
+    globalConcurrentLimit: 'El servicio está ocupado con demasiadas solicitudes. Vuelve a intentar en un momento.',
+    limitsNotConfigured: 'Los límites de tasa del servicio no están configurados.',
   },
   routine: {
     scopeTitle: 'Solicitud fuera de alcance',
@@ -497,6 +523,7 @@ const spanish: Copy = {
     shareSuccess: 'Rutina compartida.',
     copySuccess: 'Rutina copiada para compartir.',
     shareError: 'No pudimos compartir la rutina en este navegador.',
+    waitSeconds: (seconds: string | number) => `Espera ${seconds}s antes de volver a intentar.`,
   },
   export: {
     objective: 'Objetivo',

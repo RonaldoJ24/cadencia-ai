@@ -1,6 +1,67 @@
 import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
+import type { Db, DbStatement } from '../lib/server/db.ts';
 import { GET, POST } from '../app/api/routine/route.ts';
+
+function sqliteDb(): Db & { raw: DatabaseSync } {
+  const raw = new DatabaseSync(':memory:');
+  const wrap = (sql: string): DbStatement => {
+    let params: unknown[] = [];
+    const api: DbStatement = {
+      bind(...values: unknown[]) {
+        params = values;
+        return api;
+      },
+      async first<T>() {
+        const row = raw.prepare(sql).get(...(params as unknown as [])) as T | undefined;
+        return (row ?? null) as T | null;
+      },
+      async all<T>() {
+        const rows = raw.prepare(sql).all(...(params as unknown as [])) as T[];
+        return { results: rows };
+      },
+      async run() {
+        const info = raw.prepare(sql).run(...(params as unknown as []));
+        return { success: true, meta: { changes: Number(info.changes) } };
+      },
+      runSync() {
+        const info = raw.prepare(sql).run(...(params as unknown as []));
+        return { success: true, meta: { changes: Number(info.changes) } };
+      },
+    };
+    return api;
+  };
+  return {
+    raw,
+    prepare: (sql: string) => wrap(sql),
+    batch: async (statements: DbStatement[]) => {
+      raw.exec('BEGIN');
+      try {
+        const out: unknown[] = [];
+        for (const statement of statements) {
+          const syncApi = statement as unknown as { runSync?: () => unknown; run: () => Promise<unknown> };
+          out.push(typeof syncApi.runSync === 'function' ? syncApi.runSync() : await syncApi.run());
+        }
+        raw.exec('COMMIT');
+        return out;
+      } catch (error) {
+        raw.exec('ROLLBACK');
+        throw error;
+      }
+    },
+  };
+}
+
+async function migrated(): Promise<Db> {
+  const db = sqliteDb();
+  db.raw.exec('PRAGMA foreign_keys = ON');
+  for (const file of ['0001_beta_loop.sql', '0002_rate_limits.sql', '0003_public_limits.sql']) {
+    db.raw.exec(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'));
+  }
+  return db;
+}
 
 const ENV_NAMES = [
   'CADENCIA_ENABLE_LIVE',
@@ -66,6 +127,8 @@ const REFERENCE_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const RUNTIME_ENV_KEY = '__cadencia_runtime_env_v1';
 
+let testIpCounter = 1;
+
 function assertFailureReference(payload: unknown): asserts payload is {
   error: string;
   reference: string;
@@ -93,7 +156,7 @@ function serviceResponse(
 function routeRequest(body: unknown, headers: Record<string, string> = {}): Request {
   return new Request('http://localhost/api/routine', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', ...headers },
+    headers: { 'content-type': 'application/json', 'cf-connecting-ip': headers['cf-connecting-ip'] ?? `127.0.0.${(testIpCounter += 1) % 250 + 1}`, ...headers },
     body: JSON.stringify(body),
   });
 }
@@ -102,6 +165,7 @@ async function withEnvironment<T>(
   updates: Partial<Record<(typeof ENV_NAMES)[number], string | undefined>>,
   callback: () => Promise<T>,
 ): Promise<T> {
+  (globalThis as Record<string, unknown>).__cadencia_db = await migrated();
   const previous = Object.fromEntries(
     ENV_NAMES.map((name) => [name, process.env[name]]),
   ) as Record<string, string | undefined>;
@@ -114,6 +178,7 @@ async function withEnvironment<T>(
     }
     return await callback();
   } finally {
+    delete (globalThis as Record<string, unknown>).__cadencia_db;
     for (const name of ENV_NAMES) {
       const value = previous[name];
       if (value === undefined) delete process.env[name];

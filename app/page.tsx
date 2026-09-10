@@ -900,6 +900,7 @@ export default function Home() {
         const payload = (await response.json().catch(() => ({}))) as {
           plan?: RoutinePlan;
           reference?: string;
+          error?: string;
         };
         if (!response.ok || !payload.plan) {
           const ref =
@@ -907,8 +908,13 @@ export default function Home() {
             UUID_PATTERN.test(payload.reference.trim())
               ? payload.reference.trim()
               : undefined;
-          const failure = new Error('routine-request-failed');
+          const retryAfter = response.headers.get('retry-after');
+          const failure = new Error(payload.error || 'routine-request-failed');
           (failure as unknown as { reference?: string }).reference = ref;
+          (failure as unknown as { serverMessage?: string }).serverMessage =
+            typeof payload.error === 'string' ? payload.error : undefined;
+          (failure as unknown as { retryAfter?: string | null }).retryAfter = retryAfter;
+          (failure as unknown as { status?: number }).status = response.status;
           throw failure;
         }
         nextPlan = payload.plan;
@@ -922,7 +928,24 @@ export default function Home() {
     } catch (cause) {
       if (!isCurrentRequest(request)) return;
       setRequestState('error');
-      setError(copyFor(request.language).ui.createError);
+      const err = cause as {
+        reference?: string;
+        serverMessage?: string;
+        retryAfter?: string | null;
+        status?: number;
+      };
+      const activeCopy = copyFor(request.language);
+      if (err.serverMessage) {
+        let msg = err.serverMessage;
+        if (err.retryAfter && !msg.includes(err.retryAfter) && activeCopy.ui.waitSeconds) {
+          msg += ` (${activeCopy.ui.waitSeconds(err.retryAfter)})`;
+        }
+        setError(msg);
+      } else if (err.status === 429) {
+        setError(activeCopy.api.rateLimited(err.retryAfter ? Number(err.retryAfter) : undefined));
+      } else {
+        setError(activeCopy.ui.createError);
+      }
       const ref = (cause as { reference?: string })?.reference;
       setErrorReference(ref ?? null);
     } finally {

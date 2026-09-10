@@ -2,8 +2,9 @@
 
 Cadencia keeps one repository and two independently deployable server components.
 The existing Next.js-compatible Vinext frontend runs the backend-for-frontend
-`/api/routine`. It sends only `{ "request": "…" }` to Python's `/v1/intents` with
-an internal bearer token. Python calls DeepSeek and returns a validated `Intent`
+`/api/routine`. It sends `{ "request" }` plus the validated `language`,
+`session_count`, and `session_minutes` schedule contract to Python's
+`/v1/intents` with an internal bearer token. Python calls DeepSeek and returns a validated `Intent`
 plus the strict internal boolean `scope_refused`. TypeScript validates both before
 `buildPlan` computes the schedule. Python
 does not receive or calculate dates, durations, selected days, or weekly limits.
