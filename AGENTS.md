@@ -17,7 +17,9 @@ Rules for anyone, human or agent, changing this repository.
 ## Evidence
 
 - Every number in the docs comes from a run whose outputs are committed. No
-  numbers from memory, ignored folders or other projects.
+  numbers from memory, ignored folders or other projects. Engineering numbers
+  live in `docs/evidence/` (command, commit, date, raw output); model-quality
+  numbers only in a scored run under `evals/runs/`.
 - Eval labels never reach prompts, and any exposure of a held-out set is
   recorded, not hidden.
 - A written test is not a passed test. Report what was run and its result.
