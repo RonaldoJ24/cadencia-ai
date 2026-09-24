@@ -1,5 +1,6 @@
 // Shared live intent-service client. Extracted verbatim from
 // app/api/routine/route.ts so provider behavior stays identical.
+import type { DraftPayload, ReadGoalPayload } from '../goal-stream.ts';
 import type { RoutineInput } from '../routine.ts';
 
 export const SERVICE_TIMEOUT_MS = 25_000;
@@ -268,18 +269,19 @@ async function readLimitedText(
   response: Response,
   controller: AbortController,
   deadline: number,
+  maxBytes: number,
 ): Promise<string> {
   const declared = response.headers.get('content-length');
   if (declared !== null) {
     const size = Number(declared);
-    if (!Number.isFinite(size) || size < 0 || size > MAX_RESPONSE_BYTES) {
+    if (!Number.isFinite(size) || size < 0 || size > maxBytes) {
       throw new Error('service-response-size');
     }
   }
   const reader = response.body?.getReader();
   if (!reader) {
     const raw = await timed(() => response.text(), controller, deadline);
-    if (responseBytes(raw) > MAX_RESPONSE_BYTES) throw new Error('service-response-size');
+    if (responseBytes(raw) > maxBytes) throw new Error('service-response-size');
     return raw;
   }
 
@@ -290,7 +292,7 @@ async function readLimitedText(
       const part = await timed(() => reader.read(), controller, deadline);
       if (part.done) break;
       total += part.value.byteLength;
-      if (total > MAX_RESPONSE_BYTES) {
+      if (total > maxBytes) {
         void reader.cancel().catch(() => undefined);
         throw new Error('service-response-size');
       }
@@ -309,11 +311,35 @@ async function readLimitedText(
   return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
 }
 
-export async function requestIntent(
-  input: RoutineInput,
+/** Where a call goes and how long and large its answer may be. */
+export type ServiceCall = { path: string; timeoutMs: number; maxBytes: number };
+
+export const SERVICE_CALLS = {
+  intents: { path: SERVICE_PATH, timeoutMs: SERVICE_TIMEOUT_MS, maxBytes: MAX_RESPONSE_BYTES },
+  // The service allows 30 s for a reading and 50 s for a draft; these add headroom.
+  readGoal: { path: '/v1/read-goal', timeoutMs: 35_000, maxBytes: 32_768 },
+  draft: { path: '/v1/draft', timeoutMs: 55_000, maxBytes: 131_072 },
+} as const satisfies Record<string, ServiceCall>;
+
+/** The configured intents URL with its path swapped for another endpoint's. */
+export function serviceEndpoint(serviceUrl: string, path: string): string {
+  const url = new URL(serviceUrl);
+  url.pathname = `${url.pathname.slice(0, -SERVICE_PATH.length)}${path}`;
+  return url.toString();
+}
+
+/**
+ * Posts JSON to the service with the bearer token, never following a
+ * redirect, within a deadline and a response size limit. A non-2xx answer
+ * throws backend_rejected with any usage the service reported, so spend can
+ * still be settled.
+ */
+async function postService(
   config: LiveConfig,
-  fetcher: typeof fetch = globalThis.fetch,
-): Promise<{ intent: unknown; scopeRefused: boolean; requestId?: string; usage?: ServiceUsage }> {
+  call: ServiceCall,
+  payload: unknown,
+  fetcher: typeof fetch,
+): Promise<{ root: Dict; requestId?: string }> {
   let headers: Headers;
   try {
     headers = new Headers({
@@ -325,7 +351,7 @@ export async function requestIntent(
   }
 
   const controller = new AbortController();
-  const deadline = Date.now() + SERVICE_TIMEOUT_MS;
+  const deadline = Date.now() + call.timeoutMs;
   let responseRequestId: string | undefined;
   let response: Response;
   let phase: 'fetch' | 'response' = 'fetch';
@@ -334,18 +360,10 @@ export async function requestIntent(
       () =>
         // Workers' native fetch is host-backed. Preserve its global receiver
         // instead of calling a detached function from the route module.
-        fetcher.call(globalThis, config.serviceUrl, {
+        fetcher.call(globalThis, serviceEndpoint(config.serviceUrl, call.path), {
           method: 'POST',
           headers,
-          body: JSON.stringify({
-            request: input.request,
-            language: input.language,
-            session_count: Math.min(
-              input.days.length,
-              Math.floor(input.weeklyMinutes / input.sessionMinutes),
-            ),
-            session_minutes: input.sessionMinutes,
-          }),
+          body: JSON.stringify(payload),
           // Inspect redirects before any token could be sent to a new origin.
           redirect: 'manual',
           signal: controller.signal,
@@ -364,7 +382,7 @@ export async function requestIntent(
     }
     const headerRequestId = requestId(response.headers.get('x-request-id'));
     responseRequestId = safeRequestId(headerRequestId, config.token);
-    const raw = await readLimitedText(response, controller, deadline);
+    const raw = await readLimitedText(response, controller, deadline, call.maxBytes);
     const bodyRequestId = requestIdFromBody(raw);
     const serviceRequestId =
       responseRequestId ??
@@ -380,15 +398,8 @@ export async function requestIntent(
       throw rejected;
     }
     const root = dict(JSON.parse(raw));
-    if (!root || !('intent' in root) || typeof root.scope_refused !== 'boolean') {
-      throw new Error('service-response-json');
-    }
-    return {
-      intent: root.intent,
-      scopeRefused: root.scope_refused,
-      requestId: serviceRequestId,
-      usage: serviceUsage(root.meta),
-    };
+    if (!root) throw new Error('service-response-json');
+    return { root, requestId: serviceRequestId };
   } catch (error) {
     const timedOut = controller.signal.aborted;
     controller.abort();
@@ -405,4 +416,68 @@ export async function requestIntent(
       reason === 'upstream_fetch_failed' ? fetchDiagnostic(error) : undefined,
     );
   }
+}
+
+export async function requestIntent(
+  input: RoutineInput,
+  config: LiveConfig,
+  fetcher: typeof fetch = globalThis.fetch,
+): Promise<{ intent: unknown; scopeRefused: boolean; requestId?: string; usage?: ServiceUsage }> {
+  const { root, requestId: serviceRequestId } = await postService(config, SERVICE_CALLS.intents, {
+    request: input.request,
+    language: input.language,
+    session_count: Math.min(
+      input.days.length,
+      Math.floor(input.weeklyMinutes / input.sessionMinutes),
+    ),
+    session_minutes: input.sessionMinutes,
+  }, fetcher);
+  if (!('intent' in root) || typeof root.scope_refused !== 'boolean') {
+    throw new ServiceFailure(serviceRequestId, false, 'upstream_invalid_response');
+  }
+  return {
+    intent: root.intent,
+    scopeRefused: root.scope_refused,
+    requestId: serviceRequestId,
+    usage: serviceUsage(root.meta),
+  };
+}
+
+export type ReadGoalAnswer = { reading: unknown; scopeRefused: boolean; requestId?: string; usage?: ServiceUsage };
+
+/** Asks the service to read a goal: plan, clarify or abstain. */
+export async function requestReadGoal(
+  payload: ReadGoalPayload,
+  config: LiveConfig,
+  fetcher: typeof fetch = globalThis.fetch,
+): Promise<ReadGoalAnswer> {
+  const { root, requestId: serviceRequestId } = await postService(config, SERVICE_CALLS.readGoal, payload, fetcher);
+  if (!dict(root.reading) || typeof root.scope_refused !== 'boolean') {
+    const failure = new ServiceFailure(serviceRequestId, false, 'upstream_invalid_response');
+    failure.usage = serviceUsage(root.meta);
+    throw failure;
+  }
+  return {
+    reading: root.reading,
+    scopeRefused: root.scope_refused,
+    requestId: serviceRequestId,
+    usage: serviceUsage(root.meta),
+  };
+}
+
+export type DraftAnswer = { draft: unknown; requestId?: string; usage?: ServiceUsage };
+
+/** Asks the service for a draft of the weeks code has already sized. */
+export async function requestDraft(
+  payload: DraftPayload,
+  config: LiveConfig,
+  fetcher: typeof fetch = globalThis.fetch,
+): Promise<DraftAnswer> {
+  const { root, requestId: serviceRequestId } = await postService(config, SERVICE_CALLS.draft, payload, fetcher);
+  if (!dict(root.draft)) {
+    const failure = new ServiceFailure(serviceRequestId, false, 'upstream_invalid_response');
+    failure.usage = serviceUsage(root.meta);
+    throw failure;
+  }
+  return { draft: root.draft, requestId: serviceRequestId, usage: serviceUsage(root.meta) };
 }
