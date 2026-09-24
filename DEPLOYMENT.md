@@ -75,25 +75,38 @@ container there, so health checks use `/livez`.
 
 ### 3.1 Build and deploy
 
-Set the placeholders, then build with Cloud Build (no local Docker needed):
+Build from a clean copy of the committed service files, never from `service/`
+itself: without a `.gcloudignore`, Cloud Build would upload everything in the
+folder, including `service/.env.local` and the virtual environment. Builds run
+as the dedicated `cadencia-build-sa` account; the default compute account cannot
+read the Cloud Build source bucket.
 
 ```bash
 export CADENCIA_GCP_PROJECT='<project-id>'
-export CADENCIA_GCP_REGION='us-central1'
-export CADENCIA_ARTIFACT_REPOSITORY='cadencia'
-export CADENCIA_RUN_SERVICE='cadencia-intents'
 export CADENCIA_IMAGE_TAG="$(git rev-parse --short HEAD)"
+CONTEXT="$(mktemp -d)"
+git archive HEAD service/Dockerfile service/pyproject.toml service/uv.lock \
+  service/app.py service/provider.py service/cloudbuild.yaml | tar -x -C "$CONTEXT" --strip-components=1
 
-gcloud builds submit service --config service/cloudbuild.yaml \
-  --substitutions _REGION="$CADENCIA_GCP_REGION",_REPOSITORY="$CADENCIA_ARTIFACT_REPOSITORY",_SERVICE="$CADENCIA_RUN_SERVICE",COMMIT_SHA="$CADENCIA_IMAGE_TAG"
+gcloud builds submit "$CONTEXT" --project "$CADENCIA_GCP_PROJECT" --config "$CONTEXT/cloudbuild.yaml" \
+  --service-account "projects/$CADENCIA_GCP_PROJECT/serviceAccounts/cadencia-build-sa@$CADENCIA_GCP_PROJECT.iam.gserviceaccount.com" \
+  --substitutions _REGION=us-central1,_REPOSITORY=cadencia,_SERVICE=cadencia-intents,COMMIT_SHA="$CADENCIA_IMAGE_TAG"
 ```
 
-Deploy the image with the same settings as production:
+A new image for an existing service only needs the image flag; the revision
+keeps the service's settings, secrets and scaling limits:
 
 ```bash
-gcloud run deploy "$CADENCIA_RUN_SERVICE" \
-  --image "${CADENCIA_GCP_REGION}-docker.pkg.dev/${CADENCIA_GCP_PROJECT}/${CADENCIA_ARTIFACT_REPOSITORY}/${CADENCIA_RUN_SERVICE}:${CADENCIA_IMAGE_TAG}" \
-  --region "$CADENCIA_GCP_REGION" --port 8080 --cpu 1 --memory 256Mi \
+gcloud run deploy cadencia-intents --project "$CADENCIA_GCP_PROJECT" --region us-central1 \
+  --image "us-central1-docker.pkg.dev/$CADENCIA_GCP_PROJECT/cadencia/cadencia-intents:$CADENCIA_IMAGE_TAG"
+```
+
+For a first deployment, create the service with every setting production uses:
+
+```bash
+gcloud run deploy cadencia-intents --project "$CADENCIA_GCP_PROJECT" \
+  --image "us-central1-docker.pkg.dev/$CADENCIA_GCP_PROJECT/cadencia/cadencia-intents:$CADENCIA_IMAGE_TAG" \
+  --region us-central1 --port 8080 --cpu 1 --memory 256Mi \
   --concurrency 8 --min-instances 0 --max-instances 1 --timeout 30s \
   --ingress all --no-invoker-iam-check \
   --set-env-vars "DEEPSEEK_MODEL=deepseek-v4-flash" \
