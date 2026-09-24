@@ -7,7 +7,7 @@ import { replanOptions, REPLAN_OPTIONS } from '../lib/planner/replan.ts';
 import { schedulePlan } from '../lib/planner/schedule.ts';
 import { SpecError, validateGoalSpec } from '../lib/planner/spec.ts';
 import type { GoalPlan, SessionType } from '../lib/planner/types.ts';
-import { checkPick, plannedReplanSteps, REPLAN_LIMITS, runReplanPipeline, validateReplanRequest, type ReplanRequest } from '../lib/replan-stream.ts';
+import { checkPick, plannedReplanSteps, REPLAN_LIMITS, replanRequestFor, runReplanPipeline, validateReplanRequest, type ReplanRequest } from '../lib/replan-stream.ts';
 import { REPLAN_LEASE_SEC } from '../lib/server/goal-run.ts';
 import type { ReplanAnswer } from '../lib/server/live.ts';
 import { REPLAN_BOUNDS, REPLAN_WORST_CASE_MICROUSD } from '../lib/server/spend.ts';
@@ -56,15 +56,7 @@ const TODAY = '2026-10-11';
 const replan = replanOptions(missed, [], TODAY)!;
 
 /** The request the page sends: the situation and the summaries, and nothing about the goal but its area and level. */
-const REQUEST: ReplanRequest = {
-  language: 'en',
-  today: TODAY,
-  domain: spec.domain,
-  level: spec.level,
-  situation: { missedSessions: replan.situation.missedSessions, missedWeeks: replan.situation.missedWeeks, weeksLeft: replan.situation.weeksLeft },
-  options: replan.options.map((option) => option.summary),
-  reason: 'I was traveling for work all week.',
-};
+const REQUEST: ReplanRequest = replanRequestFor(missed, replan, TODAY, 'en', 'I was traveling for work all week.');
 
 const PICK = { decision: 'pick', option: 'repeat', why: 'Your trip is over, so redo the missed week now.', abstain: null };
 

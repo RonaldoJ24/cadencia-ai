@@ -145,6 +145,19 @@ void test('a missed week lowers what the next fitness week may hold', () => {
   assert.deepEqual(checkPlan(keep.plan, []), []);
 });
 
+void test('lighter is lighter than keep in every week ahead, even when the load rule trims keep', () => {
+  // Weeks 1 to 4 done, week 5 missed: keep's heavier weeks are cut by the load rule.
+  const missed = mark(tenKPlan, (session) => (session.week <= 4 ? 'done' : session.week === 5 ? 'missed' : null));
+  const replan = replanOptions(missed, [], '2026-11-01')!;
+  const keep = replan.options.find((option) => option.summary.id === 'keep')!;
+  const lighter = replan.options.find((option) => option.summary.id === 'lighter')!;
+  assert.ok(lighter, 'lighter is offered');
+  for (let week = 6; week <= 10; week += 1) {
+    assert.ok(weekMinutes(lighter.plan, week) <= weekMinutes(keep.plan, week), `week ${week}`);
+  }
+  assert.ok(lighter.summary.minutesLeft < keep.summary.minutesLeft, `${lighter.summary.minutesLeft} < ${keep.summary.minutesLeft}`);
+});
+
 void test('mid-week, sessions already behind count toward the rest of that week', () => {
   // Asked on Wednesday of week 3: week 2 missed, Monday's and today's runs done.
   const midWeek = mark(tenKPlan, (session) => {
@@ -219,6 +232,15 @@ void test('busy times imported later never flag past sessions, and new sessions 
   for (const option of replan.options) {
     assert.ok(upcoming(option, FROM).every((session) => session.date !== '2026-10-12'), option.summary.id);
   }
+});
+
+void test('misses an approved adjustment answered are not offered again', () => {
+  const keep = replanOptions(missedWeek2, [], TODAY)!.options[0];
+  const adjusted: GoalPlan = { ...keep.plan, adjustments: [{ on: TODAY, option: 'keep' }] };
+  assert.equal(replanOptions(adjusted, [], TODAY), null);
+  // A new miss after the adjustment is offered again.
+  const later = mark(adjusted, (session) => (session.week === 3 ? 'missed' : null));
+  assert.equal(replanOptions(later, [], '2026-10-18')?.situation.missedSessions, later.weeks[2].sessions.length);
 });
 
 void test('nothing to adjust: no recent miss, only old misses, or the plan is over', () => {

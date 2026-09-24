@@ -2168,6 +2168,175 @@ textarea:focus-visible {
   gap: 8px;
 }
 
+.replan-card,
+.replan-teaser,
+.simulation-banner {
+  padding: 18px 27px;
+  border-bottom: 1px solid #d7e3d6;
+}
+
+.replan-card {
+  display: grid;
+  gap: 12px;
+  background: rgb(244 249 238 / 70%);
+}
+
+.replan-card .goal-block-title {
+  margin: 0;
+}
+
+.replan-intro,
+.replan-teaser p,
+.simulation-banner p,
+.replan-message {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.replan-teaser,
+.simulation-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.simulation-banner {
+  border-left: 3px solid var(--lime);
+  background: #fbfdf2;
+}
+
+.replan-presets .example-row {
+  margin-top: 8px;
+}
+
+.replan-reason {
+  margin: 8px 0 0;
+  color: var(--foreground);
+  font-size: 13px;
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+.replan-reason-input {
+  min-height: 72px;
+}
+
+.replan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.replan-result {
+  display: grid;
+  gap: 10px;
+}
+
+.replan-why {
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--lime);
+  background: #fff;
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.replan-why span {
+  display: block;
+  margin-bottom: 2px;
+  color: #74917c;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.replan-options {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.replan-option {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid #d7e3d6;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.replan-option.is-suggested {
+  border-color: var(--foreground);
+  box-shadow: inset 3px 0 0 var(--lime);
+}
+
+.replan-option-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.replan-option h4 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 14px;
+}
+
+.replan-option p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.replan-option > button {
+  justify-self: start;
+}
+
+.replan-facts {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.replan-facts dt {
+  color: #74917c;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.replan-facts dd {
+  margin: 2px 0 0;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+@media (max-width: 600px) {
+  .replan-card,
+  .replan-teaser,
+  .simulation-banner {
+    padding: 16px;
+  }
+
+  .replan-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .goal-block-title {
   margin: 0 0 10px;
   color: #74917c;

@@ -10,10 +10,10 @@ import { keepBest } from './load.ts';
 import { schedulePlan } from './schedule.ts';
 import { SpecError, validateGoalSpec } from './spec.ts';
 import { addDays, daysBetween } from './time.ts';
-import type { BusyInterval, Draft, GoalPlan, GoalSpec, LocalDate, PlannedSession, SessionType } from './types.ts';
+import type { BusyInterval, Draft, GoalPlan, GoalSpec, LocalDate, PlannedSession, ReplanOptionId, SessionType } from './types.ts';
 
-export const REPLAN_OPTIONS = ['keep', 'repeat', 'extend', 'lighter'] as const;
-export type ReplanOptionId = (typeof REPLAN_OPTIONS)[number];
+export type { ReplanOptionId };
+export const REPLAN_OPTIONS = ['keep', 'repeat', 'extend', 'lighter'] as const satisfies readonly ReplanOptionId[];
 
 /** Misses older than this before the change date are history, not something to redo. */
 export const RECENT_MISS_DAYS = 14;
@@ -38,22 +38,12 @@ export type ReplanSummary = {
   minutesLeft: number;
   /** Minutes planned in the seven days from `from`. */
   nextSevenDaysMinutes: number;
-  /** Of what is still to do, missed sessions included, how much this option leaves out. */
+  /** Of the sessions the current plan still has plus those just missed, how many this option leaves out. */
   sessionsLeftOut: number;
 };
 
 export type ReplanOption = { summary: ReplanSummary; plan: GoalPlan };
 export type Replan = { situation: ReplanSituation; options: ReplanOption[] };
-
-/** The draft's list for a week, less one entry per kept session of that week. */
-function withoutKept(list: readonly string[], kept: readonly PlannedSession[]): string[] {
-  const rest = [...list];
-  for (const session of kept) {
-    const slot = rest.indexOf(session.typeId);
-    if (slot !== -1) rest.splice(slot, 1);
-  }
-  return rest;
-}
 
 /**
  * Redoes the draft from week `first` at week `boundary`, `shift` weeks later,
@@ -83,16 +73,22 @@ function shiftedDraft(draft: Draft, first: number, boundary: number, weeks: numb
   return { ...draft, phases, weeks: nextWeeks };
 }
 
-/** Each week from the boundary on keeps its best sessions within LIGHTER_PERCENT of its minutes. */
-function lighterDraft(draft: Draft, boundary: number, keptAt: (week: number) => PlannedSession[]): Draft {
+/**
+ * Each week from the boundary on keeps its best sessions within
+ * LIGHTER_PERCENT of what keep actually placed that week. Trimming keep's
+ * schedule rather than the draft is what makes it lighter: after a missed
+ * week the load rule cuts heavier drafted weeks harder, so a trimmed draft
+ * could end up with more time than keep.
+ */
+function lighterDraft(draft: Draft, boundary: number, keptAt: (week: number) => PlannedSession[], keepPlan: GoalPlan, from: LocalDate): Draft {
   const typeById = new Map(draft.sessionTypes.map((type) => [type.id, type]));
   return {
     ...draft,
     weeks: draft.weeks.map((entry) => {
       if (entry.week < boundary) return { ...entry, sessions: [...entry.sessions] };
       const kept = keptAt(entry.week);
-      const rest = withoutKept(entry.sessions, kept);
-      const types = rest.map((id) => typeById.get(id)).filter((type): type is SessionType => type !== undefined);
+      const placed = keepPlan.weeks.find((week) => week.week === entry.week)?.sessions.filter((session) => session.date >= from) ?? [];
+      const types = placed.map((session) => typeById.get(session.typeId)).filter((type): type is SessionType => type !== undefined);
       const minutes = types.reduce((total, type) => total + type.minutes, 0);
       // Lighter, never empty: the shortest session always fits.
       const shortest = Math.min(...types.map((type) => type.minutes));
@@ -114,7 +110,12 @@ export function replanOptions(plan: GoalPlan, busy: readonly BusyInterval[], tod
   if (from > spec.deadline || from < spec.startDate) return null;
   const sessions = plan.weeks.flatMap((week) => week.sessions);
   const kept = sessions.filter((session) => session.date < from);
-  const recent = kept.filter((session) => session.status === 'missed' && daysBetween(session.date, from) <= RECENT_MISS_DAYS);
+  // Misses an approved adjustment already answered are not answered twice.
+  const answered = plan.adjustments?.at(-1)?.on;
+  const recent = kept.filter((session) =>
+    session.status === 'missed' &&
+    daysBetween(session.date, from) <= RECENT_MISS_DAYS &&
+    (answered === undefined || session.date > answered));
   if (recent.length === 0) return null;
   const boundary = plan.weeks.find((week) => from >= week.start && from <= week.end)?.week;
   if (boundary === undefined) return null;
@@ -128,10 +129,8 @@ export function replanOptions(plan: GoalPlan, busy: readonly BusyInterval[], tod
     return interval.end > start ? [{ start, end: interval.end }] : [];
   });
   const ahead7 = addDays(from, 6);
-  // Everything still to do in the current plan, plus what was just missed.
-  const stillToDo = draft.weeks
-    .filter((entry) => entry.week >= boundary)
-    .reduce((total, entry) => total + withoutKept(entry.sessions, keptAt(entry.week)).length, 0) + recent.length;
+  // What the current plan still has ahead, plus what was just missed.
+  const stillToDo = sessions.filter((session) => session.date >= from).length + recent.length;
 
   const build = (id: ReplanOptionId, nextSpec: GoalSpec, nextDraft: Draft): ReplanOption | null => {
     const scheduled = schedulePlan(nextSpec, nextDraft, ahead, { keep: kept, from });
@@ -153,7 +152,8 @@ export function replanOptions(plan: GoalPlan, busy: readonly BusyInterval[], tod
     };
   };
 
-  const candidates: Array<ReplanOption | null> = [build('keep', spec, draft)];
+  const keep = build('keep', spec, draft);
+  const candidates: Array<ReplanOption | null> = [keep];
   if (shift > 0) {
     const weeks = plan.weeks.length;
     candidates.push(build('repeat', spec, shiftedDraft(draft, firstMissed, boundary, weeks, keptAt)));
@@ -165,7 +165,7 @@ export function replanOptions(plan: GoalPlan, busy: readonly BusyInterval[], tod
       if (!(error instanceof SpecError)) throw error;
     }
   }
-  candidates.push(build('lighter', spec, lighterDraft(draft, boundary, keptAt)));
+  if (keep) candidates.push(build('lighter', spec, lighterDraft(draft, boundary, keptAt, keep.plan, from)));
 
   // Two options that place the same sessions are one option.
   const options: ReplanOption[] = [];

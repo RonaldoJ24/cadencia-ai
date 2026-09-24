@@ -7,6 +7,7 @@ import { DeclineCard, GoalPlanView, QuestionCard, type SessionStatus } from '@/c
 import { CalendarImport, type ImportedCalendar } from '@/components/calendar-import';
 import { GoalSettings } from '@/components/goal-settings';
 import { PlanSteps } from '@/components/plan-steps';
+import { ReplanCard } from '@/components/replan-card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { GoalRunError, IDLE_TIMEOUT_MS, runGoalDemo, streamGoalRun, type GoalRunInput } from '@/lib/goal-client';
@@ -24,6 +25,8 @@ import {
 import { applyStageEvent, skipRemainingSteps, type StageEvent, type StepView } from '@/lib/plan-stream';
 import { googleCalendarLink, toGoalICS } from '@/lib/planner/export';
 import type { GoalControls } from '@/lib/planner/goal-input';
+import type { GoalPlan, ReplanOptionId } from '@/lib/planner/types';
+import { simulateMissedWeek } from '@/lib/replan-demo';
 import { stepsCopyFor } from '@/lib/steps-copy';
 
 type Mode = 'demo' | 'live';
@@ -100,6 +103,15 @@ function getServerTodaySnapshot() {
   return localDate(new Date(), 'utc');
 }
 
+function dayName(date: string, language: Language): string {
+  return new Date(`${date}T00:00:00Z`).toLocaleDateString(language === 'es' ? 'es-MX' : 'en-US', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 function downloadText(filename: string, text: string, type: string) {
   const blob = new Blob([text], { type });
   const url = URL.createObjectURL(blob);
@@ -165,6 +177,8 @@ export default function Home() {
   const [text, setText] = useState('');
   const [controls, setControls] = useState<GoalControls>({});
   const [calendar, setCalendar] = useState<ImportedCalendar | null>(null);
+  // The demo's pretend missed week: the day it pretends is today, and the plan to go back to.
+  const [simulation, setSimulation] = useState<{ today: string; original: Result } | null>(null);
   const [steps, setSteps] = useState<StepView[] | null>(null);
   const [stepsMode, setStepsMode] = useState<Mode>('demo');
   const [result, setResult] = useState<Result | null>(null);
@@ -267,6 +281,7 @@ export default function Home() {
   const run = async (clarification?: { question: string; answer: string }) => {
     const request = beginRequest();
     const runMode = mode;
+    setSimulation(null);
     setError(null);
     setErrorReference(null);
     setRequestState('loading');
@@ -353,9 +368,36 @@ export default function Home() {
           },
         },
       };
-      saveResult(next);
+      if (!simulation) saveResult(next);
       return next;
     });
+  };
+
+  const planToday = simulation?.today ?? today;
+
+  /** The person approved an option: it replaces the plan, and the history keeps a line for it. */
+  const applyReplan = (nextPlan: GoalPlan, option: ReplanOptionId) => {
+    setResult((current) => {
+      if (!current || current.outcome.outcome !== 'ready') return current;
+      const adjustments = [...(current.outcome.plan.adjustments ?? []), { on: planToday, option }];
+      const next: Result = { ...current, outcome: { ...current.outcome, plan: { ...nextPlan, adjustments } } };
+      if (!simulation) saveResult(next);
+      return next;
+    });
+  };
+
+  const startSimulation = () => {
+    if (result?.outcome.outcome !== 'ready') return;
+    const simulated = simulateMissedWeek(result.outcome.plan);
+    if (!simulated) return;
+    setSimulation({ today: simulated.today, original: result });
+    setResult({ ...result, outcome: { ...result.outcome, plan: simulated.plan } });
+  };
+
+  const endSimulation = () => {
+    if (!simulation) return;
+    setResult(simulation.original);
+    setSimulation(null);
   };
 
   const readyPlan = result?.outcome.outcome === 'ready' ? result.outcome.plan : null;
@@ -585,6 +627,33 @@ export default function Home() {
               outcome={result.outcome}
               mode={result.mode}
               demoRecord={result.demoRecord}
+              today={planToday}
+              banner={simulation ? (
+                <div className="simulation-banner">
+                  <p>{copy.replan.simulationBanner(dayName(simulation.today, language))}</p>
+                  <button type="button" className="example-chip" onClick={endSimulation}>{copy.replan.endSimulation}</button>
+                </div>
+              ) : null}
+              replan={result.mode === 'demo' && !simulation ? (
+                simulateMissedWeek(result.outcome.plan) ? (
+                  <div className="replan-teaser">
+                    <p>{copy.replan.demoTeaser}</p>
+                    <button type="button" className="example-chip" onClick={startSimulation}>{copy.replan.simulate}</button>
+                  </div>
+                ) : null
+              ) : (
+                <ReplanCard
+                  key={`${simulation ? 'simulated' : 'real'}-${result.outcome.plan.adjustments?.length ?? 0}`}
+                  plan={result.outcome.plan}
+                  busy={calendar?.busy ?? []}
+                  today={planToday}
+                  mode={result.mode}
+                  liveAvailable={liveAvailable}
+                  language={language}
+                  copy={copy}
+                  onApply={applyReplan}
+                />
+              )}
               copy={copy}
               language={language}
               onStatus={setStatus}

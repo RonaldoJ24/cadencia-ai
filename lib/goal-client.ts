@@ -4,6 +4,9 @@
 
 import { findSample, loadSamples, sampleDeps, type SampleId } from './goal-demo.ts';
 import { runGoalPipeline, type GoalOutcome } from './goal-stream.ts';
+import { findReplanSample, loadReplanSamples, replanSampleDeps, type ReplanReasonId } from './replan-demo.ts';
+import { runReplanPipeline, type ReplanOutcome, type ReplanRequest } from './replan-stream.ts';
+import { REPLAN_OPTIONS } from './planner/replan.ts';
 import type { Language } from './i18n.ts';
 import { parseStageEvent, StageFailure, type StageEvent } from './plan-stream.ts';
 import type { GoalControls } from './planner/goal-input.ts';
@@ -64,24 +67,51 @@ export function parseGoalOutcome(value: unknown): GoalOutcome | null {
   return null;
 }
 
+/** Accepts only replan outcomes with the fields the page reads. */
+export function parseReplanOutcome(value: unknown): ReplanOutcome | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const outcome = value as Record<string, unknown>;
+  if (!Array.isArray(outcome.requestIds)) return null;
+  if (outcome.outcome === 'suggested' && REPLAN_OPTIONS.includes(outcome.option as never) && typeof outcome.why === 'string') {
+    return value as ReplanOutcome;
+  }
+  if (outcome.outcome === 'declined' && (outcome.category === 'medical' || outcome.category === 'unclear') && typeof outcome.reason === 'string') {
+    return value as ReplanOutcome;
+  }
+  return outcome.outcome === 'open' ? (value as ReplanOutcome) : null;
+}
+
+type StreamOptions = {
+  signal: AbortSignal;
+  onStage: (event: StageEvent) => void;
+  onActivity: () => void;
+  fallbackMessage: string;
+  streamEndedMessage: string;
+};
+
 /**
  * Runs a live goal plan. `onActivity` fires on every chunk, heartbeats
  * included, so the caller's idle timer only trips when the server is silent.
  */
-export async function streamGoalRun(
-  input: GoalRunInput,
-  options: {
-    signal: AbortSignal;
-    onStage: (event: StageEvent) => void;
-    onActivity: () => void;
-    fallbackMessage: string;
-    streamEndedMessage: string;
-  },
-): Promise<GoalOutcome> {
+export async function streamGoalRun(input: GoalRunInput, options: StreamOptions): Promise<GoalOutcome> {
+  return streamRun('goal', input, parseGoalOutcome, options);
+}
+
+/** Runs a live replan: the model picks one of the options code built, or declines. */
+export async function streamReplanRun(input: ReplanRequest, options: StreamOptions): Promise<ReplanOutcome> {
+  return streamRun('replan', input, parseReplanOutcome, options);
+}
+
+async function streamRun<T>(
+  kind: 'goal' | 'replan',
+  input: unknown,
+  parse: (value: unknown) => T | null,
+  options: StreamOptions,
+): Promise<T> {
   const response = await fetch('/api/routine', {
     method: 'POST',
     headers: { 'content-type': 'application/json', accept: 'text/event-stream' },
-    body: JSON.stringify({ mode: 'deepseek', kind: 'goal', input }),
+    body: JSON.stringify({ mode: 'deepseek', kind, input }),
     signal: options.signal,
   });
   const contentType = response.headers.get('content-type') ?? '';
@@ -94,7 +124,7 @@ export async function streamGoalRun(
       retryAfterSec: Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : undefined,
     });
   }
-  let outcome: GoalOutcome | null = null;
+  let outcome: T | null = null;
   let failure: GoalRunError | null = null;
   await readSse(response.body, (message) => {
     let data: unknown;
@@ -107,7 +137,7 @@ export async function streamGoalRun(
       const event = parseStageEvent(data);
       if (event) options.onStage(event);
     } else if (message.event === 'result') {
-      outcome = parseGoalOutcome(data);
+      outcome = parse(data);
     } else if (message.event === 'error') {
       const payload = data as Record<string, unknown>;
       failure = new GoalRunError(text(payload.message) ?? options.fallbackMessage, {
@@ -134,6 +164,25 @@ export async function runGoalDemo(
     return await runGoalPipeline(
       { ...input, text: sample.text },
       { mode: 'demo', now: () => performance.now(), emit: onStage, ...sampleDeps(sample, input.today) },
+    );
+  } catch (error) {
+    if (error instanceof StageFailure) throw new GoalRunError(error.publicMessage, { stage: error.stage });
+    throw error;
+  }
+}
+
+/** Runs the replan demo in the browser: the real pipeline, with a recorded pick. */
+export async function runReplanDemo(
+  reason: ReplanReasonId,
+  input: ReplanRequest,
+  onStage: (event: StageEvent) => void,
+): Promise<ReplanOutcome> {
+  const sample = findReplanSample(await loadReplanSamples(), reason, input.language);
+  if (!sample) throw new GoalRunError('This reason has no recorded sample.');
+  try {
+    return await runReplanPipeline(
+      { ...input, reason: sample.text },
+      { mode: 'demo', now: () => performance.now(), emit: onStage, ...replanSampleDeps(sample) },
     );
   } catch (error) {
     if (error instanceof StageFailure) throw new GoalRunError(error.publicMessage, { stage: error.stage });

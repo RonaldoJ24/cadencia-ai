@@ -1,6 +1,7 @@
 'use client';
 
 import { CalendarPlus, Check, Download, RotateCcw, X } from 'lucide-react';
+import type { ReactNode } from 'react';
 
 import type { GoalCopy } from '@/lib/goal-copy';
 import type { GoalOutcome } from '@/lib/goal-stream';
@@ -129,11 +130,13 @@ function PhaseList({ plan, copy }: { plan: GoalPlan; copy: GoalCopy }) {
   );
 }
 
-function SessionRow({ session, role, copy, language, onStatus }: {
+function SessionRow({ session, role, copy, language, canMark, onStatus }: {
   session: PlannedSession;
   role: 'key' | 'support';
   copy: GoalCopy;
   language: Language;
+  /** Only a session whose day has come can be marked done or missed. */
+  canMark: boolean;
   onStatus: (id: string, status: SessionStatus) => void;
 }) {
   return (
@@ -163,7 +166,7 @@ function SessionRow({ session, role, copy, language, onStatus }: {
       </p>
       <div className="goal-session-actions">
         <span className={`status-chip status-${session.status}`}>{copy.plan.statuses[session.status]}</span>
-        {session.status === 'planned' ? (
+        {!canMark ? null : session.status === 'planned' ? (
           <>
             <button type="button" className="done-button" onClick={() => onStatus(session.id, 'done')}>
               <Check size={13} aria-hidden="true" />
@@ -185,14 +188,17 @@ function SessionRow({ session, role, copy, language, onStatus }: {
   );
 }
 
-function WeekList({ plan, copy, language, onStatus }: {
+function WeekList({ plan, today, copy, language, onStatus }: {
   plan: GoalPlan;
+  today: string;
   copy: GoalCopy;
   language: Language;
   onStatus: (id: string, status: SessionStatus) => void;
 }) {
   const roles = new Map(plan.draft.sessionTypes.map((type) => [type.id, type.role]));
-  const firstWithSessions = plan.weeks.find((week) => week.sessions.length > 0)?.week;
+  // The week with the next session opens first; before any, the first week with sessions.
+  const firstWithSessions = (plan.weeks.find((week) => week.sessions.some((session) => session.date >= today)) ??
+    plan.weeks.find((week) => week.sessions.length > 0))?.week;
   return (
     <section className="goal-block" aria-labelledby="weeks-title">
       <h3 id="weeks-title" className="goal-block-title">{copy.plan.weeksTitle}</h3>
@@ -215,6 +221,7 @@ function WeekList({ plan, copy, language, onStatus }: {
                     role={roles.get(session.typeId) ?? 'support'}
                     copy={copy}
                     language={language}
+                    canMark={today !== '' && session.date <= today}
                     onStatus={onStatus}
                   />
                 ))}
@@ -263,6 +270,9 @@ export function GoalPlanView({
   outcome,
   mode,
   demoRecord,
+  today,
+  banner,
+  replan,
   copy,
   language,
   onStatus,
@@ -272,6 +282,12 @@ export function GoalPlanView({
   outcome: Ready;
   mode: 'demo' | 'live';
   demoRecord: { model: string; date: string } | null;
+  /** Today, or the simulated day in the demo. */
+  today: string;
+  /** Shown above the plan, such as the demo's simulation notice. */
+  banner?: ReactNode;
+  /** What to offer after missed sessions, when there is anything to adjust. */
+  replan?: ReactNode;
   copy: GoalCopy;
   language: Language;
   onStatus: (id: string, status: SessionStatus) => void;
@@ -291,6 +307,11 @@ export function GoalPlanView({
         <h2 id="goal-plan-title">{reading.title}</h2>
         <p className="goal-plan-summary">{reading.summary}</p>
         <p className="goal-plan-stats">{copy.plan.stats(plan.weeks.length, sessions.length, hours)}</p>
+        {(plan.adjustments ?? []).map((adjustment, index) => (
+          <p key={index} className="goal-muted">
+            {copy.replan.applied(formatDay(adjustment.on, language), stepsCopyFor(language).replan.optionNames[adjustment.option])}
+          </p>
+        ))}
         {demoRecord ? (
           <p className="goal-muted">
             {copy.plan.demoProvenance(
@@ -305,10 +326,12 @@ export function GoalPlanView({
           </p>
         ) : null}
       </header>
+      {banner}
+      {replan}
       <ProvenanceList plan={plan} provenance={outcome.provenance} copy={copy} language={language} />
       <LoadChart plan={plan} copy={copy} />
       <PhaseList plan={plan} copy={copy} />
-      <WeekList plan={plan} copy={copy} language={language} onStatus={onStatus} />
+      <WeekList plan={plan} today={today} copy={copy} language={language} onStatus={onStatus} />
       <ChangeList plan={plan} copy={copy} language={language} />
       <footer className="export-actions goal-exports">
         <button type="button" onClick={onDownloadIcs}>
