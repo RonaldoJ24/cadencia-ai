@@ -123,6 +123,12 @@ _RESTRICTED_REQUEST = re.compile(
     r"divorce|immigration)\b",
     re.ASCII | re.IGNORECASE,
 )
+# The planning endpoints plan general fitness, so activity words are not
+# refused there; medical, injury, pain, diet, money and legal terms still are.
+_FITNESS_ACTIVITY_TERMS = frozenset(
+    {"ejercicio", "ejercicios", "entrenamiento", "entrenamientos", "fitness", "exercise",
+     "workout", "ganar musculo", "muscle gain"}
+)
 _DIRECT_REQUEST_CUE = re.compile(
     r"\b(?:dime|decime|indica(?:me)?|explica(?:me)?|recomiend(?:a|ame)|"
     r"aconsej(?:a|ame)|sugier(?:e|eme)|que\s+(?:debo|puedo|tengo\s+que)|"
@@ -373,7 +379,9 @@ class IntentRequest(BaseModel):
 
 @dataclass(frozen=True, slots=True)
 class IntentResult:
-    intent: Intent
+    # The validated model output: an Intent for /v1/intents, or the model class
+    # each planning endpoint asks for.
+    intent: Any
     scope_refused: bool
     model: str
     attempts: int
@@ -456,13 +464,17 @@ class _Failure(Exception):
         self.system_fingerprint = system_fingerprint
 
 
-def restricted_request(request: str) -> bool:
+def restricted_request(request: str, *, fitness_in_scope: bool = False) -> bool:
     normalized = "".join(
         character
         for character in unicodedata.normalize("NFD", request).lower()
         if not unicodedata.category(character).startswith("M")
     )
-    matches = list(_RESTRICTED_REQUEST.finditer(normalized))
+    matches = [
+        match
+        for match in _RESTRICTED_REQUEST.finditer(normalized)
+        if not (fitness_in_scope and match.group(0).casefold() in _FITNESS_ACTIVITY_TERMS)
+    ]
     if not matches:
         return False
     if _direct_advice_request(normalized):
@@ -633,7 +645,8 @@ def _usage(value: Any) -> dict[str, int] | None:
     return result or None
 
 
-async def _read_limited(response: httpx.Response) -> str:
+async def _read_limited(response: httpx.Response, max_bytes: int | None = None) -> str:
+    max_bytes = MAX_RESPONSE_BYTES if max_bytes is None else max_bytes
     encoding = response.headers.get("content-encoding", "").strip().lower()
     if encoding and encoding != "identity":
         raise _Failure(
@@ -649,7 +662,7 @@ async def _read_limited(response: httpx.Response) -> str:
                 outcome="invalid_response",
                 status_category=_status_category(response.status_code),
             ) from error
-        if declared_bytes < 0 or declared_bytes > MAX_RESPONSE_BYTES:
+        if declared_bytes < 0 or declared_bytes > max_bytes:
             raise _Failure(
                 outcome="oversized_response",
                 status_category=_status_category(response.status_code),
@@ -659,7 +672,7 @@ async def _read_limited(response: httpx.Response) -> str:
     total = 0
     async for chunk in response.aiter_bytes():
         total += len(chunk)
-        if total > MAX_RESPONSE_BYTES:
+        if total > max_bytes:
             raise _Failure(
                 outcome="oversized_response",
                 status_category=_status_category(response.status_code),
@@ -677,7 +690,8 @@ async def _read_limited(response: httpx.Response) -> str:
 def _parse_provider_response(
     raw: str,
     status_category: str,
-) -> tuple[Intent, dict[str, int] | None, bool, str | None, str | None]:
+    model_cls: type[BaseModel] = Intent,
+) -> tuple[BaseModel, dict[str, int] | None, bool, str | None, str | None]:
     if not raw.strip():
         raise _Failure(outcome="empty_response", status_category=status_category)
     try:
@@ -736,7 +750,7 @@ def _parse_provider_response(
             system_fingerprint=system_fingerprint,
         )
     try:
-        intent = Intent.model_validate(intent_value, strict=True)
+        intent = model_cls.model_validate(intent_value, strict=True)
     except Exception:
         raise _Failure(
             outcome="schema_invalid",
@@ -809,9 +823,15 @@ async def _attempt(
     client: httpx.AsyncClient,
     payload: dict[str, Any],
     api_key: str,
-) -> tuple[Intent, dict[str, int] | None, str, str | None, str | None]:
+    *,
+    model_cls: type[BaseModel] = Intent,
+    request_timeout: float | None = None,
+    max_bytes: int | None = None,
+) -> tuple[BaseModel, dict[str, int] | None, str, str | None, str | None]:
+    # Resolved at call time so tests and callers can adjust the module limits.
+    request_timeout = REQUEST_TIMEOUT_SECONDS if request_timeout is None else request_timeout
     try:
-        async with asyncio.timeout(REQUEST_TIMEOUT_SECONDS):
+        async with asyncio.timeout(request_timeout):
             async with client.stream(
                 "POST",
                 DEEPSEEK_URL,
@@ -821,7 +841,7 @@ async def _attempt(
                     "accept-encoding": "identity",
                 },
                 json=payload,
-                timeout=REQUEST_TIMEOUT_SECONDS,
+                timeout=request_timeout,
             ) as response:
                 category = _status_category(response.status_code)
                 if response.status_code == 429:
@@ -839,7 +859,7 @@ async def _attempt(
                 if not 200 <= response.status_code <= 299:
                     raise _Failure(outcome="provider_error", status_category=category)
                 intent, usage, _, observed_model, system_fingerprint = _parse_provider_response(
-                    await _read_limited(response), category
+                    await _read_limited(response, max_bytes), category, model_cls
                 )
                 return intent, usage, category, observed_model, system_fingerprint
     except _Failure:
@@ -861,17 +881,27 @@ async def _call_provider(
     started: float,
     language: Language = "en",
     before_attempt: Callable[[], None] | None = None,
+    model_cls: type[BaseModel] = Intent,
+    request_timeout: float | None = None,
+    total_timeout: float | None = None,
+    max_bytes: int | None = None,
 ) -> IntentResult:
     attempts = 0
+    total_timeout = TOTAL_TIMEOUT_SECONDS if total_timeout is None else total_timeout
     try:
-        async with asyncio.timeout(TOTAL_TIMEOUT_SECONDS):
+        async with asyncio.timeout(total_timeout):
             while attempts < 2:
                 try:
                     if before_attempt is not None:
                         before_attempt()
                     attempts += 1
                     intent, usage, category, observed_model, system_fingerprint = await _attempt(
-                        client, payload, api_key
+                        client,
+                        payload,
+                        api_key,
+                        model_cls=model_cls,
+                        request_timeout=request_timeout,
+                        max_bytes=max_bytes,
                     )
                 except ProviderAttemptLimitError:
                     raise _provider_error(
@@ -1145,12 +1175,14 @@ def log_event(
     outcome: str,
     schema_valid: bool,
     usage: dict[str, int] | None = None,
+    prompt_version: str = PROMPT_VERSION,
+    event_name: str = "intent_request",
 ) -> None:
     event: dict[str, Any] = {
-        "event": "intent_request",
+        "event": event_name,
         "request_id": request_id,
         "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "prompt_version": PROMPT_VERSION,
+        "prompt_version": prompt_version,
         "model": log_model_is_safe(model),
         "latency_ms": max(0, int(latency_ms)),
         "attempts": max(0, int(attempts)),

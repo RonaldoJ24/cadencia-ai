@@ -45,6 +45,25 @@ except ImportError:  # Allows `uvicorn app:app` from the service directory.
         LOGGER,
     )
 
+try:
+    from .planning import (
+        DRAFT_VERSION,
+        READ_GOAL_VERSION,
+        DraftRequest,
+        ReadGoalRequest,
+        draft_plan,
+        read_goal,
+    )
+except ImportError:  # Allows `uvicorn app:app` from the service directory.
+    from planning import (  # type: ignore[no-redef]
+        DRAFT_VERSION,
+        READ_GOAL_VERSION,
+        DraftRequest,
+        ReadGoalRequest,
+        draft_plan,
+        read_goal,
+    )
+
 MAX_BODY_BYTES = 32_768
 BODY_TIMEOUT_SECONDS = 5.0
 DAILY_ATTEMPT_CAP_ENV = "CADENCIA_SERVICE_DAILY_ATTEMPT_CAP"
@@ -333,6 +352,150 @@ async def intents(request: Request) -> JSONResponse:
     )
 
 
+def _meta(request_id: str, prompt_version: str, result: Any) -> dict[str, Any]:
+    meta: dict[str, Any] = {
+        "request_id": request_id,
+        "prompt_version": prompt_version,
+        "model": model_for_logging() if result is None else result.model,
+        "latency_ms": 0 if result is None else result.latency_ms,
+        "attempts": 0 if result is None else result.attempts,
+    }
+    usage = None if result is None else intent_usage(result.usage)
+    if usage is not None:
+        meta["usage"] = usage.model_dump(mode="json", exclude_none=True)
+    return meta
+
+
+async def _planning_endpoint(
+    request: Request,
+    *,
+    event_name: str,
+    prompt_version: str,
+    parse: Any,
+    call: Any,
+    respond: Any,
+) -> JSONResponse:
+    """Shared auth, body limits, error mapping and logging for the planning calls."""
+
+    request_id = _request_id()
+    language = "en"
+    if not _authorized(request):
+        _log_client_failure(request_id, "unauthorized")
+        return _error(_error_text(language, "unauthorized"), request_id, 401)
+    try:
+        raw = await _read_body(request)
+        value = _parse_request_body(raw)
+        language = _language(value)
+        body = parse(value)
+    except _BodyTooLarge:
+        _log_client_failure(request_id, "body_too_large")
+        return _error(_error_text(language, "invalid"), request_id, 413)
+    except _UnsupportedEncoding:
+        _log_client_failure(request_id, "unsupported_encoding")
+        return _error(_error_text(language, "invalid"), request_id, 400)
+    except _BodyTimeout:
+        _log_client_failure(request_id, "body_timeout")
+        return _error(_error_text(language, "invalid"), request_id, 408)
+    except Exception:
+        _log_client_failure(request_id, "invalid_request")
+        return _error(_error_text(language, "invalid"), request_id, 400)
+
+    try:
+        payload, result = await call(body, request_id)
+    except ProviderError as failure:
+        log_event(
+            logger=LOGGER,
+            request_id=request_id,
+            model=failure.model,
+            latency_ms=failure.latency_ms,
+            attempts=failure.attempts,
+            status_category=failure.status_category,
+            outcome=failure.outcome,
+            schema_valid=failure.schema_valid,
+            usage=failure.usage,
+            prompt_version=prompt_version,
+            event_name=event_name,
+        )
+        status = (
+            503
+            if failure.outcome in ("configuration_error", "provider_attempt_cap_exhausted")
+            else 502
+        )
+        spent: dict[str, Any] = {}
+        if failure.attempts > 0:
+            spent["attempts"] = failure.attempts
+            usage = intent_usage(failure.usage)
+            if usage is not None:
+                spent["usage"] = usage.model_dump(mode="json", exclude_none=True)
+        return _error(failure.safe_message, request_id, status, extra=spent)
+    except Exception:
+        _log_client_failure(request_id, "internal_error", status_category="internal")
+        return _error(_error_text(language, "internal"), request_id, 500)
+
+    log_event(
+        logger=LOGGER,
+        request_id=request_id,
+        model=model_for_logging() if result is None else result.model,
+        latency_ms=0 if result is None else result.latency_ms,
+        attempts=0 if result is None else result.attempts,
+        status_category="none" if result is None else result.status_category,
+        outcome="refused" if result is None else result.outcome,
+        schema_valid=True,
+        usage=None if result is None else result.usage,
+        prompt_version=prompt_version,
+        event_name=event_name,
+    )
+    return _json_response(
+        respond(payload, _meta(request_id, prompt_version, result)),
+        status_code=200,
+        request_id=request_id,
+    )
+
+
+@app.post("/v1/read-goal")
+async def read_goal_endpoint(request: Request) -> JSONResponse:
+    injected_client = getattr(request.app.state, "provider_client", None)
+
+    async def call(body: ReadGoalRequest, request_id: str) -> tuple[Any, Any]:
+        reading, result = await read_goal(
+            body, request_id=request_id, client=injected_client, before_attempt=DAILY_ATTEMPTS.before_attempt
+        )
+        return reading, result
+
+    return await _planning_endpoint(
+        request,
+        event_name="read_goal_request",
+        prompt_version=READ_GOAL_VERSION,
+        parse=lambda value: ReadGoalRequest.model_validate(value, strict=True),
+        call=call,
+        respond=lambda reading, meta: {
+            "reading": reading.model_dump(mode="json"),
+            "scope_refused": meta["attempts"] == 0,
+            "meta": meta,
+        },
+    )
+
+
+@app.post("/v1/draft")
+async def draft_endpoint(request: Request) -> JSONResponse:
+    injected_client = getattr(request.app.state, "provider_client", None)
+
+    async def call(body: DraftRequest, request_id: str) -> tuple[Any, Any]:
+        result = await draft_plan(
+            body, request_id=request_id, client=injected_client, before_attempt=DAILY_ATTEMPTS.before_attempt
+        )
+        return result.intent, result
+
+    return await _planning_endpoint(
+        request,
+        event_name="draft_request",
+        prompt_version=DRAFT_VERSION,
+        parse=lambda value: DraftRequest.model_validate(value, strict=True),
+        call=call,
+        respond=lambda draft, meta: {"draft": draft.model_dump(mode="json"), "meta": meta},
+    )
+
+
 @app.exception_handler(StarletteHTTPException)
 async def http_error_handler(request: Request, exception: StarletteHTTPException) -> JSONResponse:
     del request
@@ -358,4 +521,4 @@ async def unexpected_error_handler(request: Request, exception: Exception) -> JS
     return _error(_error_text("en", "internal"), request_id, 500)
 
 
-__all__ = ["MAX_BODY_BYTES", "app", "healthz", "intents"]
+__all__ = ["MAX_BODY_BYTES", "app", "draft_endpoint", "healthz", "intents", "read_goal_endpoint"]

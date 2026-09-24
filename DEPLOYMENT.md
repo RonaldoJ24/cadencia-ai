@@ -26,8 +26,11 @@ Cadencia runs in two places:
     │
     ▼  HTTPS, Authorization: Bearer <CADENCIA_SERVICE_TOKEN>
 [ Cloud Run: cadencia-intents ]  (us-central1)
-    ├─ GET  /livez      public liveness
-    ├─ POST /v1/intents constant-time token check, strict schemas, scope guard
+    ├─ GET  /livez        public liveness
+    ├─ POST /v1/intents   the current weekly routine (constant-time token check,
+    │                     strict schemas, scope guard)
+    ├─ POST /v1/read-goal reads a free-text goal: plan, clarify or abstain
+    ├─ POST /v1/draft     drafts sessions for the weeks code has already sized
     │
     ▼  HTTPS, Bearer <DEEPSEEK_API_KEY>
 [ DeepSeek API ]  https://api.deepseek.com/chat/completions
@@ -70,6 +73,10 @@ Production as read on 2026-09-23 with `gcloud run services describe`: 1 CPU,
 (the app checks the bearer token), secrets from Secret Manager, and an image built
 on 2026-09-02 that serves prompt `cadencia-routine-v2`.
 
+`/v1/draft` allows 40 s per provider attempt and 50 s in total, so the service
+needs a 60 s request timeout; the release that adds it raises the timeout (see
+below).
+
 Cloud Run reserves some paths ending in `z`: `/healthz` never reaches the
 container there, so health checks use `/livez`.
 
@@ -86,7 +93,8 @@ export CADENCIA_GCP_PROJECT='<project-id>'
 export CADENCIA_IMAGE_TAG="$(git rev-parse --short HEAD)"
 CONTEXT="$(mktemp -d)"
 git archive HEAD service/Dockerfile service/pyproject.toml service/uv.lock \
-  service/app.py service/provider.py service/cloudbuild.yaml | tar -x -C "$CONTEXT" --strip-components=1
+  service/app.py service/provider.py service/planning.py service/cloudbuild.yaml \
+  | tar -x -C "$CONTEXT" --strip-components=1
 
 gcloud builds submit "$CONTEXT" --project "$CADENCIA_GCP_PROJECT" --config "$CONTEXT/cloudbuild.yaml" \
   --service-account "projects/$CADENCIA_GCP_PROJECT/serviceAccounts/cadencia-build-sa@$CADENCIA_GCP_PROJECT.iam.gserviceaccount.com" \
@@ -94,7 +102,8 @@ gcloud builds submit "$CONTEXT" --project "$CADENCIA_GCP_PROJECT" --config "$CON
 ```
 
 A new image for an existing service only needs the image flag; the revision
-keeps the service's settings, secrets and scaling limits:
+keeps the service's settings, secrets and scaling limits. The first release with
+`/v1/draft` also passes `--timeout 60s` once:
 
 ```bash
 gcloud run deploy cadencia-intents --project "$CADENCIA_GCP_PROJECT" --region us-central1 \
@@ -107,7 +116,7 @@ For a first deployment, create the service with every setting production uses:
 gcloud run deploy cadencia-intents --project "$CADENCIA_GCP_PROJECT" \
   --image "us-central1-docker.pkg.dev/$CADENCIA_GCP_PROJECT/cadencia/cadencia-intents:$CADENCIA_IMAGE_TAG" \
   --region us-central1 --port 8080 --cpu 1 --memory 256Mi \
-  --concurrency 8 --min-instances 0 --max-instances 1 --timeout 30s \
+  --concurrency 8 --min-instances 0 --max-instances 1 --timeout 60s \
   --ingress all --no-invoker-iam-check \
   --set-env-vars "DEEPSEEK_MODEL=deepseek-v4-flash" \
   --set-secrets "DEEPSEEK_API_KEY=deepseek-api-key:latest,CADENCIA_SERVICE_TOKEN=cadencia-service-token:latest"
@@ -183,6 +192,8 @@ Zero Trust dashboard with the values above.
 curl -fsS "https://cadencia-intents-675488596560.us-central1.run.app/livez"      # {"status":"ok"}
 curl -i -X POST "https://cadencia-intents-675488596560.us-central1.run.app/v1/intents" \
   -H 'content-type: application/json' -d '{"request":"test"}'                   # 401
+curl -i -X POST "https://cadencia-intents-675488596560.us-central1.run.app/v1/read-goal" \
+  -H 'content-type: application/json' -d '{"text":"test"}'                      # 401
 
 # Worker readiness: {"liveAvailable":true} when live mode is configured
 curl -fsS "https://cadencia-ai.ronaldo-jesus-alvarez.workers.dev/api/routine"
