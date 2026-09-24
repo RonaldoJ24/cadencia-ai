@@ -109,6 +109,39 @@ void test('a live run streams the limits check and the model stage before the re
   assert.equal(inFlight.n, 0, 'the live slot is released');
 });
 
+void test('a live run the visitor leaves mid-draft still settles its spend and frees its slot', async () => {
+  const db = migratedDb(['0001_beta_loop.sql', '0002_rate_limits.sql', '0003_public_limits.sql', '0005_spend_controls.sql']);
+  const kept: Array<Promise<unknown>> = [];
+  let finishDraft = () => undefined as void;
+  const draftDone = new Promise<void>((resolve) => {
+    finishDraft = resolve;
+  });
+  const response = await POST(streamRequest({ input, mode: 'deepseek' }, '203.0.113.10'), {
+    db,
+    env: liveEnv,
+    waitUntil: (promise) => kept.push(promise),
+    intentFetcher: async () => {
+      await draftDone;
+      return {
+        intent,
+        scopeRefused: false,
+        usage: { promptTokens: 300, completionTokens: 700, attempts: 1 },
+      };
+    },
+  });
+  // The visitor closes the page while the model is still drafting.
+  const reader = response.body?.getReader();
+  await reader?.read();
+  await reader?.cancel();
+  finishDraft();
+  assert.equal(kept.length, 1, 'the run is registered to outlive the response');
+  await kept[0];
+  const row = db.raw.prepare('SELECT status, actual_microusd FROM spend_ledger').get() as Record<string, unknown>;
+  assert.deepEqual({ ...row }, { status: 'settled', actual_microusd: 930 });
+  const inFlight = db.raw.prepare('SELECT COUNT(*) AS n FROM public_concurrency').get() as { n: number };
+  assert.equal(inFlight.n, 0);
+});
+
 void test('a failed model call ends the stream with an error that names the stage', async () => {
   const db = migratedDb(['0001_beta_loop.sql', '0002_rate_limits.sql', '0003_public_limits.sql', '0005_spend_controls.sql']);
   const original = console.error;

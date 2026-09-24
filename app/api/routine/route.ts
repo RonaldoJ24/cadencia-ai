@@ -33,7 +33,27 @@ export type PublicRoutineDeps = {
   intentFetcher?: typeof requestIntent;
   nowIso?: () => string;
   nowMs?: () => number;
+  /** Keeps work running after the response; defaults to the Workers request context. */
+  waitUntil?: (promise: Promise<unknown>) => void;
 };
+
+type KeepAlive = (promise: Promise<unknown>) => void;
+
+/**
+ * The request's waitUntil, so a run whose visitor disconnects still settles
+ * its spend and releases its slot. Workers cancel unregistered work when the
+ * client goes away, and give registered work up to 30 more seconds.
+ */
+async function keepAliveFor(deps?: PublicRoutineDeps): Promise<KeepAlive> {
+  if (deps?.waitUntil) return deps.waitUntil;
+  try {
+    const worker = await import('cloudflare:workers');
+    if (typeof worker.waitUntil === 'function') return (promise) => worker.waitUntil(promise);
+  } catch {
+    // Outside Workers (tests, local scripts) nothing cancels pending work.
+  }
+  return () => undefined;
+}
 
 export async function resolvePublicRouteDb(): Promise<Db | null> {
   const scope = globalThis as Record<string, unknown>;
@@ -133,9 +153,16 @@ function meta(outcome: PipelineOutcome, mode: PipelineDeps['mode'], startedMs: n
   };
 }
 
-async function jsonResponse(rawInput: unknown, deps: Omit<PipelineDeps, 'emit'>, startedMs: number): Promise<Response> {
+async function jsonResponse(
+  rawInput: unknown,
+  deps: Omit<PipelineDeps, 'emit'>,
+  startedMs: number,
+  keepAlive: KeepAlive,
+): Promise<Response> {
   try {
-    const outcome = await runPlanPipeline(rawInput, { ...deps, emit: () => undefined });
+    const pending = runPlanPipeline(rawInput, { ...deps, emit: () => undefined });
+    keepAlive(pending.catch(() => undefined));
+    const outcome = await pending;
     return json({ plan: outcome.plan, meta: meta(outcome, deps.mode, startedMs) }, 200, outcome.requestId);
   } catch (error) {
     if (!(error instanceof StageFailure)) throw error;
@@ -152,7 +179,12 @@ async function jsonResponse(rawInput: unknown, deps: Omit<PipelineDeps, 'emit'>,
   }
 }
 
-function streamResponse(rawInput: unknown, deps: Omit<PipelineDeps, 'emit'>, startedMs: number): Response {
+function streamResponse(
+  rawInput: unknown,
+  deps: Omit<PipelineDeps, 'emit'>,
+  startedMs: number,
+  keepAlive: KeepAlive,
+): Response {
   const encoder = new TextEncoder();
   const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
   const writer = writable.getWriter();
@@ -166,7 +198,7 @@ function streamResponse(rawInput: unknown, deps: Omit<PipelineDeps, 'emit'>, sta
   // Keeps the connection alive while a slow stage (the model call) runs.
   const heartbeat = setInterval(() => write(SSE_HEARTBEAT), HEARTBEAT_MS);
 
-  void (async () => {
+  keepAlive((async () => {
     try {
       const outcome = await runPlanPipeline(rawInput, {
         ...deps,
@@ -195,7 +227,7 @@ function streamResponse(rawInput: unknown, deps: Omit<PipelineDeps, 'emit'>, sta
       clearInterval(heartbeat);
       if (open) await writer.close().catch(() => undefined);
     }
-  })();
+  })());
 
   return new Response(readable, {
     status: 200,
@@ -324,7 +356,8 @@ export async function POST(request: Request, deps?: PublicRoutineDeps): Promise<
     };
   }
 
+  const keepAlive = mode === 'deepseek' ? await keepAliveFor(deps) : () => undefined;
   return wantsStream
-    ? streamResponse(value.input, pipelineDeps, startedMs)
-    : jsonResponse(value.input, pipelineDeps, startedMs);
+    ? streamResponse(value.input, pipelineDeps, startedMs, keepAlive)
+    : jsonResponse(value.input, pipelineDeps, startedMs, keepAlive);
 }
