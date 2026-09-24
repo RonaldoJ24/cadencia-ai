@@ -53,13 +53,80 @@ def _provider_body() -> bytes:
     ).encode("utf-8")
 
 
+GOAL_READING = {
+    "decision": "plan",
+    "title": "Learn TypeScript",
+    "summary": "Learn TypeScript on Monday and Wednesday evenings.",
+    "domain": "learning",
+    "level": "unknown",
+    "deadline": None,
+    "deadline_basis": "none",
+    "days": [0, 2],
+    "window": "evening",
+    "weekly_minutes": 60,
+    "session_minutes": 30,
+    "question": None,
+    "abstain": None,
+}
+GOAL_USAGE = {"prompt_tokens": 500, "completion_tokens": 300, "total_tokens": 800}
+
+
+def _envelope(content: dict[str, Any]) -> httpx.Response:
+    body = {
+        "choices": [{"finish_reason": "stop", "message": {"content": json.dumps(content)}}],
+        "usage": GOAL_USAGE,
+    }
+    return httpx.Response(200, content=json.dumps(body).encode("utf-8"), headers={"content-type": "application/json"})
+
+
+def _goal_draft(calendar: dict[str, Any]) -> dict[str, Any]:
+    """A draft that fits whatever calendar code sent, as a well-behaved model would."""
+
+    weeks = calendar["weeks"]
+    return {
+        "phases": [{"title": "Practice", "fromWeek": 1, "toWeek": len(weeks), "focus": "Practise a little every week."}],
+        "sessionTypes": [
+            {
+                "id": "practice",
+                "title": "Typed practice",
+                "minutes": 30,
+                "intensity": "moderate",
+                "role": "key",
+                "blocks": [
+                    {"minutes": 5, "activity": "Pick one concept."},
+                    {"minutes": 20, "activity": "Write and compile a small example."},
+                    {"minutes": 5, "activity": "Note what to try next."},
+                ],
+                "deliverable": "One compiled example.",
+                "doneWhen": "The example compiles.",
+            }
+        ],
+        "weeks": [
+            {"week": week["week"], "sessions": ["practice"] * min(week["room"], week["maxMinutes"] // 30)}
+            for week in weeks
+        ],
+        "templateId": None,
+    }
+
+
 class SmokeProvider:
     def __init__(self) -> None:
         self.calls = 0
+        self.goal_calls = 0
         self.success_body = _provider_body()
 
     async def __call__(self, request: httpx.Request) -> httpx.Response:
-        del request
+        import planning
+
+        messages = json.loads(request.content)["messages"]
+        if messages[0]["content"] == planning.READ_GOAL_PROMPT:
+            self.goal_calls += 1
+            return _envelope(GOAL_READING)
+        if messages[0]["content"] == planning.DRAFT_PROMPT:
+            self.goal_calls += 1
+            prefix = "Plan calendar, fixed by code: "
+            line = next(item for item in messages[1]["content"].splitlines() if item.startswith(prefix))
+            return _envelope(_goal_draft(json.loads(line[len(prefix):])))
         self.calls += 1
         if self.calls == 1:
             return httpx.Response(
@@ -198,7 +265,24 @@ const demo = await invoke('demo');
 const demoBody = await demo.json();
 const livePlan = liveBody?.plan;
 const demoPlan = demoBody?.plan;
-const serializedBodies = JSON.stringify({ liveBody, failedBody, demoBody });
+// A goal run over the same loopback hop: read, size, draft, check and fit.
+const { SseParser } = await import('./lib/sse.ts');
+const goal = await POST(new Request('http://localhost/api/routine', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', accept: 'text/event-stream', 'cf-connecting-ip': '127.0.0.2' },
+  body: JSON.stringify({
+    mode: 'deepseek',
+    kind: 'goal',
+    input: { text: 'Learn TypeScript on Monday and Wednesday evenings', language: 'en', today: new Date().toISOString().slice(0, 10) },
+  }),
+}));
+const goalMessages = [];
+const parser = new SseParser((message) => goalMessages.push(message));
+parser.push(await goal.text());
+parser.end();
+const goalResult = JSON.parse(goalMessages.at(-1)?.data ?? '{}');
+const goalLedger = db.raw.prepare("SELECT status, actual_microusd FROM spend_ledger WHERE reserved_microusd > 20000").get();
+const serializedBodies = JSON.stringify({ liveBody, failedBody, demoBody, goalResult });
 console.log(JSON.stringify({
   availability: await availability.json(),
   live: {
@@ -218,6 +302,17 @@ console.log(JSON.stringify({
     session: demoPlan?.sessions?.[0] ?? null,
     input: demoPlan?.input ?? null,
     checksPassed: Array.isArray(demoPlan?.checks) && demoPlan.checks.every((check) => check?.passed === true),
+  },
+  goal: {
+    status: goal.status,
+    outcome: goalResult?.outcome ?? null,
+    stages: goalMessages
+      .filter((message) => message.event === 'stage')
+      .map((message) => JSON.parse(message.data))
+      .filter((event) => event.status !== 'started')
+      .map((event) => `${event.stage}:${event.status}`),
+    sessions: (goalResult?.plan?.weeks ?? []).reduce((total, week) => total + week.sessions.length, 0),
+    ledger: goalLedger ?? null,
   },
   returnedBodiesSafe: !serializedBodies.includes('smoke-token') && !serializedBodies.includes('upstream secret'),
 }));
@@ -284,6 +379,7 @@ def main() -> int:
             failed = value.get("failed")
             demo = value.get("demo")
             availability = value.get("availability")
+            goal = value.get("goal")
             returned_bodies_safe = value.get("returnedBodiesSafe")
             if not (
                 isinstance(availability, dict)
@@ -319,8 +415,25 @@ def main() -> int:
                 and demo["session"].get("minutes") == 30
                 and demo["session"].get("instructions", "").startswith("Complete session")
                 and demo.get("checksPassed") is True
+                and isinstance(goal, dict)
+                and goal.get("status") == 200
+                and goal.get("outcome") == "ready"
+                and goal.get("stages") == [
+                    "check_request:completed",
+                    "reserve:completed",
+                    "read_goal:completed",
+                    "check_availability:completed",
+                    "draft:completed",
+                    "check_draft:completed",
+                    "fit:completed",
+                ]
+                and isinstance(goal.get("sessions"), int)
+                and goal["sessions"] > 0
+                # Two calls at 500 in and 300 out settle at 510 micro-USD each.
+                and goal.get("ledger") == {"status": "settled", "actual_microusd": 1_020}
                 and returned_bodies_safe is True
                 and provider.calls == 2
+                and provider.goal_calls == 2
             ):
                 raise RuntimeError("smoke assertions failed")
         finally:
@@ -329,6 +442,7 @@ def main() -> int:
         print(json.dumps({
             "status": "ok",
             "provider_calls": provider.calls,
+            "goal_provider_calls": provider.goal_calls,
             "demo_preserved_no_provider_call": True,
             "service_transport": "loopback",
         }))

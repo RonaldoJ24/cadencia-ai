@@ -118,6 +118,8 @@ export async function checkAndReservePublicLiveSlot(
     limits?: Partial<PublicLimitsConfig>;
     allowIpFallback?: boolean;
     reservationId?: string;
+    /** How long this run may hold its slot; goal runs make several model calls. */
+    leaseSec?: number;
   },
 ): Promise<SlotReservationResult> {
   if (!args.secret || args.secret.trim().length === 0) {
@@ -172,7 +174,7 @@ export async function checkAndReservePublicLiveSlot(
   // was actually inserted in statement 1 (WHERE EXISTS public_concurrency WHERE id = reservationId).
   // If statement 1 condition is false (0 rows), statements 2 & 3 insert 0 rows.
   const reservationId = args.reservationId ?? crypto.randomUUID();
-  const expiresAt = args.nowMs + limits.concurrencyLeaseSec * 1000;
+  const expiresAt = args.nowMs + (args.leaseSec ?? limits.concurrencyLeaseSec) * 1000;
 
   let batchResults: unknown[];
   try {
