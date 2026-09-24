@@ -7,6 +7,7 @@ import hmac
 import json
 import os
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -21,8 +22,10 @@ try:
         IntentMeta,
         IntentResponse,
         PROMPT_VERSION,
+        ProviderAttemptLimitError,
         ProviderError,
         generate_intent,
+        intent_usage,
         log_event,
         model_for_logging,
         LOGGER,
@@ -33,8 +36,10 @@ except ImportError:  # Allows `uvicorn app:app` from the service directory.
         IntentMeta,
         IntentResponse,
         PROMPT_VERSION,
+        ProviderAttemptLimitError,
         ProviderError,
         generate_intent,
+        intent_usage,
         log_event,
         model_for_logging,
         LOGGER,
@@ -42,6 +47,8 @@ except ImportError:  # Allows `uvicorn app:app` from the service directory.
 
 MAX_BODY_BYTES = 32_768
 BODY_TIMEOUT_SECONDS = 5.0
+DAILY_ATTEMPT_CAP_ENV = "CADENCIA_SERVICE_DAILY_ATTEMPT_CAP"
+DEFAULT_DAILY_ATTEMPT_CAP = 400
 ERRORS = {
     "en": {
         "invalid": "The request is invalid.",
@@ -74,6 +81,43 @@ class _UnsupportedEncoding(Exception):
     pass
 
 
+def _daily_attempt_cap() -> int:
+    raw = os.environ.get(DAILY_ATTEMPT_CAP_ENV, "").strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        return DEFAULT_DAILY_ATTEMPT_CAP
+    return value if value >= 0 else DEFAULT_DAILY_ATTEMPT_CAP
+
+
+class DailyAttempts:
+    """A second fence behind the Worker's spend caps.
+
+    Counts provider attempts per UTC day in this process, so a leaked service
+    token cannot run up unlimited spend. The count resets when the instance
+    restarts; the Worker's D1 ledger remains the real budget.
+    """
+
+    def __init__(self) -> None:
+        self.day = ""
+        self.count = 0
+
+    def reset(self) -> None:
+        self.day = ""
+        self.count = 0
+
+    def before_attempt(self) -> None:
+        today = datetime.now(timezone.utc).date().isoformat()
+        if today != self.day:
+            self.day = today
+            self.count = 0
+        if self.count >= _daily_attempt_cap():
+            raise ProviderAttemptLimitError
+        self.count += 1
+
+
+DAILY_ATTEMPTS = DailyAttempts()
+
 app = FastAPI(title="Cadencia Intent Service", docs_url=None, redoc_url=None)
 app.state.provider_client = None
 
@@ -89,9 +133,15 @@ def _json_response(body: dict[str, Any], *, status_code: int, request_id: str | 
     return JSONResponse(content=body, status_code=status_code, headers=headers)
 
 
-def _error(message: str, request_id: str, status_code: int) -> JSONResponse:
+def _error(
+    message: str,
+    request_id: str,
+    status_code: int,
+    *,
+    extra: dict[str, Any] | None = None,
+) -> JSONResponse:
     return _json_response(
-        {"error": message, "request_id": request_id},
+        {"error": message, "request_id": request_id, **(extra or {})},
         status_code=status_code,
         request_id=request_id,
     )
@@ -221,6 +271,7 @@ async def intents(request: Request) -> JSONResponse:
             session_count=intent_request.session_count,
             session_minutes=intent_request.session_minutes,
             client=injected_client,
+            before_attempt=DAILY_ATTEMPTS.before_attempt,
         )
     except ProviderError as failure:
         log_event(
@@ -234,8 +285,20 @@ async def intents(request: Request) -> JSONResponse:
             schema_valid=failure.schema_valid,
             usage=failure.usage,
         )
-        status = 503 if failure.outcome == "configuration_error" else 502
-        return _error(failure.safe_message, request_id, status)
+        status = (
+            503
+            if failure.outcome in ("configuration_error", "provider_attempt_cap_exhausted")
+            else 502
+        )
+        # When the provider was called, report what was spent so the Worker
+        # can settle its reservation instead of charging the worst case.
+        spent: dict[str, Any] = {}
+        if failure.attempts > 0:
+            spent["attempts"] = failure.attempts
+            usage = intent_usage(failure.usage)
+            if usage is not None:
+                spent["usage"] = usage.model_dump(mode="json", exclude_none=True)
+        return _error(failure.safe_message, request_id, status, extra=spent)
     except Exception:
         _log_client_failure(request_id, "internal_error", status_category="internal")
         return _error(_error_text(language, "internal"), request_id, 500)
@@ -260,6 +323,7 @@ async def intents(request: Request) -> JSONResponse:
             model=result.model,
             latency_ms=result.latency_ms,
             attempts=result.attempts,
+            usage=intent_usage(result.usage),
         ),
     )
     return _json_response(

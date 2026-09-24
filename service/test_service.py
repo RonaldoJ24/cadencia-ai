@@ -189,6 +189,7 @@ def test_valid_provider_response_contract_and_request(monkeypatch: pytest.Monkey
     assert body["meta"]["prompt_version"] == provider.PROMPT_VERSION
     assert body["meta"]["model"] == MODEL
     assert body["meta"]["attempts"] == 1
+    assert body["meta"]["usage"] == {"prompt_tokens": 12, "completion_tokens": 20, "total_tokens": 32}
     assert response.headers["x-request-id"] == body["meta"]["request_id"]
     payload = json.loads(received[0].content)
     assert received[0].url == provider.DEEPSEEK_URL
@@ -803,3 +804,43 @@ def test_request_body_deadline_is_bounded(monkeypatch: pytest.MonkeyPatch) -> No
     response = run(app_request(body=SlowRequestStream()))
     assert response.status_code == 408
     assert set(response.json()) == {"error", "request_id"}
+
+
+def test_error_body_reports_spend_only_after_provider_attempts(monkeypatch: pytest.MonkeyPatch) -> None:
+    configure(monkeypatch)
+    install_provider(
+        monkeypatch,
+        lambda request: envelope(
+            content={"title": "Missing fields"},
+            usage={"prompt_tokens": 40, "completion_tokens": 9, "total_tokens": 49},
+        ),
+    )
+    response = run(app_request(body='{"request":"aprender TypeScript"}'))
+    assert response.status_code == 502
+    body = response.json()
+    assert body["attempts"] == 1
+    assert body["usage"] == {"prompt_tokens": 40, "completion_tokens": 9, "total_tokens": 49}
+    assert set(body) == {"error", "request_id", "attempts", "usage"}
+
+    refused = run(app_request(body=json.dumps({"request": "¿Qué dosis de medicamento debo tomar para el dolor?"})))
+    assert refused.status_code == 200
+    assert "usage" not in refused.json()["meta"]
+
+
+def test_daily_attempt_fence_stops_provider_calls(monkeypatch: pytest.MonkeyPatch) -> None:
+    configure(monkeypatch)
+    monkeypatch.setenv("CADENCIA_SERVICE_DAILY_ATTEMPT_CAP", "1")
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return envelope(usage={"prompt_tokens": 10, "completion_tokens": 10, "total_tokens": 20})
+
+    install_provider(monkeypatch, handler)
+    first = run(app_request(body='{"request":"practicar acuarela"}'))
+    second = run(app_request(body='{"request":"practicar acuarela"}'))
+    assert first.status_code == 200
+    assert second.status_code == 503
+    assert calls == 1
+    assert set(second.json()) == {"error", "request_id"}

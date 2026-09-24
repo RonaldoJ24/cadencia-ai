@@ -293,6 +293,28 @@ class Intent(BaseModel):
         return _text(value, limit=MAX_GOAL_UTF16_UNITS)
 
 
+class IntentUsage(BaseModel):
+    """Token counts the provider reported for the successful attempt."""
+
+    model_config = _MODEL_CONFIG
+
+    prompt_tokens: StrictInt = Field(ge=0)
+    completion_tokens: StrictInt = Field(ge=0)
+    total_tokens: StrictInt | None = Field(default=None, ge=0)
+
+
+def intent_usage(usage: dict[str, int] | None) -> IntentUsage | None:
+    """Return reportable usage only when both token counts are present."""
+
+    if not usage or "prompt_tokens" not in usage or "completion_tokens" not in usage:
+        return None
+    return IntentUsage(
+        prompt_tokens=usage["prompt_tokens"],
+        completion_tokens=usage["completion_tokens"],
+        total_tokens=usage.get("total_tokens"),
+    )
+
+
 class IntentMeta(BaseModel):
     model_config = _MODEL_CONFIG
 
@@ -301,6 +323,7 @@ class IntentMeta(BaseModel):
     model: StrictStr
     latency_ms: StrictInt = Field(ge=0)
     attempts: StrictInt = Field(ge=0, le=2)
+    usage: IntentUsage | None = None
 
     @field_validator("request_id")
     @classmethod
@@ -1148,6 +1171,7 @@ __all__ = [
     "DEEPSEEK_URL",
     "IntentBlock",
     "Intent",
+    "IntentUsage",
     "IntentRequest",
     "IntentMeta",
     "IntentResponse",
@@ -1165,6 +1189,7 @@ __all__ = [
     "ProviderError",
     "TOTAL_TIMEOUT_SECONDS",
     "generate_intent",
+    "intent_usage",
     "log_event",
     "log_model_is_safe",
     "model_for_logging",

@@ -19,6 +19,7 @@ import sys
 import time
 import unicodedata
 from collections import Counter
+from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -514,7 +515,15 @@ async def _run_async(
         session_count: int | None = None,
         session_minutes: int | None = None,
         client: httpx.AsyncClient | None = None,
+        before_attempt: Callable[[], None] | None = None,
     ) -> Any:
+        # The service's own daily fence runs first, then the run's shared budget.
+        hooks = [hook for hook in (before_attempt, attempt_budget.reserve if attempt_budget else None) if hook]
+
+        def chained_before_attempt() -> None:
+            for hook in hooks:
+                hook()
+
         try:
             result = await previous_generate_intent(
                 request,
@@ -523,7 +532,7 @@ async def _run_async(
                 session_count=session_count,
                 session_minutes=session_minutes,
                 client=client,
-                before_attempt=attempt_budget.reserve if attempt_budget is not None else None,
+                before_attempt=chained_before_attempt if hooks else None,
             )
         except BaseException as error:
             captures.append({"request_id": request_id, "value": error})
