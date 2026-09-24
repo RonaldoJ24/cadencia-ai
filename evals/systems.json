@@ -1,0 +1,25 @@
+{
+  "frozen": false,
+  "about": "Part B of evals/PREREGISTRATION.md: the arms and what each arm's service must report. Development values until the tag eval-freeze-v1, when frozen becomes true. GPT-6 Luna's model id and prices are filled in then, from the owner or OpenAI's API reference.",
+  "arms": [
+    {
+      "id": "A",
+      "label": "DeepSeek",
+      "serviceUrl": "http://127.0.0.1:8781",
+      "prices": {
+        "inputPerMillion": 0.3,
+        "outputPerMillion": 1.2,
+        "source": "https://api-docs.deepseek.com/quick_start/pricing (peak prices)",
+        "read": "2026-09-24"
+      },
+      "expect": { "readGoal": "read-goal-f2bbb9b5a76f", "draft": "draft-6ea4a82036d6", "model": "deepseek-flash" }
+    },
+    {
+      "id": "B",
+      "label": "GPT-6 Luna",
+      "serviceUrl": "http://127.0.0.1:8782",
+      "prices": null,
+      "expect": { "readGoal": "read-goal-f2bbb9b5a76f", "draft": "draft-6ea4a82036d6", "model": null }
+    }
+  ]
+}
