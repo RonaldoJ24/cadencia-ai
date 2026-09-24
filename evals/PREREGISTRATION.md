@@ -57,6 +57,15 @@ arm's worst case for that case (section 7). Otherwise it stops at that case
 boundary. Every arm therefore covers the same prefix of cases, and money never
 decides which arm got more.
 
+The runner also stops, to be resumed after a look:
+
+- at once, when the harness fails (section 4);
+- before the next case, after three failed runs in a row on one arm. Those
+  failures are scored like any other.
+
+A resumed run needs the same commit, cases and arms, and runs only what has no
+scored result yet.
+
 ## 4. Cases
 
 - The owner writes 100 to 150 cases in `evals/cases/cases.jsonl`, following
@@ -90,9 +99,14 @@ decides which arm got more.
   owner decides whether to keep it, and kept matches are listed with the
   results.
 - **Exclusions.** A case is excluded only for a validator error before the run.
-  No case is removed after results are seen. A case that fails because of the
-  harness (the local service is down, a network error before any provider call)
-  is re-run once, and both attempts are reported.
+  No case is removed after results are seen.
+- **Harness failures.** A run fails because of the harness when the runner
+  cannot reach the local service, when the service refuses the call before any
+  provider attempt (a bad token or configuration, its daily attempt cap), or
+  when the service is not the one in Part B. Such a run is not scored: it is
+  kept with its cost, the runner stops, and resuming runs the case again. Every
+  harness failure is listed with the results. A failed provider call is not a
+  harness failure; it is scored.
 
 ## 5. Metrics
 
@@ -102,13 +116,13 @@ All figures are counts with their denominators. No percentages. Per arm:
 |---|---|---|
 | M1 | Valid readings | Readings that pass the service's schema and the Worker's re-check, over cases run |
 | M2 | Decisions | 3×3 table of expected against actual decision (plan, clarify, abstain) on the first reading, plus matching abstention categories on cases expected to abstain |
-| M3 | After an answer | For cases with an expected question and a scripted answer: outcomes of the second reading (plan, still unclear, abstain) |
-| M4 | Drafts | First draft structurally valid; valid after the one retry; failed twice. Denominator: runs that reached drafting |
-| M5 | Scheduling violations | `checkPlan` violations summed over ready plans. Expected: 0 |
+| M3 | After an answer | For runs where the first reading asked a question and the case has a scripted answer: the second reading's decision (plan, still unclear, abstain) or an invalid reading |
+| M4 | Drafts | First draft structurally valid; valid after the one retry; failed twice; a draft call failed. These add up to the denominator, runs that reached drafting |
+| M5 | Scheduling violations | A plan with a violation never reaches the person: the fit stage stops the run. M5 counts those runs with the rules they broke, plus any violation the runner's own `checkPlan` finds in ready plans. Expected: 0 for both |
 | M6 | Code trims | Sessions removed by code per ready plan (median, max), and weeks over their limits |
 | M7 | Blind rating | Section 6 |
 | M8 | Cost | Micro-dollars per run from reported usage and the arm's rate card (median, max, total) |
-| M9 | Latency | Per stage and per run, measured at the runner against a local service (median, p90, max). This is not edge latency |
+| M9 | Latency | Per model call and per run, measured at the runner against a local service (median, p90, max). This is not edge latency |
 
 Comparisons between A and B rest on:
 
@@ -124,8 +138,9 @@ are reported as they are.
 
 - **Pairs.** Cases where both A and B produced a ready plan.
 - **Hiding the systems.** The rating page shows the goal text and the two plans
-  as "Plan 1" and "Plan 2". Their order is randomized with a recorded seed, and
-  the key that unblinds them lives in a file the page never loads.
+  as "Plan 1" and "Plan 2". Their order is randomized with a random seed. The
+  seed and the key that unblinds the pairs live in a file the page never loads,
+  and the owner leaves it closed until the ratings are exported.
 - **Scale.** For each plan, the owner rates three statements from 1 to 5:
   - it fits my constraints;
   - the progression makes sense;
