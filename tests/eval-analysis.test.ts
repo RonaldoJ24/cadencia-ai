@@ -73,6 +73,16 @@ void test('the report counts decisions, drafts, trims and cost per arm, with den
   assert.match(report, /\| Rules broken in those runs \| none \| week_ceiling 1, load_jump 1 \|/u);
   assert.match(report, /\| Runs stopped by the harness, not scored \| 1, \$0\.0007 \| 0, \$0\.0000 \|/u);
   assert.doesNotMatch(report, /%/u);
+  assert.doesNotMatch(report, /## Cases/u);
+  const withSources = renderReport([a, b], {
+    runId: 'test',
+    cases: CASES.length,
+    sources: { counts: [{ name: 'origin post', count: 2 }], review: { drafted: 5, dropped: 2 }, closeToDevelopment: [{ id: 'c3', similarity: 0.6 }] },
+  });
+  assert.match(withSources, /\| origin post \| 2 \|/u);
+  assert.match(withSources, /Drafts written: 5\. Dropped by the owner: 2\./u);
+  assert.match(withSources, /close to development texts, kept: c3 \(0\.6\)/u);
+  assert.match(renderReport([a], { runId: 'test', cases: 3, sources: { closeToDevelopment: [] } }), /No provenance file[\s\S]*kept: none\./u);
 });
 
 void test('percentiles use the nearest rank', () => {

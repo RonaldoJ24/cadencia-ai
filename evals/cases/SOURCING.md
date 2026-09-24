@@ -106,7 +106,8 @@ DeepSeek or OpenAI.
 
 Final ids (`c001` onward) come from a shuffle with a recorded seed, so if the
 budget stops a run early, the cases it covered still mix languages, decisions
-and domains. The seed is recorded in the commit that adds the cases.
+and domains. `review.json` beside the cases records the seed, how many drafts
+were written and how many the owner dropped, and the report prints those counts.
 
 ## What can be claimed
 
