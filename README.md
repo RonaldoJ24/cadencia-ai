@@ -41,6 +41,7 @@ answered from outputs recorded from the model for fixed example goals.
 Browser ──SSE── Worker /api/routine ──bearer── Python service ──── DeepSeek
                  │  limits, spend, D1          /v1/read-goal
                  │  goal pipeline (TS)         /v1/draft
+                 │                             /v1/replan
                  └─ planner: spec, skeleton, scheduler, independent checks
 ```
 

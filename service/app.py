@@ -38,23 +38,31 @@ try:
     from .planning import (
         DRAFT_VERSION,
         READ_GOAL_VERSION,
+        REPLAN_VERSION,
         DraftRequest,
         ReadGoalRequest,
+        ReplanRequest,
         draft_plan,
         draft_request,
         read_goal,
         read_goal_request,
+        replan_pick,
+        replan_request,
     )
 except ImportError:  # Allows `uvicorn app:app` from the service directory.
     from planning import (  # type: ignore[no-redef]
         DRAFT_VERSION,
         READ_GOAL_VERSION,
+        REPLAN_VERSION,
         DraftRequest,
         ReadGoalRequest,
+        ReplanRequest,
         draft_plan,
         draft_request,
         read_goal,
         read_goal_request,
+        replan_pick,
+        replan_request,
     )
 
 MAX_BODY_BYTES = 32_768
@@ -393,6 +401,26 @@ async def draft_endpoint(request: Request) -> JSONResponse:
     )
 
 
+@app.post("/v1/replan")
+async def replan_endpoint(request: Request) -> JSONResponse:
+    injected_client = getattr(request.app.state, "provider_client", None)
+
+    async def call(body: ReplanRequest, request_id: str) -> tuple[Any, Any]:
+        result = await replan_pick(
+            body, request_id=request_id, client=injected_client, before_attempt=DAILY_ATTEMPTS.before_attempt
+        )
+        return result.intent, result
+
+    return await _planning_endpoint(
+        request,
+        event_name="replan_request",
+        prompt_version=REPLAN_VERSION,
+        parse=replan_request,
+        call=call,
+        respond=lambda pick, meta: {"pick": pick.model_dump(mode="json"), "meta": meta},
+    )
+
+
 @app.exception_handler(StarletteHTTPException)
 async def http_error_handler(request: Request, exception: StarletteHTTPException) -> JSONResponse:
     del request
@@ -418,4 +446,4 @@ async def unexpected_error_handler(request: Request, exception: Exception) -> JS
     return _error(_error_text("en", "internal"), request_id, 500)
 
 
-__all__ = ["MAX_BODY_BYTES", "app", "draft_endpoint", "healthz", "read_goal_endpoint"]
+__all__ = ["MAX_BODY_BYTES", "app", "draft_endpoint", "healthz", "read_goal_endpoint", "replan_endpoint"]

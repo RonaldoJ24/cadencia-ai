@@ -36,8 +36,10 @@ to, must find every endpoint it calls.
     ├─ GET  /livez        public liveness
     ├─ POST /v1/read-goal reads a free-text goal: plan, clarify or abstain
     ├─ POST /v1/draft     drafts sessions for the weeks code has already sized
-    │                     (both: constant-time token check, strict schemas,
-    │                     prompt byte ceilings, scope guard on the reading)
+    ├─ POST /v1/replan    picks one of the options code built after missed
+    │                     sessions, from the person's reason, or declines
+    │                     (all: constant-time token check, strict schemas,
+    │                     prompt byte ceilings; a scope guard on the reading)
     │
     ▼  HTTPS, Bearer <DEEPSEEK_API_KEY>
 [ DeepSeek API ]  https://api.deepseek.com/chat/completions
@@ -201,7 +203,7 @@ Zero Trust dashboard with the values above.
 ```bash
 # Cloud Run liveness and auth
 curl -fsS "https://cadencia-intents-675488596560.us-central1.run.app/livez"      # {"status":"ok"}
-for endpoint in read-goal draft; do
+for endpoint in read-goal draft replan; do
   curl -s -o /dev/null -w "$endpoint %{http_code}\n" -X POST \
     "https://cadencia-intents-675488596560.us-central1.run.app/v1/$endpoint" \
     -H 'content-type: application/json' -d '{}'                                 # 401
