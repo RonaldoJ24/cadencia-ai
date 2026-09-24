@@ -60,9 +60,8 @@ export type RoutinePlan = {
 
 /**
  * Planner decision events, emitted by buildPlan/replan AT the branch that
- * decides — never reconstructed from a finished plan. A sink collects them
- * during execution; lib/trace.ts turns the recorded events into the typed
- * compiler trace and refuses to build one when events and output diverge.
+ * decides — never reconstructed from a finished plan. A caller-supplied
+ * sink collects them while the planner runs.
  */
 export type PlannerEvent =
   | { type: 'intent_validated'; scopeRefused: boolean; sessionCount: number; domain: Intent['domain'] }
@@ -72,21 +71,7 @@ export type PlannerEvent =
   | { type: 'schedule_completed'; sessionCount: number; weeklyUsedMinutes: number }
   | { type: 'adaptation_missed_marked'; sessionId: string; date: string }
   | { type: 'adaptation_replacement_placed'; fromSessionId: string; fromDate: string; replacementId: string; replacementDate: string; budgetBefore: number; budgetAfter: number }
-  | { type: 'adaptation_infeasible'; missedSessionId: string; reason: 'no_free_day' | 'budget_exhausted' }
-  | {
-    type: 'adaptation_candidate_confirmed';
-    missedSessionId: string;
-    replacementId: string | null;
-    sessions: Array<{
-      sessionId: string;
-      date: string;
-      dayIndex: number;
-      minutes: number;
-      budgetBefore: number;
-      budgetAfter: number;
-      disposition: 'preserved' | 'missed' | 'replacement';
-    }>;
-  };
+  | { type: 'adaptation_infeasible'; missedSessionId: string; reason: 'no_free_day' | 'budget_exhausted' };
 
 export type PlannerEventSink = (event: PlannerEvent) => void;
 
@@ -970,34 +955,6 @@ export function replan(plan: RoutinePlan, missedId: string, sink?: PlannerEventS
     next.sessions.push(replacement);
   }
   next.sessions.sort((a, b) => a.date.localeCompare(b.date));
-  // Confirmation walk over the executed result: every final session is
-  // confirmed here, while this operation runs, with its budget arithmetic.
-  // The adaptation layer builds the candidate trace from THESE events.
-  let confirmedUsed = 0;
-  const confirmed = next.sessions.map((session) => {
-    const countsAgainstCap = session.status !== 'missed';
-    const budgetBefore = next.input.weeklyMinutes - confirmedUsed;
-    if (countsAgainstCap) confirmedUsed += session.minutes;
-    return {
-      sessionId: session.id,
-      date: session.date,
-      dayIndex: session.dayIndex,
-      minutes: session.minutes,
-      budgetBefore,
-      budgetAfter: countsAgainstCap ? budgetBefore - session.minutes : budgetBefore,
-      disposition: (session.id === missed.id
-        ? 'missed'
-        : replacement && session.id === replacement.id
-          ? 'replacement'
-          : 'preserved') as 'preserved' | 'missed' | 'replacement',
-    };
-  });
-  sink?.({
-    type: 'adaptation_candidate_confirmed',
-    missedSessionId: missed.id,
-    replacementId: replacement ? replacement.id : null,
-    sessions: confirmed,
-  });
   return planWithChecks(next, warnings, explanation);
 }
 
