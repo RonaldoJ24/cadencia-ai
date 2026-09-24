@@ -21,7 +21,8 @@ export type Rule =
   | 'draft_consistency'
   | 'week_ceiling'
   | 'load_jump'
-  | 'hard_per_week';
+  | 'hard_per_week'
+  | 'session_length';
 
 export type Violation = { rule: Rule; detail: string; sessionId?: string; week?: number };
 
@@ -82,6 +83,9 @@ export function checkPlan(plan: GoalPlan, busy: BusyInterval[]): Violation[] {
       }
       if (session.blocks.reduce((total, block) => total + block.minutes, 0) !== session.minutes) {
         violations.push({ rule: 'blocks_sum', ...at, detail: session.id });
+      }
+      if (spec.maxSessionMinutes !== undefined && session.minutes > spec.maxSessionMinutes) {
+        violations.push({ rule: 'session_length', ...at, detail: `${session.minutes} > ${spec.maxSessionMinutes}` });
       }
       const slot = requested.indexOf(session.typeId);
       if (slot === -1) violations.push({ rule: 'draft_consistency', ...at, detail: `${session.typeId} not requested` });

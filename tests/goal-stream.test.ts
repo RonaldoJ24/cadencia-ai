@@ -220,6 +220,29 @@ void test('a draft with broken structure gets one retry, shown as its own steps'
   ]);
 });
 
+void test('a session length the person states caps every session the model may propose', async () => {
+  const short = {
+    ...DRAFT,
+    sessionTypes: [DRAFT.sessionTypes[0], { ...sessionType('long_run', 30, 'moderate', 'key') }],
+  };
+  const { deps, drafts } = harness({
+    readGoal: async () => ({ reading: { ...READING, session_minutes: 30 }, scopeRefused: false }),
+    draft: async (payload) => {
+      drafts.push(payload);
+      // The first draft keeps its 45-minute long run, which no longer fits.
+      return { draft: drafts.length === 1 ? DRAFT : short };
+    },
+  });
+  const outcome = await runGoalPipeline(input({ text: 'Run a 10K by December, 30 minutes a session, weekday mornings' }), deps);
+  assert.equal(drafts[0].calendar.sessionMinutes.max, 30);
+  assert.equal(drafts[1].previousProblems?.[0].code, 'session_minutes');
+  assert.equal(outcome.outcome, 'ready');
+  if (outcome.outcome !== 'ready') return;
+  assert.deepEqual(outcome.provenance.sessionMinutes, { source: 'goal' });
+  assert.ok(outcome.plan.weeks.every((week) => week.sessions.every((session) => session.minutes <= 30)));
+  assert.deepEqual(checkPlan(outcome.plan, []), []);
+});
+
 void test('a second broken draft fails closed at the check and nothing is scheduled', async () => {
   const { deps, events, state } = harness({ draft: async () => ({ draft: BROKEN_DRAFT }) });
   const error = await failure(runGoalPipeline(input(), deps));

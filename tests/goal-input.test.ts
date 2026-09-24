@@ -75,6 +75,7 @@ void test('goal requests are refused field by field', () => {
   assert.equal(fieldOf(() => request({ controls: { days: [1, 1] } })), 'days');
   assert.equal(fieldOf(() => request({ controls: { window: { start: '07:00', end: '07:10' } } })), 'window');
   assert.equal(fieldOf(() => request({ controls: { weeklyMinutes: 10 } })), 'weeklyMinutes');
+  assert.equal(fieldOf(() => request({ controls: { sessionMinutes: 300 } })), 'sessionMinutes');
   assert.equal(fieldOf(() => request({ busy: [{ start: '2026-09-25T09:00', end: '2026-09-25T10:00' }] })), 'busy');
   assert.equal(fieldOf(() => request({ clarification: { question: 'Which level?', answer: '' } })), 'answer');
 });
@@ -114,8 +115,10 @@ void test('settings the person touched win, then the reading, then defaults, eac
     days: { source: 'goal' },
     window: { source: 'goal', preset: 'morning' },
     weeklyMinutes: { source: 'you' },
+    sessionMinutes: { source: 'default' },
     level: { source: 'default' },
   });
+  assert.equal(spec.maxSessionMinutes, undefined);
 
   const vague: GoalReading = { ...read, deadline: null, deadlineBasis: 'none', days: null, window: null, weeklyMinutes: null };
   const defaults = buildGoalSpec(request(), vague);
@@ -156,7 +159,7 @@ void test('presets, setting names, categories and spend bounds match the Python 
   };
   assert.deepEqual(literal('AbstainCategory'), [...ABSTAIN_CATEGORIES]);
   assert.deepEqual(literal('Window'), Object.keys(WINDOW_PRESETS));
-  for (const name of providedSettings({ deadline: '2026-10-01', days: [0], window: WINDOW_PRESETS.night, weeklyMinutes: 60 })) {
+  for (const name of providedSettings({ deadline: '2026-10-01', days: [0], window: WINDOW_PRESETS.night, weeklyMinutes: 60, sessionMinutes: 30 })) {
     assert.ok(literal('Provided').includes(name), `${name} is a Provided value`);
   }
   const constant = (source: string, name: string) => Number(new RegExp(`^${name} = ([\\d_]+)`, 'mu').exec(source)?.[1].replaceAll('_', ''));

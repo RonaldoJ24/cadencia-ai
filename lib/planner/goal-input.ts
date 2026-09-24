@@ -50,6 +50,7 @@ export type GoalControls = {
   days?: Weekday[];
   window?: TimeWindow;
   weeklyMinutes?: number;
+  sessionMinutes?: number;
   level?: Level;
 };
 
@@ -87,18 +88,21 @@ export type Provenance = {
   days: { source: Source };
   window: { source: Source; preset?: WindowPreset };
   weeklyMinutes: { source: Source };
+  /** 'default' means no cap beyond the window and the weekly minutes. */
+  sessionMinutes: { source: Source };
   level: { source: Source };
 };
 
 const DOMAINS: readonly Domain[] = ['fitness', 'learning', 'creative', 'general'];
 const LEVELS: readonly Level[] = ['beginner', 'intermediate', 'advanced', 'unknown'];
-const CONTROL_NAMES: readonly ControlName[] = ['deadline', 'days', 'window', 'weeklyMinutes', 'level'];
+const CONTROL_NAMES: readonly ControlName[] = ['deadline', 'days', 'window', 'weeklyMinutes', 'sessionMinutes', 'level'];
 /** How the service names the settings the model must not ask about. */
 const SERVICE_NAMES: Partial<Record<ControlName, string>> = {
   deadline: 'deadline',
   days: 'days',
   window: 'window',
   weeklyMinutes: 'weekly_minutes',
+  sessionMinutes: 'session_minutes',
 };
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -177,6 +181,21 @@ function controlsOf(raw: unknown, today: LocalDate): GoalControls {
       );
     }
     controls.weeklyMinutes = minutes;
+  }
+  if (value.sessionMinutes !== undefined) {
+    const minutes = value.sessionMinutes;
+    if (
+      typeof minutes !== 'number' ||
+      !Number.isInteger(minutes) ||
+      minutes < PLAN_LIMITS.minSessionMinutes ||
+      minutes > PLAN_LIMITS.maxSessionMinutes
+    ) {
+      throw new SpecError(
+        'sessionMinutes',
+        `session minutes must be ${PLAN_LIMITS.minSessionMinutes} to ${PLAN_LIMITS.maxSessionMinutes}`,
+      );
+    }
+    controls.sessionMinutes = minutes;
   }
   if (value.level !== undefined) {
     if (!LEVELS.includes(value.level as Level)) throw new SpecError('level', 'level is not supported');
@@ -329,6 +348,7 @@ export function buildGoalSpec(request: GoalRequest, reading: GoalReading): { spe
   const preset = controls.window ? undefined : reading.window ?? GOAL_DEFAULTS.window;
   const window = controls.window ?? WINDOW_PRESETS[preset ?? GOAL_DEFAULTS.window];
   const weeklyMinutes = controls.weeklyMinutes ?? reading.weeklyMinutes ?? GOAL_DEFAULTS.weeklyMinutes;
+  const sessionMinutes = controls.sessionMinutes ?? reading.sessionMinutes ?? undefined;
   const level = controls.level ?? reading.level;
 
   const spec = validateGoalSpec({
@@ -341,6 +361,7 @@ export function buildGoalSpec(request: GoalRequest, reading: GoalReading): { spe
     window: { start: window.start, end: window.end },
     weeklyCapMinutes: weeklyMinutes,
     level,
+    ...(sessionMinutes === undefined ? {} : { maxSessionMinutes: sessionMinutes }),
   });
   const from = (mine: unknown, read: unknown): Source => (mine !== undefined ? 'you' : read !== null ? 'goal' : 'default');
   return {
@@ -350,6 +371,7 @@ export function buildGoalSpec(request: GoalRequest, reading: GoalReading): { spe
       days: { source: from(controls.days, reading.days) },
       window: { source: from(controls.window, reading.window), ...(preset ? { preset } : {}) },
       weeklyMinutes: { source: from(controls.weeklyMinutes, reading.weeklyMinutes) },
+      sessionMinutes: { source: from(controls.sessionMinutes, reading.sessionMinutes) },
       level: {
         source: controls.level !== undefined ? 'you' : reading.level !== 'unknown' ? 'goal' : 'default',
       },

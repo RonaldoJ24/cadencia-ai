@@ -89,6 +89,9 @@ export function validateGoalSpec(raw: unknown): GoalSpec {
   );
   const level = value.level === undefined ? 'unknown' : value.level;
   if (!LEVELS.includes(level as Level)) throw new SpecError('level', 'level is not supported');
+  const maxSessionMinutes = value.maxSessionMinutes === undefined
+    ? undefined
+    : integer(value.maxSessionMinutes, 'maxSessionMinutes', PLAN_LIMITS.minSessionMinutes, PLAN_LIMITS.maxSessionMinutes);
 
   return {
     title: title.trim(),
@@ -100,6 +103,7 @@ export function validateGoalSpec(raw: unknown): GoalSpec {
     window: { start: window.start, end: window.end },
     weeklyCapMinutes,
     level: level as Level,
+    ...(maxSessionMinutes === undefined ? {} : { maxSessionMinutes }),
   };
 }
 

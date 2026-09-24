@@ -1,6 +1,6 @@
 import type { Language } from './i18n.ts';
 
-type SettingName = 'deadline' | 'days' | 'window' | 'weeklyMinutes' | 'level';
+type SettingName = 'deadline' | 'days' | 'window' | 'weeklyMinutes' | 'sessionMinutes' | 'level';
 type DeclineReason =
   | 'medical'
   | 'eating'
@@ -107,6 +107,7 @@ const FIELD_NAMES_EN: Readonly<Record<string, string>> = {
   days: 'the days',
   window: 'the time window',
   weeklyMinutes: 'the weekly minutes',
+  sessionMinutes: 'the session length',
   level: 'the level',
   busy: 'the calendar import',
   question: 'your answer',
@@ -122,6 +123,7 @@ const FIELD_NAMES_ES: Readonly<Record<string, string>> = {
   days: 'los días',
   window: 'el horario',
   weeklyMinutes: 'los minutos por semana',
+  sessionMinutes: 'la duración de cada sesión',
   level: 'el nivel',
   busy: 'el calendario importado',
   question: 'tu respuesta',
@@ -211,6 +213,7 @@ const EN: StepsCopy = {
       days: 'the days',
       window: 'the time window',
       weeklyMinutes: 'the weekly minutes',
+      sessionMinutes: 'the session length',
       level: 'the level',
     },
     declines: {
@@ -314,6 +317,7 @@ const ES: StepsCopy = {
       days: 'los días',
       window: 'el horario',
       weeklyMinutes: 'los minutos por semana',
+      sessionMinutes: 'la duración de cada sesión',
       level: 'el nivel',
     },
     declines: {

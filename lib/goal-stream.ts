@@ -5,7 +5,7 @@
 // streams it for live runs; the browser runs it with recorded samples for
 // the demo, so both show the same stages.
 
-import { languageFrom, type Language } from './i18n.ts';
+import { copyFor, languageFrom, type Language } from './i18n.ts';
 import { buildSkeleton, planWeeks } from './planner/availability.ts';
 import { checkPlan } from './planner/check.ts';
 import { validateDraft, type DraftIssue, type DraftValidation } from './planner/draft.ts';
@@ -175,7 +175,7 @@ function summaryOf(reading: GoalReading): ReadingSummary {
 }
 
 function touchedSettings(request: GoalRequest): ControlName[] {
-  return (['deadline', 'days', 'window', 'weeklyMinutes', 'level'] as const).filter(
+  return (['deadline', 'days', 'window', 'weeklyMinutes', 'sessionMinutes', 'level'] as const).filter(
     (name) => request.controls[name] !== undefined,
   );
 }
@@ -246,7 +246,7 @@ export async function runGoalPipeline(rawInput: unknown, deps: GoalPipelineDeps)
         }
         return { value: result, detail: result.detail ?? stepsCopyFor(language).detail.reserve };
       },
-      () => new StageFailure('reserve', 'limits_unavailable', stepsCopyFor(language).failure.fit, { status: 503 }),
+      () => new StageFailure('reserve', 'limits_unavailable', copyFor(language).api.limitsNotConfigured, { status: 503 }),
     );
     release = slot.release;
   }
