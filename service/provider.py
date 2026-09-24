@@ -320,6 +320,7 @@ def _configured_credentials() -> tuple[str, ...]:
         credential.casefold()
         for credential in (
             os.environ.get("DEEPSEEK_API_KEY", "").strip(),
+            os.environ.get("OPENAI_API_KEY", "").strip(),
             os.environ.get("CADENCIA_SERVICE_TOKEN", "").strip(),
         )
         if credential
@@ -513,8 +514,7 @@ def _parse_provider_response(
     return intent, usage, True, observed_model, system_fingerprint
 
 
-def _configured_model(api_key: str) -> str:
-    raw = os.environ.get("DEEPSEEK_MODEL", DEFAULT_MODEL).strip() or DEFAULT_MODEL
+def _checked_model(raw: str, api_key: str) -> str:
     lowered = raw.casefold()
     credentials = [
         credential.casefold()
@@ -534,11 +534,67 @@ def _configured_model(api_key: str) -> str:
     return raw
 
 
+@dataclass(frozen=True, slots=True)
+class ProviderSettings:
+    """Where and how this service calls its model, read from the environment."""
+
+    name: Literal["deepseek", "openai"]
+    url: str
+    api_key: str
+    model: str
+    token_param: Literal["max_tokens", "max_completion_tokens"]
+    temperature: float | None
+    extra: dict[str, Any]
+
+
+def provider_settings() -> ProviderSettings:
+    """The configured provider. DeepSeek is the default. OpenAI must be configured
+    in full, with its URL, model id, token-limit parameter and temperature taken
+    from the owner or OpenAI's current API reference, never assumed here."""
+
+    name = os.environ.get("CADENCIA_PROVIDER", "deepseek").strip() or "deepseek"
+    if name == "deepseek":
+        api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+        raw = os.environ.get("DEEPSEEK_MODEL", DEFAULT_MODEL).strip() or DEFAULT_MODEL
+        return ProviderSettings(
+            name="deepseek",
+            url=DEEPSEEK_URL,
+            api_key=api_key,
+            model=_checked_model(raw, api_key),
+            token_param="max_tokens",
+            temperature=0.2,
+            extra={"thinking": {"type": "disabled"}},
+        )
+    if name == "openai":
+        api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+        url = os.environ.get("OPENAI_URL", "").strip()
+        token_param = os.environ.get("OPENAI_TOKEN_PARAM", "").strip()
+        temperature = os.environ.get("OPENAI_TEMPERATURE", "").strip()
+        if not url.startswith("https://") or token_param not in ("max_tokens", "max_completion_tokens") or not temperature:
+            raise ValueError("incomplete provider configuration")
+        if temperature == "omit":
+            chosen: float | None = None
+        else:
+            chosen = float(temperature)
+            if not 0.0 <= chosen <= 2.0:
+                raise ValueError("invalid temperature")
+        return ProviderSettings(
+            name="openai",
+            url=url,
+            api_key=api_key,
+            model=_checked_model(os.environ.get("OPENAI_MODEL", "").strip(), api_key),
+            token_param=token_param,  # type: ignore[arg-type]
+            temperature=chosen,
+            extra={},
+        )
+    raise ValueError("unknown provider")
+
+
 def model_for_logging() -> str:
     """Return a model label safe to place in an allowlisted log record."""
 
     try:
-        return _configured_model(os.environ.get("DEEPSEEK_API_KEY", "").strip())
+        return provider_settings().model
     except ValueError:
         return "<redacted>"
 
@@ -573,6 +629,7 @@ async def _attempt(
     payload: dict[str, Any],
     api_key: str,
     *,
+    url: str,
     model_cls: type[BaseModel],
     request_timeout: float | None = None,
     max_bytes: int | None = None,
@@ -583,7 +640,7 @@ async def _attempt(
         async with asyncio.timeout(request_timeout):
             async with client.stream(
                 "POST",
-                DEEPSEEK_URL,
+                url,
                 headers={
                     "content-type": "application/json",
                     "authorization": f"Bearer {api_key}",
@@ -625,6 +682,7 @@ async def _call_provider(
     *,
     payload: dict[str, Any],
     api_key: str,
+    url: str,
     model: str,
     request_id: str,
     started: float,
@@ -648,6 +706,7 @@ async def _call_provider(
                         client,
                         payload,
                         api_key,
+                        url=url,
                         model_cls=model_cls,
                         request_timeout=request_timeout,
                         max_bytes=max_bytes,
@@ -797,11 +856,13 @@ __all__ = [
     "MAX_RESPONSE_BYTES",
     "ProviderAttemptLimitError",
     "ProviderError",
+    "ProviderSettings",
     "TOTAL_TIMEOUT_SECONDS",
     "intent_usage",
     "log_event",
     "log_model_is_safe",
     "model_for_logging",
     "parse_json_object",
+    "provider_settings",
     "restricted_request",
 ]
