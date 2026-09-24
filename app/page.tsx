@@ -1,46 +1,17 @@
 'use client';
 
-import {
-  ArrowUpRight,
-  CalendarPlus,
-  CalendarDays,
-  Check,
-  CheckCircle2,
-  ChevronDown,
-  Clock3,
-  Download,
-  LoaderCircle,
-  RotateCcw,
-  Share2,
-  Sparkles,
-  WandSparkles,
-  X,
-} from 'lucide-react';
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from 'react';
+import { ArrowUpRight, LoaderCircle, PenLine, Sparkles, WandSparkles, X } from 'lucide-react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
+import { DeclineCard, GoalPlanView, QuestionCard, type SessionStatus } from '@/components/goal-plan';
+import { GoalSettings } from '@/components/goal-settings';
 import { PlanSteps } from '@/components/plan-steps';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { googleCalendarUrl, routineShareText } from '@/lib/calendar';
-import { buildInsights } from '@/lib/insights';
-import {
-  applyStageEvent,
-  parseStageEvent,
-  plannedSteps,
-  runPlanPipeline,
-  StageFailure,
-  type StageEvent,
-  type StepView,
-} from '@/lib/plan-stream';
-import { readSse } from '@/lib/sse';
-import { stepsCopyFor } from '@/lib/steps-copy';
+import { GoalRunError, IDLE_TIMEOUT_MS, runGoalDemo, streamGoalRun, type GoalRunInput } from '@/lib/goal-client';
+import { goalCopyFor } from '@/lib/goal-copy';
+import { findSample, loadSamples, SAMPLE_IDS, type GoalSample, type SampleId } from '@/lib/goal-demo';
+import { plannedGoalSteps, type GoalOutcome } from '@/lib/goal-stream';
 import {
   DEFAULT_LANGUAGE,
   LANGUAGE_STORAGE_KEY,
@@ -49,133 +20,18 @@ import {
   isCurrentRequestGeneration,
   type Language,
 } from '@/lib/i18n';
-import {
-  markDone,
-  replan,
-  toICS,
-  toMarkdown,
-  weekStartOf,
-  type RoutineInput,
-  type RoutinePlan,
-  type Session,
-} from '@/lib/routine';
+import { applyStageEvent, skipRemainingSteps, type StageEvent, type StepView } from '@/lib/plan-stream';
+import { googleCalendarLink, toGoalICS } from '@/lib/planner/export';
+import type { GoalControls } from '@/lib/planner/goal-input';
+import { stepsCopyFor } from '@/lib/steps-copy';
 
-// Placeholder for the static examples; the page swaps in the current week's
-// Monday before an example is shown or planned.
-const DEFAULT_START_DATE = '2026-08-31';
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
-
-type Example = { label: string; input: RoutineInput };
-
-const EXAMPLES: Readonly<Record<Language, Example[]>> = {
-  en: [
-    {
-      label: 'English for interviews',
-      input: {
-        request: 'Practice English for job interviews, focusing on answering with more confidence.',
-        days: [0, 1, 2, 3, 4],
-        sessionMinutes: 30,
-        weeklyMinutes: 90,
-        startDate: DEFAULT_START_DATE,
-        time: '07:30',
-        language: 'en',
-      },
-    },
-    {
-      label: 'Learn TypeScript',
-      input: {
-        request: 'Learn TypeScript by building a small side project and understanding its types.',
-        days: [1, 3, 5],
-        sessionMinutes: 45,
-        weeklyMinutes: 135,
-        startDate: DEFAULT_START_DATE,
-        time: '19:00',
-        language: 'en',
-      },
-    },
-    {
-      label: 'Write each week',
-      input: {
-        request: 'Write one short piece each week, starting with an outline and a first draft.',
-        days: [0, 2, 5],
-        sessionMinutes: 35,
-        weeklyMinutes: 105,
-        startDate: DEFAULT_START_DATE,
-        time: '08:00',
-        language: 'en',
-      },
-    },
-  ],
-  es: [
-    {
-      label: 'Inglés para entrevistas',
-      input: {
-        request: 'Practicar inglés para entrevistas de trabajo, con foco en responder con más seguridad.',
-        days: [0, 1, 2, 3, 4],
-        sessionMinutes: 30,
-        weeklyMinutes: 90,
-        startDate: DEFAULT_START_DATE,
-        time: '07:30',
-        language: 'es',
-      },
-    },
-    {
-      label: 'Aprender TypeScript',
-      input: {
-        request: 'Aprender TypeScript construyendo un pequeño proyecto lateral y entendiendo sus tipos.',
-        days: [1, 3, 5],
-        sessionMinutes: 45,
-        weeklyMinutes: 135,
-        startDate: DEFAULT_START_DATE,
-        time: '19:00',
-        language: 'es',
-      },
-    },
-    {
-      label: 'Escribir cada semana',
-      input: {
-        request: 'Escribir una pieza breve cada semana, empezando por un esquema y una primera versión.',
-        days: [0, 2, 5],
-        sessionMinutes: 35,
-        weeklyMinutes: 105,
-        startDate: DEFAULT_START_DATE,
-        time: '08:00',
-        language: 'es',
-      },
-    },
-  ],
-};
-
-const SAMPLE_SESSIONS: Readonly<Record<Language, Array<{
-  day: string;
-  kind: string;
-  title: string;
-  minutes: number;
-  tone: string;
-}>>> = {
-  en: [
-    { day: 'Mon 31', kind: 'Warm-up', title: 'Introduce yourself clearly', minutes: 25, tone: 'lime' },
-    { day: 'Tue 01', kind: 'Practice', title: 'Stories with the STAR method', minutes: 30, tone: 'cream' },
-    { day: 'Thu 03', kind: 'Review', title: 'Listening: difficult questions', minutes: 25, tone: 'mint' },
-    { day: 'Sat 05', kind: 'Simulation', title: 'A complete interview', minutes: 40, tone: 'blue' },
-  ],
-  es: [
-    { day: 'Lun 31', kind: 'Calentamiento', title: 'Presentarte con claridad', minutes: 25, tone: 'lime' },
-    { day: 'Mar 01', kind: 'Práctica', title: 'Historias con método STAR', minutes: 30, tone: 'cream' },
-    { day: 'Jue 03', kind: 'Revisión', title: 'Escucha: preguntas difíciles', minutes: 25, tone: 'mint' },
-    { day: 'Sáb 05', kind: 'Simulación', title: 'Una entrevista completa', minutes: 40, tone: 'blue' },
-  ],
-};
-
+type Mode = 'demo' | 'live';
 type RequestState = 'idle' | 'loading' | 'error';
+type LiveStatus = 'available' | 'paused' | 'daily_cap' | 'monthly_cap';
+type ActiveRequest = { controller: AbortController; generation: number; language: Language };
+type Result = { outcome: GoalOutcome; mode: Mode; demoRecord: { model: string; date: string } | null };
 
-type ActiveRequest = {
-  controller: AbortController;
-  generation: number;
-  language: Language;
-};
+const PLAN_STORAGE_KEY = 'cadencia-goal-plan-v1';
 
 let clientLanguageSnapshot: Language | undefined;
 const languageSubscribers = new Set<() => void>();
@@ -201,9 +57,7 @@ function subscribeToLanguage(listener: () => void) {
   languageSubscribers.add(listener);
   const handleStorage = (event: StorageEvent) => {
     if (event.key !== LANGUAGE_STORAGE_KEY) return;
-    clientLanguageSnapshot = isLanguage(event.newValue)
-      ? event.newValue
-      : DEFAULT_LANGUAGE;
+    clientLanguageSnapshot = isLanguage(event.newValue) ? event.newValue : DEFAULT_LANGUAGE;
     listener();
   };
   window.addEventListener('storage', handleStorage);
@@ -213,142 +67,36 @@ function subscribeToLanguage(listener: () => void) {
   };
 }
 
-// The server renders the UTC week; after hydration the page uses the
-// visitor's own local Monday.
-function subscribeToWeekStart() {
-  return () => undefined;
-}
-
-function getWeekStartSnapshot() {
-  return weekStartOf(new Date(), 'local');
-}
-
-function getServerWeekStartSnapshot() {
-  return weekStartOf(new Date(), 'utc');
-}
-
 function setLanguagePreference(language: Language) {
   clientLanguageSnapshot = language;
   try {
     window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
   } catch {
-    // The live selection still applies when storage is unavailable.
+    // The selection still applies when storage is unavailable.
   }
   languageSubscribers.forEach((listener) => listener());
 }
 
-function sessionStatusLabel(status: Session['status'], language: Language) {
-  return copyFor(language).status[status];
+// The server renders with its UTC date; after hydration the page uses the
+// visitor's own local date, which is what the plan is scheduled from.
+function localDate(date: Date, zone: 'local' | 'utc'): string {
+  const [year, month, day] = zone === 'local'
+    ? [date.getFullYear(), date.getMonth() + 1, date.getDate()]
+    : [date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate()];
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
-function domainLabel(domain: RoutinePlan['intent']['domain'], language: Language) {
-  return copyFor(language).domain[domain];
+function subscribeToToday() {
+  return () => undefined;
 }
 
-function sameInput(left: RoutineInput, right: RoutineInput) {
-  return (
-    left.request === right.request &&
-    left.days.join(',') === right.days.join(',') &&
-    left.sessionMinutes === right.sessionMinutes &&
-    left.weeklyMinutes === right.weeklyMinutes &&
-    left.startDate === right.startDate &&
-    left.time === right.time &&
-    left.language === right.language
-  );
+function getTodaySnapshot() {
+  return localDate(new Date(), 'local');
 }
 
-function formatSessionDate(date: string, language: Language) {
-  return new Intl.DateTimeFormat(copyFor(language).dateLocale, {
-    weekday: 'short',
-    day: '2-digit',
-    month: 'short',
-    timeZone: 'UTC',
-  })
-    .format(new Date(`${date}T12:00:00Z`))
-    .replace('.', '');
+function getServerTodaySnapshot() {
+  return localDate(new Date(), 'utc');
 }
-
-type RequestFailure = Error & {
-  reference?: string;
-  serverMessage?: string;
-  retryAfter?: string | null;
-  status?: number;
-};
-
-function requestFailure(details: {
-  message?: unknown;
-  reference?: unknown;
-  retryAfter?: string | null;
-  status?: number;
-}): RequestFailure {
-  const serverMessage = typeof details.message === 'string' ? details.message : undefined;
-  const failure = new Error(serverMessage || 'routine-request-failed') as RequestFailure;
-  failure.reference = typeof details.reference === 'string' && UUID_PATTERN.test(details.reference.trim())
-    ? details.reference.trim()
-    : undefined;
-  failure.serverMessage = serverMessage;
-  failure.retryAfter = details.retryAfter ?? null;
-  failure.status = details.status;
-  return failure;
-}
-
-/**
- * Asks the route for a live plan as a stream of stage events. Checks that
- * fail before planning starts (origin, limits configuration) still answer
- * with a plain JSON error.
- */
-async function streamLivePlan(
-  input: RoutineInput,
-  signal: AbortSignal,
-  onStage: (event: StageEvent) => void,
-  language: Language,
-): Promise<RoutinePlan> {
-  const response = await fetch('/api/routine', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', accept: 'text/event-stream' },
-    body: JSON.stringify({ input, mode: 'deepseek' }),
-    signal,
-  });
-  const contentType = response.headers.get('content-type') ?? '';
-  if (!contentType.includes('text/event-stream') || !response.body) {
-    const payload = (await response.json().catch(() => ({}))) as { error?: unknown; reference?: unknown };
-    throw requestFailure({
-      message: payload.error,
-      reference: payload.reference,
-      retryAfter: response.headers.get('retry-after'),
-      status: response.status,
-    });
-  }
-  let plan: RoutinePlan | null = null;
-  let failure: RequestFailure | null = null;
-  await readSse(response.body, (message) => {
-    let data: unknown;
-    try {
-      data = JSON.parse(message.data);
-    } catch {
-      return;
-    }
-    if (message.event === 'stage') {
-      const event = parseStageEvent(data);
-      if (event) onStage(event);
-    } else if (message.event === 'result') {
-      const candidate = (data as { plan?: unknown }).plan;
-      if (candidate && typeof candidate === 'object') plan = candidate as RoutinePlan;
-    } else if (message.event === 'error') {
-      const payload = data as { message?: unknown; reference?: unknown; retryAfterSec?: unknown };
-      failure = requestFailure({
-        message: payload.message,
-        reference: payload.reference,
-        retryAfter: typeof payload.retryAfterSec === 'number' ? String(payload.retryAfterSec) : null,
-      });
-    }
-  });
-  if (failure) throw failure;
-  if (!plan) throw requestFailure({ message: stepsCopyFor(language).failure.streamEnded });
-  return plan;
-}
-
-const LIVE_TIMEOUT_MS = 60_000;
 
 function downloadText(filename: string, text: string, type: string) {
   const blob = new Blob([text], { type });
@@ -362,545 +110,54 @@ function downloadText(filename: string, text: string, type: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-function RhythmMap({
-  sessions,
-  input,
-}: {
-  sessions: Session[];
-  input: RoutineInput;
-}) {
-  const copy = copyFor(input.language);
-  return (
-    <div className="rhythm-map" aria-label={copy.ui.rhythmMap}>
-      {copy.dayNames.map((name, index) => {
-        const session = sessions.find((item) => item.dayIndex === index);
-        return (
-          <div className="rhythm-day" key={name}>
-            <span className="rhythm-day-label">{copy.dayShort[index]}</span>
-            <div className="rhythm-track" aria-hidden="true">
-              <span
-                className={`rhythm-bar ${session ? 'is-on' : ''} ${
-                  session?.status === 'done' ? 'is-done' : ''
-                }`}
-                style={{
-                  height: session
-                    ? `${Math.min(82, 38 + session.minutes)}%`
-                    : '16%',
-                }}
-              />
-            </div>
-            <span className="rhythm-day-name">{name.slice(0, 3)}</span>
-          </div>
-        );
-      })}
-      <span className="sr-only">
-        {copy.ui.sessionsInDays(sessions.length, input.days.length)}
-      </span>
-    </div>
-  );
+function readSavedResult(): Result | null {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(PLAN_STORAGE_KEY) ?? 'null') as Result | null;
+    return saved && typeof saved === 'object' && saved.outcome?.outcome === 'ready' ? saved : null;
+  } catch {
+    return null;
+  }
 }
 
-function SamplePreview({ language }: { language: Language }) {
-  const copy = copyFor(language);
-  const selectedDays = [0, 1, 3, 5];
-  const sampleSessions = SAMPLE_SESSIONS[language];
-  return (
-    <div className="preview-card">
-      <div className="preview-card-header">
-        <div>
-          <span className="sample-kicker">
-            <span className="sample-marker" aria-hidden="true" />
-            {copy.ui.sampleKicker}
-          </span>
-          <h2 id="preview-title">{copy.ui.sampleTitle}</h2>
-          <p>{copy.ui.sampleGoal}</p>
-        </div>
-        <span className="demo-tag">{copy.ui.demoTag}</span>
-      </div>
-
-      <div className="rhythm-header">
-        <span>{copy.ui.weeklyRhythm}</span>
-        <span>{copy.ui.sessionCount(4, 120)}</span>
-      </div>
-      <div
-        className="rhythm-map"
-        aria-label={copy.ui.sampleRhythmMap}
-      >
-        {copy.dayNames.map((name, index) => (
-          <div className="rhythm-day" key={name}>
-            <span className="rhythm-day-label">{copy.dayShort[index]}</span>
-            <div className="rhythm-track" aria-hidden="true">
-              <span
-                className={`rhythm-bar ${selectedDays.includes(index) ? 'is-on' : ''}`}
-                style={{ height: `${32 + ((index * 13) % 35)}%` }}
-              />
-            </div>
-            <span className="rhythm-day-name">{name.slice(0, 3)}</span>
-          </div>
-        ))}
-      </div>
-
-      <div className="sample-disclaimer">
-        <span className="sample-disclaimer-mark" aria-hidden="true" />
-        <span>
-          {copy.ui.sampleDisclaimer}
-        </span>
-      </div>
-
-      <div className="session-list" aria-label={copy.ui.sampleSessions}>
-        {sampleSessions.map((session) => (
-          <article className="session-row" key={session.title}>
-            <div
-              className={`session-tone tone-${session.tone}`}
-              aria-hidden="true"
-            />
-            <div className="session-main">
-              <div className="session-meta">
-                <span>{session.day}</span>
-                <span className="session-separator">/</span>
-                <span>{session.kind}</span>
-              </div>
-              <h3>{session.title}</h3>
-            </div>
-            <span className="session-minutes">{session.minutes}m</span>
-          </article>
-        ))}
-      </div>
-
-      <div className="preview-card-footer">
-        <span>{copy.ui.sampleFooter}</span>
-        <span className="footer-line" aria-hidden="true" />
-      </div>
-    </div>
-  );
-}
-
-function RoutinePreview({
-  plan,
-  stale,
-  controlsDisabled,
-  selectedSessionId,
-  onSelectSession,
-  onMarkDone,
-  onReplan,
-  onReset,
-  onDownloadMarkdown,
-  onDownloadICS,
-  onAddToGoogle,
-  onShare,
-  onRefine,
-  shareStatus,
-}: {
-  plan: RoutinePlan;
-  stale: boolean;
-  controlsDisabled: boolean;
-  selectedSessionId: string | null;
-  onSelectSession: (id: string) => void;
-  onMarkDone: (id: string) => void;
-  onReplan: (id: string) => void;
-  onReset: () => void;
-  onDownloadMarkdown: () => void;
-  onDownloadICS: () => void;
-  onAddToGoogle: (session: Session) => void;
-  onShare: () => void;
-  onRefine: () => void;
-  shareStatus: string | null;
-}) {
-  const language = plan.input.language;
-  const copy = copyFor(language);
-  const selectedSession =
-    plan.sessions.find((session) => session.id === selectedSessionId) ??
-    plan.sessions[0];
-  const doneCount = plan.sessions.filter(
-    (session) => session.status === 'done',
-  ).length;
-  const plannedCount = plan.sessions.filter(
-    (session) => session.status !== 'missed',
-  ).length;
-  const totalMinutes = plan.sessions
-    .filter((session) => session.status !== 'missed')
-    .reduce((total, session) => total + session.minutes, 0);
-  const noReplacementWarning = plan.warnings.some((warning) =>
-    warning === copy.routine.noFreeDayWarning,
-  );
-  const insights = buildInsights(plan);
-
-  return (
-    <div className={`preview-card routine-card${stale ? ' is-stale' : ''}`}>
-      <div className="preview-card-header routine-header">
-        <div>
-            <span className="sample-kicker">
-              <span className="sample-marker" aria-hidden="true" />
-            {plan.mode === 'deepseek'
-              ? copy.ui.liveMode
-              : copy.ui.demoMode}
-          </span>
-          <h2 id="preview-title">{plan.intent.title}</h2>
-          <p>{plan.intent.goal}</p>
-        </div>
-        <button
-          className="reset-button"
-          type="button"
-          onClick={onReset}
-          disabled={controlsDisabled}
-        >
-          <RotateCcw size={14} aria-hidden="true" />
-          <span className="sr-only">{copy.ui.reset}</span>
-        </button>
-      </div>
-
-      {stale ? (
-        <output className="stale-banner">
-          <span>{copy.ui.stale}</span>
-        </output>
-      ) : null}
-
-      <div className="rhythm-header">
-        <span>{copy.ui.weeklyRhythm}</span>
-        <span>{copy.ui.sessionCount(plannedCount, totalMinutes)}</span>
-      </div>
-      <RhythmMap input={plan.input} sessions={plan.sessions} />
-
-      {plan.warnings.length > 0 ? (
-        <output className="warning-box">
-          <span className="warning-mark" aria-hidden="true">
-            !
-          </span>
-          <div>
-            <strong>{copy.ui.warningHeading}</strong>
-            {plan.warnings.map((warning) => (
-              <p key={warning}>{warning}</p>
-            ))}
-          </div>
-        </output>
-      ) : null}
-
-      <section className="insight-panel" aria-labelledby="insight-title">
-        <div className="insight-heading">
-          <div>
-            <span className="decision-label">{copy.ui.insightLabel}</span>
-            <h3 id="insight-title">{copy.ui.insightTitle}</h3>
-          </div>
-          <span className="insight-horizon">{copy.ui.insightHorizon}</span>
-        </div>
-        <div className="insight-metrics">
-          <p>{insights.capacity}</p>
-          <p>{insights.fourWeekProjection}</p>
-        </div>
-        <div className="insight-recommendation">
-            <strong>{copy.ui.nextDecision}</strong>
-          <p>{insights.recommendation}</p>
-        </div>
-        <div className="insight-columns">
-          {insights.clarifyingQuestions.length > 0 ? (
-            <div>
-                <strong>{copy.ui.refinePlan}</strong>
-              <ul>
-                {insights.clarifyingQuestions.map((question) => (
-                  <li key={question}>{question}</li>
-                ))}
-              </ul>
-              <button
-                className="refine-button"
-                type="button"
-                onClick={onRefine}
-              >
-                {copy.ui.refinePlan}
-              </button>
-            </div>
-          ) : null}
-          <div>
-            <strong>{copy.ui.successSignals}</strong>
-            <ul>
-              {insights.successSignals.map((signal) => (
-                <li key={signal}>{signal}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      <div className="plan-summary" aria-live="polite">
-        <span>
-          {copy.ui.planProgress(doneCount, plan.sessions.length)}
-        </span>
-        <span className="plan-summary-line" aria-hidden="true" />
-        <span>{plan.input.time} · {copy.ui.localTime}</span>
-      </div>
-
-      <div
-        className="session-list dynamic-session-list"
-        aria-label={copy.ui.routineSessions}
-      >
-        {plan.sessions.map((session) => (
-          <button
-            className={`session-row session-button${
-              selectedSession?.id === session.id ? ' is-current' : ''
-            } ${session.status === 'done' ? ' is-complete' : ''} ${
-              session.status === 'missed' ? ' is-missed' : ''
-            }`}
-            key={session.id}
-            type="button"
-            onClick={() => onSelectSession(session.id)}
-            disabled={controlsDisabled}
-            aria-pressed={selectedSession?.id === session.id}
-          >
-            <div className="session-tone tone-lime" aria-hidden="true" />
-            <div className="session-main">
-              <div className="session-meta">
-                <span>{formatSessionDate(session.date, language)}</span>
-                <span className="session-separator">/</span>
-                <span>{sessionStatusLabel(session.status, language)}</span>
-              </div>
-              <h3>{session.title}</h3>
-            </div>
-            <span className="session-minutes">{session.minutes}m</span>
-          </button>
-        ))}
-      </div>
-
-      {selectedSession ? (
-        <SessionDetail
-          session={selectedSession}
-          language={language}
-          stale={stale}
-          disabled={stale || controlsDisabled}
-          noReplacementWarning={noReplacementWarning}
-          onMarkDone={onMarkDone}
-          onReplan={onReplan}
-        />
-      ) : (
-        <div className="empty-plan">
-          {copy.ui.emptyPlan}
-        </div>
-      )}
-
-      <details className="decision-details">
-        <summary>
-          <span>{copy.ui.decisionSummary}</span>
-          <ChevronDown size={15} aria-hidden="true" />
-        </summary>
-        <div className="decision-content">
-          <div className="decision-block">
-            <span className="decision-label">{copy.ui.understoodIntent}</span>
-            <p>{plan.intent.goal}</p>
-            <span className="intent-domain">
-              {domainLabel(plan.intent.domain, language)}
-            </span>
-          </div>
-          <div className="decision-block">
-            <span className="decision-label">{copy.ui.deterministicChecks}</span>
-            <ul className="check-list">
-              {plan.checks.map((check) => (
-                <li
-                  key={check.label}
-                  className={check.passed ? 'is-passed' : 'is-failed'}
-                >
-                  {check.passed ? (
-                    <CheckCircle2 size={14} aria-hidden="true" />
-                  ) : (
-                    <X size={14} aria-hidden="true" />
-                  )}
-                  <span>
-                    <strong>{check.label}</strong>
-                    <small>{check.detail}</small>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <p className="decision-explanation">{plan.explanation}</p>
-          <p className="decision-honesty">
-            {plan.mode === 'deepseek' ? copy.ui.liveHonesty : copy.ui.demoHonesty}
-          </p>
-        </div>
-      </details>
-
-      <div className="export-row integration-row">
-        <span>
-          {copy.ui.calendarCompanion}
-          <small>{copy.ui.calendarCompanionHelp}</small>
-        </span>
-        <div className="export-actions">
-          <button
-            type="button"
-            onClick={() => selectedSession && onAddToGoogle(selectedSession)}
-            title={copy.ui.addGoogleTitle}
-            disabled={
-              stale || !selectedSession || selectedSession.status === 'missed'
-            }
-          >
-            <CalendarPlus size={13} aria-hidden="true" />
-            {copy.ui.addGoogle}
-          </button>
-          <button
-            type="button"
-            onClick={onDownloadMarkdown}
-            disabled={stale}
-            title={copy.ui.downloadMarkdownTitle}
-          >
-            <Download size={13} aria-hidden="true" />
-            {copy.ui.downloadMarkdown}
-          </button>
-          <button
-            type="button"
-            onClick={onDownloadICS}
-            disabled={stale}
-            title={copy.ui.downloadIcsTitle}
-          >
-            <Download size={13} aria-hidden="true" />
-            {copy.ui.downloadIcs}
-          </button>
-          <button type="button" onClick={onShare} disabled={stale}>
-            <Share2 size={13} aria-hidden="true" />
-            {copy.ui.share}
-          </button>
-        </div>
-        {shareStatus ? (
-          <output className="share-status">{shareStatus}</output>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function SessionDetail({
-  session,
-  language,
-  stale,
-  disabled,
-  noReplacementWarning,
-  onMarkDone,
-  onReplan,
-}: {
-  session: Session;
-  language: Language;
-  stale: boolean;
-  disabled: boolean;
-  noReplacementWarning: boolean;
-  onMarkDone: (id: string) => void;
-  onReplan: (id: string) => void;
-}) {
-  const copy = copyFor(language);
-  return (
-    <div className="session-detail" aria-live="polite">
-      <div className="detail-heading">
-        <span className="detail-kicker">{copy.ui.selectedSession}</span>
-        <span className={`detail-status status-${session.status}`}>
-          {sessionStatusLabel(session.status, language)}
-        </span>
-      </div>
-      <h3>{session.title}</h3>
-      <p className="session-objective">{session.instructions}</p>
-      <ol className="session-agenda" aria-label={copy.ui.timedAgenda}>
-        {session.blocks.map((block, index) => (
-          <li key={`${session.id}-block-${index}`}>
-            <span>{block.minutes} min</span>
-            <p>{block.activity}</p>
-          </li>
-        ))}
-      </ol>
-      <div className="session-proof-grid">
-        <div>
-          <span>{copy.ui.deliverable}</span>
-          <p>{session.deliverable}</p>
-        </div>
-        <div>
-          <span>{copy.ui.doneWhen}</span>
-          <p>{session.doneWhen}</p>
-        </div>
-      </div>
-      <div className="detail-actions">
-        {session.status === 'planned' ? (
-          <>
-            <Button
-              className="done-button"
-              size="sm"
-              type="button"
-              onClick={() => onMarkDone(session.id)}
-              disabled={disabled}
-            >
-              <Check size={14} aria-hidden="true" />
-              {copy.ui.markDone}
-            </Button>
-            <button
-              className="missed-button"
-              type="button"
-              onClick={() => onReplan(session.id)}
-              disabled={disabled}
-            >
-              {copy.ui.replan}
-            </button>
-          </>
-        ) : session.status === 'done' ? (
-          <span className="done-copy">
-            <CheckCircle2 size={14} aria-hidden="true" />
-            {copy.ui.doneCopy}
-          </span>
-        ) : (
-          <span className="missed-copy">
-            {noReplacementWarning
-              ? copy.ui.missedWithWarning
-              : copy.ui.missedReplanned}
-          </span>
-        )}
-      </div>
-      {stale ? (
-        <p className="stale-detail-note">
-          {copy.ui.staleDetail}
-        </p>
-      ) : null}
-    </div>
-  );
+function saveResult(result: Result | null) {
+  try {
+    if (result && result.outcome.outcome === 'ready') window.localStorage.setItem(PLAN_STORAGE_KEY, JSON.stringify(result));
+    else window.localStorage.removeItem(PLAN_STORAGE_KEY);
+  } catch {
+    // A plan that cannot be saved still shows until the page is closed.
+  }
 }
 
 export default function Home() {
-  const language = useSyncExternalStore(
-    subscribeToLanguage,
-    getLanguageSnapshot,
-    getServerLanguageSnapshot,
-  );
-  const weekStart = useSyncExternalStore(
-    subscribeToWeekStart,
-    getWeekStartSnapshot,
-    getServerWeekStartSnapshot,
-  );
-  const [draftInput, setDraftInput] = useState<RoutineInput>(
-    EXAMPLES[DEFAULT_LANGUAGE][0].input,
-  );
-  const [usingDefaultSample, setUsingDefaultSample] = useState(true);
-  const [plan, setPlan] = useState<RoutinePlan | null>(null);
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
-    null,
-  );
+  const language = useSyncExternalStore(subscribeToLanguage, getLanguageSnapshot, getServerLanguageSnapshot);
+  const today = useSyncExternalStore(subscribeToToday, getTodaySnapshot, getServerTodaySnapshot);
+  const copy = goalCopyFor(language);
+  const baseCopy = copyFor(language);
+  const stepsCopy = stepsCopyFor(language);
+
+  const [mode, setMode] = useState<Mode>('demo');
+  const [samples, setSamples] = useState<GoalSample[]>([]);
+  const [sampleId, setSampleId] = useState<SampleId>('ten_k');
+  const [text, setText] = useState('');
+  const [controls, setControls] = useState<GoalControls>({});
+  const [steps, setSteps] = useState<StepView[] | null>(null);
+  const [stepsMode, setStepsMode] = useState<Mode>('demo');
+  const [result, setResult] = useState<Result | null>(null);
+  const [answer, setAnswer] = useState('');
   const [requestState, setRequestState] = useState<RequestState>('idle');
   const [error, setError] = useState<string | null>(null);
   const [errorReference, setErrorReference] = useState<string | null>(null);
-  const [mode, setMode] = useState<'demo' | 'live'>('demo');
-  // The API remains authoritative for every live POST. Start optimistically so
-  // an Access-protected browser is not locked into demo mode when its optional
-  // readiness fetch is redirected before the application cookie is available.
+  // The API stays authoritative for every live POST; start optimistic so an
+  // Access-protected browser is not stuck in demo mode before its cookie.
   const [liveAvailable, setLiveAvailable] = useState(true);
-  const [liveStatus, setLiveStatus] = useState<'available' | 'paused' | 'daily_cap' | 'monthly_cap' | null>(null);
-  const [shareStatus, setShareStatus] = useState<string | null>(null);
-  const [steps, setSteps] = useState<StepView[] | null>(null);
-  const [stepsMode, setStepsMode] = useState<'demo' | 'deepseek'>('demo');
-  const requestGenerationRef = useRef(0);
-  const activeRequestRef = useRef<ActiveRequest | null>(null);
+  const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null);
+  const generationRef = useRef(0);
+  const activeRef = useRef<ActiveRequest | null>(null);
   const latestLanguageRef = useRef(language);
 
-  const copy = copyFor(language);
-
-  const input = useMemo(
-    () => usingDefaultSample
-      ? {
-        ...EXAMPLES[language][0].input,
-        days: [...EXAMPLES[language][0].input.days],
-        startDate: weekStart,
-      }
-      : { ...draftInput, language },
-    [draftInput, language, usingDefaultSample, weekStart],
-  );
+  const sample = findSample(samples, sampleId, language);
+  const goalText = mode === 'demo' ? sample?.text ?? '' : text;
+  const busy = requestState === 'loading';
 
   useEffect(() => {
     document.documentElement.lang = language;
@@ -909,296 +166,224 @@ export default function Home() {
   useEffect(() => {
     latestLanguageRef.current = language;
     return () => {
-      requestGenerationRef.current += 1;
-      activeRequestRef.current?.controller.abort();
-      activeRequestRef.current = null;
+      generationRef.current += 1;
+      activeRef.current?.controller.abort();
+      activeRef.current = null;
     };
   }, [language]);
 
-  const invalidateRequest = () => {
-    requestGenerationRef.current += 1;
-    activeRequestRef.current?.controller.abort();
-    activeRequestRef.current = null;
-  };
-
-  const beginRequest = () => {
-    activeRequestRef.current?.controller.abort();
-    const request: ActiveRequest = {
-      controller: new AbortController(),
-      generation: requestGenerationRef.current + 1,
-      language,
-    };
-    requestGenerationRef.current = request.generation;
-    activeRequestRef.current = request;
-    return request;
-  };
-
-  const isCurrentRequest = (request: ActiveRequest) =>
-    activeRequestRef.current === request &&
-    isCurrentRequestGeneration(
-      requestGenerationRef.current,
-      request.generation,
-    ) &&
-    latestLanguageRef.current === request.language;
-
-  const changeLanguage = (next: Language) => {
-    invalidateRequest();
-    setLanguagePreference(next);
-    setPlan(null);
-    setSelectedSessionId(null);
-    setError(null);
-    setErrorReference(null);
-    setRequestState('idle');
-    setShareStatus(null);
-  };
-
   useEffect(() => {
     let active = true;
-    // Cloudflare Access may cache a prior readiness redirect in Safari. This
-    // request is safe to make fresh: it returns a boolean and a coarse reason
-    // and carries no user routine content.
-    fetch(`/api/routine?readiness=${Date.now().toString(36)}`, {
-      cache: 'no-store',
-      credentials: 'same-origin',
-    })
-      .then(async (response) => {
-        if (!response.ok) return { liveAvailable: false };
-        return (await response.json()) as { liveAvailable?: boolean; liveStatus?: unknown };
-      })
-      .then((payload) => {
-        if (!active) return;
-        setLiveAvailable(payload.liveAvailable === true);
-        const status = 'liveStatus' in payload ? payload.liveStatus : null;
-        setLiveStatus(
-          status === 'available' || status === 'paused' || status === 'daily_cap' || status === 'monthly_cap'
-            ? status
-            : null,
-        );
-      })
-      .catch(() => {
-        if (!active) return;
-        // Keep the optimistic UI state. The server still rejects an unconfigured
-        // live request without exposing configuration or credential details.
-      });
+    void loadSamples().then((loaded) => {
+      if (!active) return;
+      setSamples(loaded);
+      // A plan saved in this browser comes back once the page is interactive.
+      const saved = readSavedResult();
+      if (saved) setResult(saved);
+    });
     return () => {
       active = false;
     };
   }, []);
 
-  const stale = plan !== null && !sameInput(plan.input, input);
-  const selectedDaysCount = input.days.length;
-  const configuredMinutes = selectedDaysCount * input.sessionMinutes;
-  const availableModeLabel =
-    mode === 'live' ? copy.ui.liveMode : copy.ui.demoMode;
-  const controlsDisabled = requestState === 'loading';
+  useEffect(() => {
+    let active = true;
+    // Returns only a coarse availability reason and carries no goal content.
+    fetch(`/api/routine?readiness=${Date.now().toString(36)}`, { cache: 'no-store', credentials: 'same-origin' })
+      .then(async (response) => (response.ok ? ((await response.json()) as { liveAvailable?: boolean; liveStatus?: unknown }) : { liveAvailable: false }))
+      .then((payload) => {
+        if (!active) return;
+        setLiveAvailable(payload.liveAvailable === true);
+        const status = 'liveStatus' in payload ? payload.liveStatus : null;
+        setLiveStatus(status === 'available' || status === 'paused' || status === 'daily_cap' || status === 'monthly_cap' ? status : null);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
 
-  const updateInput = (patch: Partial<RoutineInput>) => {
-    setUsingDefaultSample(false);
-    setDraftInput({ ...input, ...patch, language: input.language });
+  const beginRequest = (): ActiveRequest => {
+    activeRef.current?.controller.abort();
+    const request = { controller: new AbortController(), generation: generationRef.current + 1, language };
+    generationRef.current = request.generation;
+    activeRef.current = request;
+    return request;
   };
 
-  const applyExample = (example: Example) => {
-    setUsingDefaultSample(example.input.request === EXAMPLES[language][0].input.request);
-    setDraftInput({ ...example.input, days: [...example.input.days], startDate: weekStart });
-    setPlan(null);
+  const isCurrent = (request: ActiveRequest) =>
+    activeRef.current === request &&
+    isCurrentRequestGeneration(generationRef.current, request.generation) &&
+    latestLanguageRef.current === request.language;
+
+  const changeLanguage = (next: Language) => {
+    generationRef.current += 1;
+    activeRef.current?.controller.abort();
+    activeRef.current = null;
+    setLanguagePreference(next);
     setSteps(null);
-    setSelectedSessionId(null);
     setError(null);
     setErrorReference(null);
     setRequestState('idle');
-    setShareStatus(null);
   };
 
-  const resetSample = () => applyExample(EXAMPLES[language][0]);
+  const pickExample = (id: SampleId) => {
+    setSampleId(id);
+    if (mode === 'live') setText(findSample(samples, id, language)?.text ?? '');
+  };
 
-  const handleGenerate = async () => {
+  const switchMode = (next: Mode) => {
+    setMode(next);
+    if (next === 'live' && !text) setText(sample?.text ?? '');
+  };
+
+  const run = async (clarification?: { question: string; answer: string }) => {
     const request = beginRequest();
+    const runMode = mode;
     setError(null);
     setErrorReference(null);
     setRequestState('loading');
-    setShareStatus(null);
-    const pipelineMode = mode === 'live' ? 'deepseek' : 'demo';
-    setStepsMode(pipelineMode);
-    setSteps(plannedSteps(pipelineMode));
+    setStepsMode(runMode);
+    setSteps(plannedGoalSteps(runMode));
     const onStage = (event: StageEvent) => {
-      if (!isCurrentRequest(request)) return;
-      setSteps((current) => (current ? applyStageEvent(current, event) : current));
+      if (isCurrent(request)) setSteps((current) => (current ? applyStageEvent(current, event) : current));
     };
+    const input: GoalRunInput = {
+      text: goalText,
+      language: request.language,
+      today,
+      controls,
+      ...(clarification ? { clarification } : {}),
+    };
+    let idle: number | undefined;
     let timedOut = false;
-    const timeout = window.setTimeout(() => {
-      timedOut = true;
-      request.controller.abort();
-    }, LIVE_TIMEOUT_MS);
+    const resetIdle = () => {
+      window.clearTimeout(idle);
+      idle = window.setTimeout(() => {
+        timedOut = true;
+        request.controller.abort();
+      }, IDLE_TIMEOUT_MS);
+    };
     try {
-      let nextPlan: RoutinePlan;
-      if (mode === 'live') {
-        try {
-          nextPlan = await streamLivePlan(input, request.controller.signal, onStage, request.language);
-        } catch (cause) {
-          if (timedOut) throw requestFailure({ message: stepsCopyFor(request.language).failure.timeout });
-          throw cause;
-        }
+      let outcome: GoalOutcome;
+      if (runMode === 'demo') {
+        outcome = await runGoalDemo(sampleId, input, onStage);
       } else {
-        try {
-          nextPlan = (await runPlanPipeline(input, {
-            mode: 'demo',
-            now: () => performance.now(),
-            emit: onStage,
-          })).plan;
-        } catch (cause) {
-          if (cause instanceof StageFailure) throw requestFailure({ message: cause.publicMessage });
-          throw cause;
-        }
+        resetIdle();
+        outcome = await streamGoalRun(input, {
+          signal: request.controller.signal,
+          onStage,
+          onActivity: resetIdle,
+          fallbackMessage: copy.errors.generic,
+          streamEndedMessage: stepsCopy.failure.streamEnded,
+        });
       }
-      if (!isCurrentRequest(request)) return;
-      setPlan(nextPlan);
-      setSelectedSessionId(nextPlan.sessions[0]?.id ?? null);
+      if (!isCurrent(request)) return;
+      setSteps((current) => (current ? skipRemainingSteps(current) : current));
+      const record = runMode === 'demo' && sample?.draftMeta
+        ? { model: sample.draftMeta.model, date: sample.recordedOn }
+        : null;
+      const next: Result = { outcome, mode: runMode, demoRecord: record };
+      setResult(next);
+      saveResult(next);
+      if (outcome.outcome !== 'needs_answer') setAnswer('');
       setRequestState('idle');
     } catch (cause) {
-      if (!isCurrentRequest(request)) return;
+      if (!isCurrent(request)) return;
       setRequestState('error');
-      const err = cause as {
-        reference?: string;
-        serverMessage?: string;
-        retryAfter?: string | null;
-        status?: number;
-      };
-      const activeCopy = copyFor(request.language);
-      if (err.serverMessage) {
-        let msg = err.serverMessage;
-        if (err.retryAfter && !msg.includes(err.retryAfter) && activeCopy.ui.waitSeconds) {
-          msg += ` (${activeCopy.ui.waitSeconds(err.retryAfter)})`;
-        }
-        setError(msg);
-      } else if (err.status === 429) {
-        setError(activeCopy.api.rateLimited(err.retryAfter ? Number(err.retryAfter) : undefined));
+      if (timedOut) {
+        setError(stepsCopy.failure.timeout);
+        return;
+      }
+      if (cause instanceof GoalRunError) {
+        const wait = cause.retryAfterSec ? ` (${copy.errors.wait(cause.retryAfterSec)})` : '';
+        setError(`${cause.message}${wait}`);
+        setErrorReference(cause.reference ?? null);
       } else {
-        setError(activeCopy.ui.createError);
+        setError(copy.errors.generic);
       }
-      const ref = (cause as { reference?: string })?.reference;
-      setErrorReference(ref ?? null);
     } finally {
-      window.clearTimeout(timeout);
-      if (activeRequestRef.current === request) {
-        activeRequestRef.current = null;
-      }
+      window.clearTimeout(idle);
+      if (activeRef.current === request) activeRef.current = null;
     }
   };
 
-  const updatePlan = (updater: (current: RoutinePlan) => RoutinePlan) => {
-    setShareStatus(null);
-    setPlan((current) => {
-      if (!current) return current;
-      try {
-        return updater(current);
-      } catch {
-        setError(copyFor(language).ui.updateError);
-        setErrorReference(null);
-        return current;
-      }
+  const setStatus = (id: string, status: SessionStatus) => {
+    setResult((current) => {
+      if (!current || current.outcome.outcome !== 'ready') return current;
+      const { plan } = current.outcome;
+      const next: Result = {
+        ...current,
+        outcome: {
+          ...current.outcome,
+          plan: {
+            ...plan,
+            weeks: plan.weeks.map((week) => ({
+              ...week,
+              sessions: week.sessions.map((session) => (session.id === id ? { ...session, status } : session)),
+            })),
+          },
+        },
+      };
+      saveResult(next);
+      return next;
     });
   };
 
-  const handleDownloadMarkdown = () => {
-    if (!plan || stale) return;
-    downloadText(
-      copy.ui.downloadMarkdownFilename,
-      toMarkdown(plan),
-      'text/markdown;charset=utf-8',
-    );
+  const readyPlan = result?.outcome.outcome === 'ready' ? result.outcome.plan : null;
+
+  const downloadIcs = () => {
+    if (readyPlan) downloadText('cadencia-plan.ics', toGoalICS(readyPlan), 'text/calendar;charset=utf-8');
   };
 
-  const handleDownloadICS = () => {
-    if (!plan || stale) return;
-    downloadText(
-      copy.ui.downloadIcsFilename,
-      toICS(plan),
-      'text/calendar;charset=utf-8',
-    );
+  const addToGoogle = () => {
+    const first = readyPlan?.weeks.flatMap((week) => week.sessions).find((session) => session.status === 'planned');
+    if (!first) return;
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    window.open(googleCalendarLink(first, language, timeZone), '_blank', 'noopener,noreferrer');
   };
 
-  const handleAddToGoogle = (session: Session) => {
-    if (!plan || stale) return;
-    try {
-      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const link = document.createElement('a');
-      link.href = googleCalendarUrl(plan, session, timeZone);
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.click();
-    } catch {
-      setError(copyFor(language).ui.calendarError);
-      setErrorReference(null);
-    }
-  };
-
-  const handleShare = async () => {
-    if (!plan || stale) return;
-    const text = routineShareText(plan);
-    try {
-      if (typeof navigator.share === 'function') {
-        await navigator.share({ title: plan.intent.title, text });
-        setShareStatus(copy.ui.shareSuccess);
-      } else {
-        await navigator.clipboard.writeText(text);
-        setShareStatus(copy.ui.copySuccess);
-      }
-    } catch (cause) {
-      if (cause instanceof DOMException && cause.name === 'AbortError') return;
-      setError(copy.ui.shareError);
-      setErrorReference(null);
-    }
-  };
-
-  const handleRefine = () => {
-    const field = document.getElementById('goal');
-    field?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    field?.focus();
-  };
-
-  const sampleCountLabel = useMemo(() => {
-    if (selectedDaysCount === 0) return language === 'en' ? 'no days' : 'ningún día';
-    return `${selectedDaysCount} ${selectedDaysCount === 1 ? (language === 'en' ? 'day' : 'día') : (language === 'en' ? 'days' : 'días')}`;
-  }, [language, selectedDaysCount]);
+  const liveHelp = liveAvailable
+    ? copy.liveHelp
+    : liveStatus === 'daily_cap'
+      ? stepsCopy.spend.dailyCap
+      : liveStatus === 'monthly_cap'
+        ? stepsCopy.spend.monthlyCap
+        : liveStatus === 'paused'
+          ? stepsCopy.spend.disabled
+          : copy.liveUnavailable;
 
   return (
     <main className="cadencia-shell">
       <header className="topbar">
-        <a className="brand" href="#inicio" aria-label={copy.ui.homeAria}>
+        <a className="brand" href="#inicio" aria-label={baseCopy.ui.homeAria}>
           <span className="brand-mark" aria-hidden="true">
             <span />
             <span />
             <span />
           </span>
           <span className="brand-word">cadencia</span>
-          <span className="brand-note">{copy.ui.brandNote}</span>
+          <span className="brand-note">{copy.brandNote}</span>
         </a>
-
         <div className="topbar-meta">
           <fieldset className="language-switcher">
-            <legend className="sr-only">{copy.ui.languageSelector}</legend>
-            <button
-              type="button"
-              className={`language-option${language === 'en' ? ' is-selected' : ''}`}
-              aria-pressed={language === 'en'}
-              onClick={() => changeLanguage('en')}
-              title={copy.ui.languageEnglish}
-            >
-              EN
-            </button>
-            <button
-              type="button"
-              className={`language-option${language === 'es' ? ' is-selected' : ''}`}
-              aria-pressed={language === 'es'}
-              onClick={() => changeLanguage('es')}
-              title={copy.ui.languageSpanish}
-            >
-              ES
-            </button>
+            <legend className="sr-only">{baseCopy.ui.languageSelector}</legend>
+            {(['en', 'es'] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={`language-option${language === option ? ' is-selected' : ''}`}
+                aria-pressed={language === option}
+                onClick={() => changeLanguage(option)}
+                title={option === 'en' ? baseCopy.ui.languageEnglish : baseCopy.ui.languageSpanish}
+              >
+                {option.toUpperCase()}
+              </button>
+            ))}
           </fieldset>
           <span className="mode-pill">
             <span className="status-dot" aria-hidden="true" />
-            {availableModeLabel}
+            {copy.modePill[mode]}
           </span>
         </div>
       </header>
@@ -1208,260 +393,106 @@ export default function Home() {
           <div className="hero-copy">
             <p className="eyebrow">
               <Sparkles size={14} aria-hidden="true" />
-              {copy.ui.heroEyebrow}
+              {copy.eyebrow}
             </p>
             <h1 id="editor-title">
-              {copy.ui.heroTitleFirst}
-              <span>{copy.ui.heroTitleSecond}</span>
+              {baseCopy.ui.heroTitleFirst}
+              <span>{baseCopy.ui.heroTitleSecond}</span>
             </h1>
-            <p className="intro-copy">
-              {copy.ui.intro}
-            </p>
+            <p className="intro-copy">{copy.intro}</p>
           </div>
 
-          <div className="editor-form" aria-busy={requestState === 'loading'}>
+          <div className="editor-form" aria-busy={busy}>
             <div className="form-section form-section-goal">
-              <div className="section-number" aria-hidden="true">
-                01
-              </div>
+              <div className="section-number" aria-hidden="true">01</div>
               <div className="section-body">
-                <label className="field-label" htmlFor="goal">
-                  {copy.ui.goalLabel}
-                </label>
+                <label className="field-label" htmlFor="goal">{copy.goalLabel}</label>
                 <Textarea
                   id="goal"
                   name="goal"
                   rows={3}
-                  value={input.request}
-                  onChange={(event) =>
-                    updateInput({ request: event.target.value })
-                  }
-                  disabled={controlsDisabled}
+                  maxLength={2000}
+                  value={goalText}
+                  readOnly={mode === 'demo'}
+                  onChange={(event) => setText(event.target.value)}
+                  disabled={busy}
                   aria-describedby="goal-help"
                   className="goal-input"
                 />
                 <p className="field-help" id="goal-help">
-                  {copy.ui.goalHelp}
+                  {mode === 'demo' ? copy.demoLocked : copy.goalHelp}
                 </p>
-                <div className="example-row" aria-label={copy.ui.examples}>
-                  <span className="example-label">{copy.ui.examples}</span>
-                  {EXAMPLES[language].slice(1).map((example) => (
+                <div className="example-row" aria-label={copy.examplesLabel}>
+                  <span className="example-label">{copy.examplesLabel}</span>
+                  {SAMPLE_IDS.map((id) => (
                     <button
-                      className="example-chip"
-                      key={example.label}
+                      key={id}
                       type="button"
-                      disabled={controlsDisabled}
-                      onClick={() => applyExample(example)}
+                      className={`example-chip${mode === 'demo' && id === sampleId ? ' is-selected' : ''}`}
+                      aria-pressed={mode === 'demo' ? id === sampleId : undefined}
+                      disabled={busy}
+                      onClick={() => pickExample(id)}
                     >
-                      {example.label}
+                      {copy.examples[id]}
                       <ArrowUpRight size={13} aria-hidden="true" />
                     </button>
                   ))}
+                  {mode === 'demo' && liveAvailable ? (
+                    <button type="button" className="example-chip write-own" disabled={busy} onClick={() => switchMode('live')}>
+                      <PenLine size={13} aria-hidden="true" />
+                      {copy.writeOwn}
+                    </button>
+                  ) : null}
                 </div>
               </div>
             </div>
 
             <div className="form-section">
-              <div className="section-number" aria-hidden="true">
-                02
-              </div>
+              <div className="section-number" aria-hidden="true">02</div>
               <div className="section-body">
-                <div className="section-heading">
-                  <div>
-                    <p className="field-label">{copy.ui.daySectionLabel}</p>
-                    <p className="field-help">
-                      {copy.ui.daySectionHelp}
-                    </p>
-                  </div>
-                  <span className="constraint-value">{sampleCountLabel}</span>
-                </div>
-                <fieldset className="day-toggle-row">
-                  <legend className="sr-only">{copy.ui.availableDays}</legend>
-                  {copy.dayNames.map((name, index) => {
-                    const selected = input.days.includes(index);
-                    return (
-                      <button
-                        aria-pressed={selected}
-                        className={`day-toggle${selected ? ' is-selected' : ''}`}
-                        key={name}
-                        type="button"
-                        disabled={controlsDisabled}
-                        onClick={() =>
-                          updateInput({
-                            days: selected
-                              ? input.days.filter((day) => day !== index)
-                              : [...input.days, index].sort((a, b) => a - b),
-                          })
-                        }
-                      >
-                        <span className="day-short">{copy.dayShort[index]}</span>
-                        <span className="day-name">{name}</span>
-                        {selected ? (
-                          <Check size={12} aria-hidden="true" />
-                        ) : null}
-                      </button>
-                    );
-                  })}
-                </fieldset>
-              </div>
-            </div>
-
-            <div className="form-section">
-              <div className="section-number" aria-hidden="true">
-                03
-              </div>
-              <div className="section-body">
-                <div className="field-grid">
-                  <label className="control-field" htmlFor="session-minutes">
-                    <span className="field-label">{copy.ui.sessionMinutes}</span>
-                    <span className="input-with-suffix">
-                      <Input
-                        id="session-minutes"
-                        type="number"
-                        value={input.sessionMinutes}
-                        min={5}
-                        max={240}
-                        onChange={(event) =>
-                          updateInput({
-                            sessionMinutes: Number(event.target.value) || 0,
-                          })
-                        }
-                        disabled={controlsDisabled}
-                      />
-                      <span>min</span>
-                    </span>
-                  </label>
-                  <label className="control-field" htmlFor="weekly-minutes">
-                    <span className="field-label">{copy.ui.weeklyCap}</span>
-                    <span className="input-with-suffix">
-                      <Input
-                        id="weekly-minutes"
-                        type="number"
-                        value={input.weeklyMinutes}
-                        min={10}
-                        max={10080}
-                        onChange={(event) =>
-                          updateInput({
-                            weeklyMinutes: Number(event.target.value) || 0,
-                          })
-                        }
-                        disabled={controlsDisabled}
-                      />
-                      <span>min</span>
-                    </span>
-                  </label>
-                </div>
-                <div className="field-grid field-grid-second">
-                  <label className="control-field" htmlFor="start-date">
-                    <span className="field-label">
-                      {copy.ui.weekStart}
-                    </span>
-                    <span className="input-with-icon">
-                      <CalendarDays size={15} aria-hidden="true" />
-                      <Input
-                        id="start-date"
-                        type="date"
-                        value={input.startDate}
-                        onChange={(event) =>
-                          updateInput({ startDate: event.target.value })
-                        }
-                        disabled={controlsDisabled}
-                      />
-                    </span>
-                  </label>
-                  <label className="control-field" htmlFor="start-time">
-                    <span className="field-label">{copy.ui.localTimeField}</span>
-                    <span className="input-with-icon">
-                      <Clock3 size={15} aria-hidden="true" />
-                      <Input
-                        id="start-time"
-                        type="time"
-                        value={input.time}
-                        onChange={(event) =>
-                          updateInput({ time: event.target.value })
-                        }
-                        disabled={controlsDisabled}
-                      />
-                    </span>
-                  </label>
-                </div>
-                <p className="capacity-note">
-                  {configuredMinutes > input.weeklyMinutes ? (
-                    <>
-                      {copy.ui.capacityOver(configuredMinutes)}
-                    </>
-                  ) : (
-                    <>
-                      {copy.ui.capacityWithin(configuredMinutes)}
-                    </>
-                  )}
-                </p>
-                <p className="authority-note">
-                  {copy.ui.authority}
-                </p>
+                <p className="field-label">{copy.settingsLabel}</p>
+                <p className="field-help">{copy.settingsHelp}</p>
+                <GoalSettings
+                  controls={controls}
+                  onChange={setControls}
+                  today={today}
+                  language={language}
+                  copy={copy}
+                  disabled={busy}
+                />
               </div>
             </div>
 
             <div className="mode-section">
               <div className="mode-section-heading">
                 <div>
-                  <p className="field-label">{copy.ui.contentProposer}</p>
-                  <p className="field-help">
-                    {copy.ui.deterministicLimits}
-                  </p>
+                  <p className="field-label">{copy.modeLabel}</p>
+                  <p className="field-help">{copy.modeHelp}</p>
                 </div>
-                <span className="mode-selection-label">
-                  {availableModeLabel}
-                </span>
               </div>
               <fieldset className="mode-options">
-                  <legend className="sr-only">{copy.ui.contentProposer}</legend>
+                <legend className="sr-only">{copy.modeLabel}</legend>
                 <button
                   className={`mode-option${mode === 'demo' ? ' is-selected' : ''}`}
                   type="button"
                   aria-pressed={mode === 'demo'}
-                  disabled={controlsDisabled}
-                  onClick={() => setMode('demo')}
+                  disabled={busy}
+                  onClick={() => switchMode('demo')}
                 >
-                  <span className="mode-option-title">{copy.ui.localDemo}</span>
-                  <span>{copy.ui.localDemoHelp}</span>
+                  <span className="mode-option-title">{copy.demo}</span>
+                  <span>{copy.demoHelp}</span>
                 </button>
                 <button
                   className={`mode-option${mode === 'live' ? ' is-selected' : ''}`}
                   type="button"
                   aria-pressed={mode === 'live'}
-                  disabled={!liveAvailable || controlsDisabled}
-                  onClick={() => setMode('live')}
-                  title={
-                    !liveAvailable
-                      ? copy.ui.enableLiveTitle
-                      : undefined
-                  }
+                  disabled={!liveAvailable || busy}
+                  onClick={() => switchMode('live')}
                 >
-                  <span className="mode-option-title">{copy.ui.connectedAi}</span>
-                  <span>
-                    {liveAvailable
-                      ? copy.ui.deepseekOptional
-                      : copy.ui.providerDisabled}
-                  </span>
+                  <span className="mode-option-title">{copy.live}</span>
+                  <span>{liveHelp}</span>
                 </button>
               </fieldset>
-              {!liveAvailable ? (
-                <p className="mode-help">
-                  {liveStatus === 'daily_cap'
-                    ? stepsCopyFor(language).spend.dailyCap
-                    : liveStatus === 'monthly_cap'
-                      ? stepsCopyFor(language).spend.monthlyCap
-                      : liveStatus === 'paused'
-                        ? stepsCopyFor(language).spend.disabled
-                        : copy.ui.liveDisabledHelp}
-                </p>
-              ) : null}
-              {mode === 'live' && liveAvailable ? (
-                <p className="live-warning">
-                  {copy.ui.liveWarning}
-                </p>
-              ) : null}
             </div>
 
             <div className="form-actions">
@@ -1469,18 +500,11 @@ export default function Home() {
                 className="create-button"
                 size="lg"
                 type="button"
-                onClick={handleGenerate}
-                disabled={
-                  requestState === 'loading' ||
-                  (mode === 'live' && !liveAvailable)
-                }
+                onClick={() => void run()}
+                disabled={busy || goalText.trim().length === 0 || (mode === 'live' && !liveAvailable)}
               >
-                {requestState === 'loading' ? (
-                  <LoaderCircle className="spin" size={17} aria-hidden="true" />
-                ) : (
-                  <WandSparkles size={17} aria-hidden="true" />
-                )}
-                {requestState === 'loading' ? copy.ui.creating : copy.ui.createRoutine}
+                {busy ? <LoaderCircle className="spin" size={17} aria-hidden="true" /> : <WandSparkles size={17} aria-hidden="true" />}
+                {busy ? copy.planning : copy.submit}
               </Button>
             </div>
             {error ? (
@@ -1488,9 +512,7 @@ export default function Home() {
                 <span>
                   <span>{error}</span>
                   {errorReference ? (
-                    <span style={{ display: 'block' }}>
-                      {copy.ui.failureReference}: {errorReference}
-                    </span>
+                    <span style={{ display: 'block' }}>{copy.errors.reference}: {errorReference}</span>
                   ) : null}
                 </span>
                 <button
@@ -1499,7 +521,7 @@ export default function Home() {
                     setError(null);
                     setErrorReference(null);
                   }}
-                  aria-label={copy.ui.closeError}
+                  aria-label={baseCopy.ui.closeError}
                 >
                   <X size={15} aria-hidden="true" />
                 </button>
@@ -1510,33 +532,47 @@ export default function Home() {
 
         <aside className="preview-column" aria-labelledby="preview-title">
           <div className="preview-label-row">
-            <p className="eyebrow">{copy.ui.weekView}</p>
-            <span className="preview-index">
-              {plan ? copy.ui.planIndex : copy.ui.sampleIndex}
-            </span>
+            <p className="eyebrow" id="preview-title">{copy.resultLabel}</p>
           </div>
-          {steps ? <PlanSteps steps={steps} mode={stepsMode} language={language} /> : null}
-          {plan ? (
-            <RoutinePreview
-              onDownloadICS={handleDownloadICS}
-              onDownloadMarkdown={handleDownloadMarkdown}
-              onAddToGoogle={handleAddToGoogle}
-              onShare={handleShare}
-              onRefine={handleRefine}
-              onMarkDone={(id) =>
-                updatePlan((current) => markDone(current, id))
-              }
-              onReplan={(id) => updatePlan((current) => replan(current, id))}
-              onReset={resetSample}
-              onSelectSession={setSelectedSessionId}
-              plan={plan}
-              selectedSessionId={selectedSessionId}
-              shareStatus={shareStatus}
-              stale={stale}
-              controlsDisabled={controlsDisabled}
+          {steps ? (
+            <PlanSteps
+              steps={steps}
+              note={stepsMode === 'demo' ? copy.demoStepsNote : copy.liveStepsNote}
+              language={language}
             />
+          ) : null}
+          {result?.outcome.outcome === 'ready' ? (
+            <GoalPlanView
+              outcome={result.outcome}
+              mode={result.mode}
+              demoRecord={result.demoRecord}
+              copy={copy}
+              language={language}
+              onStatus={setStatus}
+              onDownloadIcs={downloadIcs}
+              onAddToGoogle={addToGoogle}
+            />
+          ) : result?.outcome.outcome === 'needs_answer' ? (
+            <QuestionCard
+              question={result.outcome.question}
+              answer={answer}
+              onAnswer={setAnswer}
+              onSubmit={() => {
+                if (result.outcome.outcome === 'needs_answer') {
+                  void run({ question: result.outcome.question, answer });
+                }
+              }}
+              mode={result.mode}
+              copy={copy}
+              disabled={busy || (result.mode === 'live' && !liveAvailable)}
+            />
+          ) : result?.outcome.outcome === 'cannot_plan' ? (
+            <DeclineCard outcome={result.outcome} copy={copy} language={language} />
           ) : (
-            <SamplePreview language={language} />
+            <article className="preview-card goal-empty">
+              <p className="sample-kicker">{copy.emptyTitle}</p>
+              <p>{copy.emptyBody}</p>
+            </article>
           )}
         </aside>
       </div>
