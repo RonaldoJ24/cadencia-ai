@@ -1,4 +1,4 @@
-"""FastAPI application for Cadencia's authenticated intent service."""
+"""FastAPI application for Cadencia's authenticated planning service."""
 
 from __future__ import annotations
 
@@ -13,18 +13,12 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 try:
     from .provider import (
-        IntentRequest,
-        IntentMeta,
-        IntentResponse,
-        PROMPT_VERSION,
         ProviderAttemptLimitError,
         ProviderError,
-        generate_intent,
         intent_usage,
         log_event,
         model_for_logging,
@@ -32,13 +26,8 @@ try:
     )
 except ImportError:  # Allows `uvicorn app:app` from the service directory.
     from provider import (  # type: ignore[no-redef]
-        IntentRequest,
-        IntentMeta,
-        IntentResponse,
-        PROMPT_VERSION,
         ProviderAttemptLimitError,
         ProviderError,
-        generate_intent,
         intent_usage,
         log_event,
         model_for_logging,
@@ -238,6 +227,8 @@ def _parse_request_body(raw: bytes) -> dict[str, Any]:
 
 
 def _log_client_failure(request_id: str, outcome: str, *, status_category: str = "client") -> None:
+    # Before the body is read the endpoint's prompt is unknown, so these
+    # events carry no prompt version.
     log_event(
         logger=LOGGER,
         request_id=request_id,
@@ -247,6 +238,8 @@ def _log_client_failure(request_id: str, outcome: str, *, status_category: str =
         status_category=status_category,
         outcome=outcome,
         schema_valid=False,
+        prompt_version=None,
+        event_name="request_rejected",
     )
 
 
@@ -254,106 +247,6 @@ def _log_client_failure(request_id: str, outcome: str, *, status_category: str =
 @app.get("/healthz")
 async def healthz() -> JSONResponse:
     return _json_response({"status": "ok"}, status_code=200)
-
-
-@app.post("/v1/intents")
-async def intents(request: Request) -> JSONResponse:
-    request_id = _request_id()
-    language = "en"
-    if not _authorized(request):
-        _log_client_failure(request_id, "unauthorized")
-        return _error(_error_text(language, "unauthorized"), request_id, 401)
-
-    try:
-        raw = await _read_body(request)
-        value = _parse_request_body(raw)
-        language = _language(value)
-        intent_request = IntentRequest.model_validate(value, strict=True)
-    except _BodyTooLarge:
-        _log_client_failure(request_id, "body_too_large")
-        return _error(_error_text(language, "invalid"), request_id, 413)
-    except _UnsupportedEncoding:
-        _log_client_failure(request_id, "unsupported_encoding")
-        return _error(_error_text(language, "invalid"), request_id, 400)
-    except _BodyTimeout:
-        _log_client_failure(request_id, "body_timeout")
-        return _error(_error_text(language, "invalid"), request_id, 408)
-    except (ValueError, ValidationError, TypeError):
-        _log_client_failure(request_id, "invalid_request")
-        return _error(_error_text(language, "invalid"), request_id, 400)
-    except Exception:
-        _log_client_failure(request_id, "invalid_request")
-        return _error(_error_text(language, "invalid"), request_id, 400)
-
-    injected_client = getattr(request.app.state, "provider_client", None)
-    try:
-        result = await generate_intent(
-            intent_request.request,
-            request_id=request_id,
-            language=intent_request.language,
-            session_count=intent_request.session_count,
-            session_minutes=intent_request.session_minutes,
-            client=injected_client,
-            before_attempt=DAILY_ATTEMPTS.before_attempt,
-        )
-    except ProviderError as failure:
-        log_event(
-            logger=LOGGER,
-            request_id=request_id,
-            model=failure.model,
-            latency_ms=failure.latency_ms,
-            attempts=failure.attempts,
-            status_category=failure.status_category,
-            outcome=failure.outcome,
-            schema_valid=failure.schema_valid,
-            usage=failure.usage,
-        )
-        status = (
-            503
-            if failure.outcome in ("configuration_error", "provider_attempt_cap_exhausted")
-            else 502
-        )
-        # When the provider was called, report what was spent so the Worker
-        # can settle its reservation instead of charging the worst case.
-        spent: dict[str, Any] = {}
-        if failure.attempts > 0:
-            spent["attempts"] = failure.attempts
-            usage = intent_usage(failure.usage)
-            if usage is not None:
-                spent["usage"] = usage.model_dump(mode="json", exclude_none=True)
-        return _error(failure.safe_message, request_id, status, extra=spent)
-    except Exception:
-        _log_client_failure(request_id, "internal_error", status_category="internal")
-        return _error(_error_text(language, "internal"), request_id, 500)
-
-    log_event(
-        logger=LOGGER,
-        request_id=request_id,
-        model=result.model,
-        latency_ms=result.latency_ms,
-        attempts=result.attempts,
-        status_category=result.status_category,
-        outcome=result.outcome,
-        schema_valid=result.schema_valid,
-        usage=result.usage,
-    )
-    response = IntentResponse(
-        intent=result.intent,
-        scope_refused=result.scope_refused,
-        meta=IntentMeta(
-            request_id=request_id,
-            prompt_version=PROMPT_VERSION,
-            model=result.model,
-            latency_ms=result.latency_ms,
-            attempts=result.attempts,
-            usage=intent_usage(result.usage),
-        ),
-    )
-    return _json_response(
-        response.model_dump(mode="json", exclude_none=True),
-        status_code=200,
-        request_id=request_id,
-    )
 
 
 def _meta(request_id: str, prompt_version: str, result: Any) -> dict[str, Any]:
@@ -525,4 +418,4 @@ async def unexpected_error_handler(request: Request, exception: Exception) -> JS
     return _error(_error_text("en", "internal"), request_id, 500)
 
 
-__all__ = ["MAX_BODY_BYTES", "app", "draft_endpoint", "healthz", "intents", "read_goal_endpoint"]
+__all__ = ["MAX_BODY_BYTES", "app", "draft_endpoint", "healthz", "read_goal_endpoint"]

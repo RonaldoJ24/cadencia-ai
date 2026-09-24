@@ -11,7 +11,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import planning  # noqa: E402
-from test_service import TOKEN, configure, envelope, install_provider, run  # noqa: E402
+from test_service import MODEL, TOKEN, configure, envelope, install_provider, run  # noqa: E402
 from app import app  # noqa: E402
 
 READING = {
@@ -96,6 +96,8 @@ def test_read_goal_returns_the_reading_with_usage_and_version(monkeypatch: pytes
     assert body["scope_refused"] is False
     assert body["meta"]["prompt_version"] == planning.READ_GOAL_VERSION
     assert body["meta"]["usage"] == {"prompt_tokens": 300, "completion_tokens": 120, "total_tokens": 420}
+    assert body["meta"]["model"] == MODEL
+    assert response.headers["x-request-id"] == body["meta"]["request_id"]
     payload = json.loads(received[0].content)
     assert payload["max_tokens"] == planning.READ_MAX_TOKENS
     user = payload["messages"][1]["content"]
@@ -180,6 +182,8 @@ def test_draft_returns_the_draft_and_keeps_problems_inside_the_data_block(monkey
     body = response.json()
     assert body["draft"] == DRAFT
     assert body["meta"]["prompt_version"] == planning.DRAFT_VERSION
+    assert body["meta"]["model"] == MODEL
+    assert response.headers["x-request-id"] == body["meta"]["request_id"]
     payload = json.loads(received[0].content)
     assert payload["max_tokens"] == planning.DRAFT_MAX_TOKENS
     user = payload["messages"][1]["content"]
@@ -200,9 +204,10 @@ def test_malformed_drafts_are_rejected_with_their_spend(monkeypatch: pytest.Monk
 
 def test_the_image_and_the_build_context_ship_every_service_module() -> None:
     service = Path(__file__).resolve().parent
+    # Tests, their configuration and the local smoke tool never ship.
     modules = {
         path.name for path in service.glob("*.py")
-        if not path.name.startswith("test_") and path.name != "conftest.py"
+        if not path.name.startswith("test_") and path.name not in {"conftest.py", "smoke.py"}
     }
     dockerfile = (service / "Dockerfile").read_text(encoding="utf-8").splitlines()
     copied = next(line for line in dockerfile if line.startswith("COPY app.py")).split()[1:-1]

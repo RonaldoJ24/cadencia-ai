@@ -15,6 +15,7 @@ from httpx import AsyncByteStream
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import provider  # noqa: E402
+import planning  # noqa: E402
 import app as app_module  # noqa: E402
 from app import app  # noqa: E402
 
@@ -22,32 +23,51 @@ TOKEN = "service-token-for-tests"
 API_KEY = "deepseek-test-key"
 MODEL = "deepseek-v4-flash"
 REQUEST_ID = "test-request-id"
-INTENT = {
-    "title": "Practicar acuarela",
-    "goal": "Crear una muestra breve.",
-    "domain": "creative",
-    "steps": [{"title": "Boceto", "instructions": "Haz una primera versión pequeña."}],
-}
-ROUTINE_INTENT = {
-    "title": "Practicar acuarela",
-    "goal": "Crear dos muestras breves.",
-    "domain": "creative",
-    "steps": [
-        {
-            "title": f"Muestra {index}",
-            "instructions": "Crea y revisa una muestra concreta.",
-            "blocks": [
-                {"minutes": 5, "activity": "Prepara materiales."},
-                {"minutes": 20, "activity": "Crea la muestra."},
-                {"minutes": 5, "activity": "Revísala y guárdala."},
-            ],
-            "deliverable": f"Muestra fechada {index}.",
-            "done_when": "La muestra existe y tiene una nota de revisión.",
-        }
-        for index in (1, 2)
-    ],
-}
 PADDING = " trama narrativa " * 25
+READ_BODY = {"text": "learn watercolor", "language": "en", "today": "2026-09-24"}
+READING = {
+    "decision": "plan",
+    "title": "Learn watercolor",
+    "summary": "Learn to paint with watercolor.",
+    "domain": "creative",
+    "level": "unknown",
+    "deadline": None,
+    "deadline_basis": "none",
+    "days": None,
+    "window": None,
+    "weekly_minutes": None,
+    "session_minutes": None,
+    "question": None,
+    "abstain": None,
+}
+DRAFT_REQUEST = {
+    "language": "en",
+    "goal": {"title": "Run a 10K", "summary": "Run 10 km by December."},
+    "domain": "fitness",
+    "level": "beginner",
+    "calendar": {
+        "weeks": [{"week": 1, "room": 2, "maxMinutes": 90}, {"week": 2, "room": 5, "maxMinutes": 99}],
+        "weeklyCapMinutes": 180,
+        "sessionMinutes": {"min": 15, "max": 180},
+    },
+}
+DRAFT = {
+    "phases": [{"title": "Base", "fromWeek": 1, "toWeek": 2, "focus": "Easy running."}],
+    "sessionTypes": [
+        {
+            "id": "easy_run",
+            "title": "Easy run",
+            "minutes": 30,
+            "intensity": "easy",
+            "role": "key",
+            "blocks": [{"minutes": 10, "activity": "Walk."}, {"minutes": 20, "activity": "Run easy."}],
+            "deliverable": "A logged run.",
+            "doneWhen": "The run is logged.",
+        }
+    ],
+    "weeks": [{"week": 1, "sessions": ["easy_run"]}, {"week": 2, "sessions": ["easy_run", "easy_run"]}],
+    "templateId": None,
+}
 
 
 @pytest.fixture(autouse=True)
@@ -64,7 +84,7 @@ def run(awaitable: Awaitable[Any]) -> Any:
 
 
 def envelope(
-    content: Any = INTENT,
+    content: Any = READING,
     *,
     status: int = 200,
     finish_reason: str = "stop",
@@ -102,6 +122,7 @@ async def app_request(
     body: bytes | str | AsyncByteStream,
     auth: str | None = TOKEN,
     headers: dict[str, str] | None = None,
+    path: str = "/v1/read-goal",
 ) -> httpx.Response:
     request_headers = {"content-type": "application/json"}
     if auth is not None:
@@ -114,7 +135,7 @@ async def app_request(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
     ) as client:
-        return await client.post("/v1/intents", content=body, headers=request_headers)
+        return await client.post(path, content=body, headers=request_headers)
 
 
 def configure(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -127,6 +148,25 @@ def install_provider(monkeypatch: pytest.MonkeyPatch, handler: Callable[[httpx.R
     client = mock_client(handler)
     app.state.provider_client = client
     monkeypatch.setattr(app.state, "_test_provider_client", client, raising=False)
+
+
+async def read_goal_result(
+    client: httpx.AsyncClient,
+    before_attempt: Callable[[], None] | None = None,
+) -> provider.IntentResult:
+    _, result = await planning.read_goal(
+        planning.ReadGoalRequest.model_validate(READ_BODY, strict=True),
+        request_id=REQUEST_ID,
+        client=client,
+        before_attempt=before_attempt,
+    )
+    assert result is not None
+    return result
+
+
+def refusal(body: dict[str, Any]) -> dict[str, Any]:
+    request = planning.ReadGoalRequest.model_validate(body, strict=True)
+    return planning.refused_reading(request).model_dump(mode="json")
 
 
 def test_health_is_public_and_generic(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -147,102 +187,53 @@ def test_health_is_public_and_generic(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_auth_requires_exact_bearer_token(monkeypatch: pytest.MonkeyPatch) -> None:
     configure(monkeypatch)
-    for auth in (None, "Bearer wrong-token", f"Basic {TOKEN}", f"Bearer {TOKEN} "):
-        response = run(app_request(body='{"request":"aprender"}', auth=auth))
-        assert response.status_code == 401
-        body = response.json()
-        assert set(body) == {"error", "request_id"}
-        assert response.headers["x-request-id"] == body["request_id"]
-        assert API_KEY not in response.text and TOKEN not in response.text
-
-
-def test_valid_provider_response_contract_and_request(monkeypatch: pytest.MonkeyPatch) -> None:
-    configure(monkeypatch)
-    received: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        received.append(request)
-        return envelope(
-            ROUTINE_INTENT,
-            usage={"prompt_tokens": 12, "completion_tokens": 20, "total_tokens": 32},
-        )
-
-    client = mock_client(handler)
-    app.state.provider_client = client
-    response = run(
-        app_request(
-            body=json.dumps(
-                {
-                    "request": "practicar acuarela",
-                    "session_count": 2,
-                    "session_minutes": 30,
-                }
-            )
-        )
-    )
-    run(client.aclose())
-    assert response.status_code == 200
-    body = response.json()
-    assert set(body) == {"intent", "scope_refused", "meta"}
-    assert body["intent"] == ROUTINE_INTENT
-    assert body["scope_refused"] is False
-    assert body["meta"]["prompt_version"] == provider.PROMPT_VERSION
-    assert body["meta"]["model"] == MODEL
-    assert body["meta"]["attempts"] == 1
-    assert body["meta"]["usage"] == {"prompt_tokens": 12, "completion_tokens": 20, "total_tokens": 32}
-    assert response.headers["x-request-id"] == body["meta"]["request_id"]
-    payload = json.loads(received[0].content)
-    assert received[0].url == provider.DEEPSEEK_URL
-    assert received[0].headers["authorization"] == f"Bearer {API_KEY}"
-    assert received[0].headers["accept-encoding"] == "identity"
-    assert payload["response_format"] == {"type": "json_object"}
-    assert payload["thinking"] == {"type": "disabled"}
-    assert payload["temperature"] == 0.2
-    assert payload["max_tokens"] == 4_000
-    assert payload["stream"] is False
-    assert "tools" not in payload
-    assert "session_count=2" in payload["messages"][1]["content"]
-    assert "session_minutes=30" in payload["messages"][1]["content"]
-    assert "language=en" in payload["messages"][1]["content"]
-    assert "done_when" in payload["messages"][0]["content"]
+    for path, raw in (("/v1/read-goal", READ_BODY), ("/v1/draft", DRAFT_REQUEST)):
+        for auth in (None, "Bearer wrong-token", f"Basic {TOKEN}", f"Bearer {TOKEN} "):
+            response = run(app_request(body=json.dumps(raw), auth=auth, path=path))
+            assert response.status_code == 401
+            body = response.json()
+            assert set(body) == {"error", "request_id"}
+            assert response.headers["x-request-id"] == body["request_id"]
+            assert API_KEY not in response.text and TOKEN not in response.text
 
 
 @pytest.mark.parametrize(
-    ("language", "prompt_marker"),
-    [("en", "Every user-visible content value must be written in English."),
-     ("es", "Cada valor visible para el usuario debe estar escrito en español.")],
+    ("path", "raw", "content", "max_tokens"),
+    [
+        ("/v1/read-goal", READ_BODY, READING, planning.READ_MAX_TOKENS),
+        ("/v1/draft", DRAFT_REQUEST, DRAFT, planning.DRAFT_MAX_TOKENS),
+    ],
+    ids=["read-goal", "draft"],
 )
-def test_language_selects_provider_prompt_without_request_text_inference(
+def test_provider_request_is_json_mode_without_tools(
     monkeypatch: pytest.MonkeyPatch,
-    language: str,
-    prompt_marker: str,
+    path: str,
+    raw: dict[str, Any],
+    content: dict[str, Any],
+    max_tokens: int,
 ) -> None:
     configure(monkeypatch)
     received: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         received.append(request)
-        return envelope(ROUTINE_INTENT)
+        return envelope(content)
 
-    client = mock_client(handler)
-    app.state.provider_client = client
-    response = run(
-        app_request(
-            body=json.dumps(
-                {
-                    "request": "learn watercolor",
-                    "language": language,
-                    "session_count": 2,
-                    "session_minutes": 30,
-                }
-            )
-        )
-    )
-    run(client.aclose())
+    install_provider(monkeypatch, handler)
+    response = run(app_request(body=json.dumps(raw), path=path))
     assert response.status_code == 200
+    assert len(received) == 1
     payload = json.loads(received[0].content)
-    assert prompt_marker in payload["messages"][0]["content"]
-    assert f"language={language}" in payload["messages"][1]["content"]
+    assert received[0].url == provider.DEEPSEEK_URL
+    assert received[0].headers["authorization"] == f"Bearer {API_KEY}"
+    assert received[0].headers["accept-encoding"] == "identity"
+    assert payload["model"] == MODEL
+    assert payload["response_format"] == {"type": "json_object"}
+    assert payload["thinking"] == {"type": "disabled"}
+    assert payload["temperature"] == 0.2
+    assert payload["stream"] is False
+    assert "tools" not in payload
+    assert payload["max_tokens"] == max_tokens
 
 
 def test_scope_refusal_is_exact_and_skips_provider(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -256,19 +247,21 @@ def test_scope_refusal_is_exact_and_skips_provider(monkeypatch: pytest.MonkeyPat
 
     client = mock_client(handler)
     app.state.provider_client = client
-    response = run(app_request(body=json.dumps({"request": "¿Cuál es mi diagnóstico?"})))
+    raw = {**READ_BODY, "text": "¿Cuál es mi diagnóstico?", "language": "es"}
+    response = run(app_request(body=json.dumps(raw)))
     run(client.aclose())
     assert response.status_code == 200
     body = response.json()
-    assert body["intent"] == provider.scope_intent().model_dump(exclude_none=True)
+    assert body["reading"] == refusal(raw)
+    assert body["reading"]["decision"] == "abstain"
     assert body["scope_refused"] is True
     assert body["meta"]["attempts"] == 0
     assert calls == 0
 
 
 def test_scope_word_boundary_matches_javascript_for_non_ascii_neighbors() -> None:
-    assert provider.restricted_request("漢dosis")
-    assert provider.restricted_request("dosis漢")
+    assert provider.restricted_request("漢dosis", fitness_in_scope=True)
+    assert provider.restricted_request("dosis漢", fitness_in_scope=True)
 
 
 @pytest.mark.parametrize(
@@ -282,7 +275,7 @@ def test_scope_word_boundary_matches_javascript_for_non_ascii_neighbors() -> Non
     ],
 )
 def test_contextual_literary_and_fiction_requests_are_allowed(raw_request: str) -> None:
-    assert provider.restricted_request(raw_request) is False
+    assert provider.restricted_request(raw_request, fitness_in_scope=True) is False
 
 
 @pytest.mark.parametrize(
@@ -303,10 +296,11 @@ def test_contextual_requests_reach_provider(monkeypatch: pytest.MonkeyPatch, raw
 
     client = mock_client(handler)
     app.state.provider_client = client
-    response = run(app_request(body=json.dumps({"request": raw_request}, ensure_ascii=False)))
+    raw = {**READ_BODY, "text": raw_request, "language": "es"}
+    response = run(app_request(body=json.dumps(raw, ensure_ascii=False)))
     run(client.aclose())
     assert response.status_code == 200
-    assert response.json()["intent"] == INTENT
+    assert response.json()["reading"] == READING
     assert response.json()["meta"]["attempts"] == 1
     assert calls == 1
 
@@ -333,11 +327,12 @@ def test_mixed_contextual_requests_are_refused_before_provider(
 
     client = mock_client(handler)
     app.state.provider_client = client
-    response = run(app_request(body=json.dumps({"request": raw_request}, ensure_ascii=False)))
+    raw = {**READ_BODY, "text": raw_request, "language": "es"}
+    response = run(app_request(body=json.dumps(raw, ensure_ascii=False)))
     run(client.aclose())
     body = response.json()
     assert response.status_code == 200
-    assert body["intent"] == provider.scope_intent().model_dump(exclude_none=True)
+    assert body["reading"] == refusal(raw)
     assert body["scope_refused"] is True
     assert body["meta"]["attempts"] == 0
     assert calls == 0
@@ -357,22 +352,22 @@ def test_mixed_contextual_requests_are_refused_before_provider(
     ],
 )
 def test_contextual_exceptions_do_not_relax_direct_scope_refusals(raw_request: str) -> None:
-    assert provider.restricted_request(raw_request) is True
+    assert provider.restricted_request(raw_request, fitness_in_scope=True) is True
 
 
 @pytest.mark.parametrize(
     "raw",
     [
-        {"request": ""},
-        {"request": "   "},
-        {"request": "\x00 objetivo"},
-        {"request": "\t objetivo"},
-        {"request": "😀" * 1_001},
-        {"request": 42},
-        {"request": "aprender", "extra": True},
-        {"request": "aprender", "language": "fr"},
-        {"request": "aprender", "session_count": 2},
-        {"request": "aprender", "session_minutes": 30},
+        {**READ_BODY, "text": ""},
+        {**READ_BODY, "text": "   "},
+        {**READ_BODY, "text": "\x00 watercolor"},
+        {**READ_BODY, "text": "\t watercolor"},
+        {**READ_BODY, "text": "x" * 2_001},
+        {**READ_BODY, "text": 42},
+        {**READ_BODY, "extra": True},
+        {**READ_BODY, "language": "fr"},
+        {"text": "learn watercolor", "language": "en"},
+        {**READ_BODY, "today": "2026-02-30"},
     ],
 )
 def test_strict_input_validation(monkeypatch: pytest.MonkeyPatch, raw: dict[str, Any]) -> None:
@@ -384,10 +379,10 @@ def test_strict_input_validation(monkeypatch: pytest.MonkeyPatch, raw: dict[str,
 
 def test_duplicate_malformed_and_oversized_json_are_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     configure(monkeypatch)
-    for raw in ('{"request":"one","request":"two"}', "{", "[]"):
+    for raw in ('{"text":"learn","text":"watercolor","today":"2026-09-24"}', "{", "[]"):
         response = run(app_request(body=raw))
         assert response.status_code == 400
-    response = run(app_request(body=json.dumps({"request": "x" * 32_769})))
+    response = run(app_request(body=json.dumps({**READ_BODY, "text": "x" * 32_769})))
     assert response.status_code == 413
 
 
@@ -395,7 +390,7 @@ def test_non_identity_request_encoding_is_rejected(monkeypatch: pytest.MonkeyPat
     configure(monkeypatch)
     response = run(
         app_request(
-            body=b'{"request":"aprender"}',
+            body=json.dumps(READ_BODY).encode(),
             headers={"content-encoding": "gzip"},
         )
     )
@@ -412,7 +407,7 @@ def test_provider_transient_retry_is_bounded_to_one(monkeypatch: pytest.MonkeyPa
         return envelope(status=429) if calls == 1 else envelope()
 
     client = mock_client(handler)
-    result = run(provider.generate_intent("aprender", request_id=REQUEST_ID, client=client))
+    result = run(read_goal_result(client))
     run(client.aclose())
     assert result.attempts == 2
     assert result.outcome == "success"
@@ -439,14 +434,7 @@ def test_before_attempt_runs_for_each_retry_and_cap_blocks_next_request(
 
     client = mock_client(handler)
     with pytest.raises(provider.ProviderError) as raised:
-        run(
-            provider.generate_intent(
-                "aprender",
-                request_id=REQUEST_ID,
-                client=client,
-                before_attempt=before_attempt,
-            )
-        )
+        run(read_goal_result(client, before_attempt=before_attempt))
     run(client.aclose())
     assert reservations == 2
     assert calls == 1
@@ -462,7 +450,7 @@ def test_provider_observed_metadata_is_separate_and_bounded(monkeypatch: pytest.
             system_fingerprint="fp_abc-1",
         )
     )
-    result = run(provider.generate_intent("aprender", request_id=REQUEST_ID, client=client))
+    result = run(read_goal_result(client))
     run(client.aclose())
     assert result.model == MODEL
     assert result.observed_model == "deepseek-observed-1"
@@ -474,7 +462,7 @@ def test_provider_observed_metadata_is_separate_and_bounded(monkeypatch: pytest.
             system_fingerprint="x" * 129,
         )
     )
-    result = run(provider.generate_intent("aprender", request_id=REQUEST_ID, client=invalid))
+    result = run(read_goal_result(invalid))
     run(invalid.aclose())
     assert result.observed_model is None
     assert result.system_fingerprint is None
@@ -487,9 +475,7 @@ def test_provider_observed_metadata_is_separate_and_bounded(monkeypatch: pytest.
             system_fingerprint="fp-beta-4321-observed",
         )
     )
-    result = run(
-        provider.generate_intent("aprender", request_id=REQUEST_ID, client=credential_metadata)
-    )
+    result = run(read_goal_result(credential_metadata))
     run(credential_metadata.aclose())
     assert result.observed_model is None
     assert result.system_fingerprint is None
@@ -505,7 +491,7 @@ def test_provider_error_preserves_safe_envelope_metadata(monkeypatch: pytest.Mon
         )
     )
     with pytest.raises(provider.ProviderError) as raised:
-        run(provider.generate_intent("aprender", request_id=REQUEST_ID, client=client))
+        run(read_goal_result(client))
     run(client.aclose())
     assert raised.value.observed_model == "deepseek-observed-2"
     assert raised.value.system_fingerprint == "fp_error-2"
@@ -523,7 +509,7 @@ def test_provider_retries_429_and_5xx_only_once(monkeypatch: pytest.MonkeyPatch,
 
     client = mock_client(handler)
     with pytest.raises(provider.ProviderError) as raised:
-        run(provider.generate_intent("aprender", request_id=REQUEST_ID, client=client))
+        run(read_goal_result(client))
     run(client.aclose())
     assert raised.value.attempts == 2
     assert raised.value.outcome in {"rate_limited", "provider_5xx"}
@@ -542,7 +528,7 @@ def test_provider_does_not_retry_other_status_or_malformed_output(monkeypatch: p
 
         client = mock_client(handler)
         with pytest.raises(provider.ProviderError) as raised:
-            run(provider.generate_intent("aprender", request_id=REQUEST_ID, client=client))
+            run(read_goal_result(client))
         run(client.aclose())
         assert raised.value.attempts == 1
         assert calls == 1
@@ -557,14 +543,14 @@ def test_usage_is_retained_when_completion_is_truncated(monkeypatch: pytest.Monk
         )
     )
     with pytest.raises(provider.ProviderError) as raised:
-        run(provider.generate_intent("aprender", request_id=REQUEST_ID, client=client))
+        run(read_goal_result(client))
     run(client.aclose())
     assert raised.value.usage == {"prompt_tokens": 4, "completion_tokens": 800, "total_tokens": 804}
 
 
 @pytest.mark.parametrize(
     "content",
-    [None, "", "not json", {"title": "bad", "goal": "ok", "domain": "medical", "steps": []}],
+    [None, "", "not json", {**READING, "domain": "medical"}],
 )
 def test_empty_malformed_and_schema_invalid_provider_output(
     monkeypatch: pytest.MonkeyPatch, content: Any
@@ -577,29 +563,10 @@ def test_empty_malformed_and_schema_invalid_provider_output(
         response = envelope(response_content)
     client = mock_client(lambda request: response)
     with pytest.raises(provider.ProviderError) as raised:
-        run(provider.generate_intent("aprender", request_id=REQUEST_ID, client=client))
+        run(read_goal_result(client))
     run(client.aclose())
     assert raised.value.attempts == 1
     assert raised.value.SAFE_MESSAGE not in {""}
-
-
-def test_scheduled_output_must_match_count_and_minutes(monkeypatch: pytest.MonkeyPatch) -> None:
-    configure(monkeypatch)
-    client = mock_client(lambda request: envelope(INTENT))
-    with pytest.raises(provider.ProviderError) as raised:
-        run(
-            provider.generate_intent(
-                "practicar acuarela",
-                request_id=REQUEST_ID,
-                session_count=2,
-                session_minutes=30,
-                client=client,
-            )
-        )
-    run(client.aclose())
-    assert raised.value.outcome == "malformed_response"
-    assert raised.value.provider_completed is True
-    assert raised.value.schema_valid is False
 
 
 class OversizedStream(AsyncByteStream):
@@ -624,7 +591,7 @@ def test_oversized_and_compressed_provider_responses_are_rejected(monkeypatch: p
         )
     )
     with pytest.raises(provider.ProviderError) as raised:
-        run(provider.generate_intent("aprender", request_id=REQUEST_ID, client=oversized))
+        run(read_goal_result(oversized))
     run(oversized.aclose())
     assert raised.value.outcome == "oversized_response"
 
@@ -636,14 +603,14 @@ def test_oversized_and_compressed_provider_responses_are_rejected(monkeypatch: p
         )
     )
     with pytest.raises(provider.ProviderError) as raised:
-        run(provider.generate_intent("aprender", request_id=REQUEST_ID, client=compressed))
+        run(read_goal_result(compressed))
     run(compressed.aclose())
     assert raised.value.outcome == "unsupported_encoding"
 
 
 def test_provider_timeout_has_no_retry(monkeypatch: pytest.MonkeyPatch) -> None:
     configure(monkeypatch)
-    monkeypatch.setattr(provider, "REQUEST_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setitem(planning.READ_TIMEOUTS, "request", 0.01)
     calls = 0
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -653,7 +620,7 @@ def test_provider_timeout_has_no_retry(monkeypatch: pytest.MonkeyPatch) -> None:
 
     client = mock_client(handler)
     with pytest.raises(provider.ProviderError) as raised:
-        run(provider.generate_intent("aprender", request_id=REQUEST_ID, client=client))
+        run(read_goal_result(client))
     run(client.aclose())
     assert raised.value.outcome == "timeout"
     assert raised.value.attempts == 1
@@ -662,8 +629,8 @@ def test_provider_timeout_has_no_retry(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_total_deadline_covers_the_retry_attempt(monkeypatch: pytest.MonkeyPatch) -> None:
     configure(monkeypatch)
-    monkeypatch.setattr(provider, "REQUEST_TIMEOUT_SECONDS", 0.5)
-    monkeypatch.setattr(provider, "TOTAL_TIMEOUT_SECONDS", 0.03)
+    monkeypatch.setitem(planning.READ_TIMEOUTS, "request", 0.5)
+    monkeypatch.setitem(planning.READ_TIMEOUTS, "total", 0.03)
     calls = 0
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -675,7 +642,7 @@ def test_total_deadline_covers_the_retry_attempt(monkeypatch: pytest.MonkeyPatch
 
     client = mock_client(handler)
     with pytest.raises(provider.ProviderError) as raised:
-        run(provider.generate_intent("aprender", request_id=REQUEST_ID, client=client))
+        run(read_goal_result(client))
     run(client.aclose())
     assert raised.value.outcome == "timeout"
     assert raised.value.attempts == 2
@@ -690,9 +657,10 @@ def test_generic_provider_errors_redact_details_from_response_and_logs(
     upstream_secret = "provider body secret"
     client = mock_client(lambda request: httpx.Response(503, text=upstream_secret))
     app.state.provider_client = client
+    raw = {**READ_BODY, "text": secret_prompt, "language": "es"}
     provider.LOGGER.propagate = True
     with caplog.at_level(logging.INFO, logger="cadencia.intent"):
-        response = run(app_request(body=json.dumps({"request": secret_prompt}, ensure_ascii=False)))
+        response = run(app_request(body=json.dumps(raw, ensure_ascii=False)))
     provider.LOGGER.propagate = False
     run(client.aclose())
     captured = caplog.records[-1].message
@@ -702,6 +670,7 @@ def test_generic_provider_errors_redact_details_from_response_and_logs(
     assert API_KEY not in response.text and API_KEY not in captured
     assert TOKEN not in response.text and TOKEN not in captured
     event = json.loads(captured)
+    assert event["event"] == "read_goal_request"
     assert set(event) <= {
         "event",
         "request_id",
@@ -725,12 +694,13 @@ def test_model_that_matches_a_credential_is_rejected_and_never_returned(
     monkeypatch.setenv("DEEPSEEK_MODEL", TOKEN)
     provider.LOGGER.propagate = True
     with caplog.at_level(logging.INFO, logger="cadencia.intent"):
-        response = run(app_request(body='{"request":"aprender"}'))
+        response = run(app_request(body=json.dumps(READ_BODY)))
     provider.LOGGER.propagate = False
     captured = caplog.records[-1].message
     assert response.status_code == 503
     assert TOKEN not in response.text and TOKEN not in captured
     event = json.loads(captured)
+    assert event["event"] == "read_goal_request"
     assert event["model"] == "<redacted>"
 
 
@@ -744,58 +714,22 @@ def test_model_containing_an_opaque_credential_is_rejected_and_redacted(
     provider.LOGGER.propagate = True
     try:
         with caplog.at_level(logging.INFO, logger="cadencia.intent"):
-            response = run(app_request(body='{"request":"aprender"}'))
+            response = run(app_request(body=json.dumps(READ_BODY)))
     finally:
         provider.LOGGER.propagate = False
     captured = caplog.records[-1].message
     assert response.status_code == 503
     assert opaque_credential not in response.text
     assert opaque_credential not in captured
-    assert json.loads(captured)["model"] == "<redacted>"
-
-
-def test_public_output_model_is_strict_and_utf16_limited(monkeypatch: pytest.MonkeyPatch) -> None:
-    configure(monkeypatch)
-    valid = provider.Intent.model_validate(INTENT, strict=True)
-    assert provider.IntentResponse(
-        intent=valid,
-        scope_refused=False,
-        meta=provider.IntentMeta(
-            request_id=REQUEST_ID,
-            prompt_version=provider.PROMPT_VERSION,
-            model=MODEL,
-            latency_ms=0,
-            attempts=1,
-        ),
-    )
-    with pytest.raises(Exception):
-        provider.IntentResponse.model_validate(
-            {
-                "intent": INTENT,
-                "scope_refused": "false",
-                "meta": {
-                    "request_id": REQUEST_ID,
-                    "prompt_version": provider.PROMPT_VERSION,
-                    "model": MODEL,
-                    "latency_ms": 0,
-                    "attempts": 1,
-                },
-            },
-            strict=True,
-        )
-    with pytest.raises(Exception):
-        provider.Intent.model_validate({**INTENT, "extra": "rejected"}, strict=True)
-    with pytest.raises(Exception):
-        provider.Intent.model_validate(
-            {**INTENT, "title": "😀" * 81},
-            strict=True,
-        )
+    event = json.loads(captured)
+    assert event["event"] == "read_goal_request"
+    assert event["model"] == "<redacted>"
 
 
 class SlowRequestStream(AsyncByteStream):
     async def __aiter__(self):
         await asyncio.sleep(0.2)
-        yield b'{"request":"aprender"}'
+        yield json.dumps(READ_BODY).encode()
 
 
 def test_request_body_deadline_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -815,14 +749,15 @@ def test_error_body_reports_spend_only_after_provider_attempts(monkeypatch: pyte
             usage={"prompt_tokens": 40, "completion_tokens": 9, "total_tokens": 49},
         ),
     )
-    response = run(app_request(body='{"request":"aprender TypeScript"}'))
+    response = run(app_request(body=json.dumps(READ_BODY)))
     assert response.status_code == 502
     body = response.json()
     assert body["attempts"] == 1
     assert body["usage"] == {"prompt_tokens": 40, "completion_tokens": 9, "total_tokens": 49}
     assert set(body) == {"error", "request_id", "attempts", "usage"}
 
-    refused = run(app_request(body=json.dumps({"request": "¿Qué dosis de medicamento debo tomar para el dolor?"})))
+    raw = {**READ_BODY, "text": "¿Qué dosis de medicamento debo tomar para el dolor?", "language": "es"}
+    refused = run(app_request(body=json.dumps(raw)))
     assert refused.status_code == 200
     assert "usage" not in refused.json()["meta"]
 
@@ -838,8 +773,8 @@ def test_daily_attempt_fence_stops_provider_calls(monkeypatch: pytest.MonkeyPatc
         return envelope(usage={"prompt_tokens": 10, "completion_tokens": 10, "total_tokens": 20})
 
     install_provider(monkeypatch, handler)
-    first = run(app_request(body='{"request":"practicar acuarela"}'))
-    second = run(app_request(body='{"request":"practicar acuarela"}'))
+    first = run(app_request(body=json.dumps(READ_BODY)))
+    second = run(app_request(body=json.dumps(READ_BODY)))
     assert first.status_code == 200
     assert second.status_code == 503
     assert calls == 1

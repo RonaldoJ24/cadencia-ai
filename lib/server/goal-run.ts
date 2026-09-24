@@ -38,7 +38,7 @@ export type GoalRunArgs = {
 };
 
 /** The refusal shown when a spend cap or the kill switch stops a run. */
-export function spendRefusal(
+function spendRefusal(
   spend: Extract<SpendDecision, { allowed: false }>,
   language: Language,
 ): Extract<ReserveResult, { allowed: false }> {

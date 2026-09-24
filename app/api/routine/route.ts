@@ -1,39 +1,18 @@
+// The public planning route. GET reports whether live AI is available; POST
+// runs a live goal plan, streamed as server-sent events or answered as JSON.
+// The demo runs the same pipeline in the browser and never calls this route.
+
 import { runGoalPipeline } from '../../../lib/goal-stream.ts';
 import { copyFor, languageFrom } from '../../../lib/i18n.ts';
-import {
-  runPlanPipeline,
-  StageFailure,
-  type PipelineDeps,
-  type PipelineOutcome,
-  type ReserveResult,
-  type StageEvent,
-} from '../../../lib/plan-stream.ts';
+import { StageFailure, type ReserveResult, type StageEvent } from '../../../lib/plan-stream.ts';
 import { formatSse, SSE_HEARTBEAT } from '../../../lib/sse.ts';
 import { dict, errorResponse, json, rateLimited, readBoundedText, sameOrigin, type Dict } from '../../../lib/server/http.ts';
-import { liveGoalRun, spendRefusal } from '../../../lib/server/goal-run.ts';
-import {
-  liveConfig,
-  requestDraft,
-  requestIntent,
-  requestReadGoal,
-  runtimeEnv,
-  ServiceFailure,
-  type ServiceUsage,
-} from '../../../lib/server/live.ts';
+import { liveGoalRun } from '../../../lib/server/goal-run.ts';
+import { liveConfig, requestDraft, requestReadGoal, runtimeEnv } from '../../../lib/server/live.ts';
 import { envDb, type Db } from '../../../lib/server/db.ts';
 import { checkRateLimit, ipScopeKey } from '../../../lib/server/ratelimit.ts';
-import { checkAndReservePublicLiveSlot, type SlotReservationResult } from '../../../lib/server/public_limits.ts';
-import {
-  cancelSpend,
-  formatUsd,
-  GOAL_WORST_CASE_MICROUSD,
-  liveStatusOf,
-  loadSpendState,
-  reserveSpend,
-  settleSpend,
-  type LiveStatus,
-} from '../../../lib/server/spend.ts';
-import { stepsCopyFor } from '../../../lib/steps-copy.ts';
+import type { SlotReservationResult } from '../../../lib/server/public_limits.ts';
+import { GOAL_WORST_CASE_MICROUSD, liveStatusOf, loadSpendState, type LiveStatus } from '../../../lib/server/spend.ts';
 
 const EVENT = 'cadencia_routine_failure';
 const HEARTBEAT_MS = 10_000;
@@ -41,7 +20,6 @@ const HEARTBEAT_MS = 10_000;
 export type PublicRoutineDeps = {
   db?: Db | null;
   env?: Record<string, unknown>;
-  intentFetcher?: typeof requestIntent;
   readGoalFetcher?: typeof requestReadGoal;
   draftFetcher?: typeof requestDraft;
   nowIso?: () => string;
@@ -159,30 +137,9 @@ function logFailure(failure: StageFailure): string {
   return reference;
 }
 
-function meta(outcome: PipelineOutcome, mode: PipelineDeps['mode'], startedMs: number) {
-  return {
-    modelUsed: mode === 'deepseek',
-    provider: mode === 'deepseek' ? 'succeeded' : 'skipped',
-    outcome: outcome.outcome,
-    timingsMs: { total: Date.now() - startedMs },
-  };
-}
-
 /** What a finished run sends: the stream's result event and the JSON body. */
 type RunResult = { result: Record<string, unknown>; json: Record<string, unknown>; requestId?: string };
 type Run = (emit: (event: StageEvent) => void) => Promise<RunResult>;
-
-function routineRun(rawInput: unknown, deps: Omit<PipelineDeps, 'emit'>, startedMs: number): Run {
-  return async (emit) => {
-    const outcome = await runPlanPipeline(rawInput, { ...deps, emit });
-    const runMeta = meta(outcome, deps.mode, startedMs);
-    return {
-      result: { outcome: outcome.outcome, plan: outcome.plan, requestId: outcome.requestId, meta: runMeta },
-      json: { plan: outcome.plan, meta: runMeta },
-      requestId: outcome.requestId,
-    };
-  };
-}
 
 function goalRun(rawInput: unknown, live: ReturnType<typeof liveGoalRun>, startedMs: number): Run {
   return async (emit) => {
@@ -204,14 +161,13 @@ async function jsonResponse(run: Run, keepAlive: KeepAlive): Promise<Response> {
     return json(body, 200, requestId);
   } catch (error) {
     if (!(error instanceof StageFailure)) throw error;
-    const { status = 500, retryAfterSec, requestId, diagnostic } = error.options;
-    return errorResponse(
-      error.publicMessage,
+    // Logged like a streamed failure, with the stage that failed.
+    const reference = logFailure(error);
+    const { status = 500, retryAfterSec, requestId } = error.options;
+    return json(
+      { error: error.publicMessage, reference },
       status,
-      error.code,
       requestId,
-      diagnostic,
-      EVENT,
       retryAfterSec ? { 'retry-after': String(retryAfterSec) } : undefined,
     );
   }
@@ -283,13 +239,11 @@ export async function POST(request: Request, deps?: PublicRoutineDeps): Promise<
 
   const language = languageFrom(dict(value.input)?.language);
   const apiCopy = copyFor(language).api;
-  const mode = value.mode === undefined ? 'demo' : value.mode;
-  if (mode !== 'demo' && mode !== 'deepseek') {
+  // Every run here is live; the demo runs in the browser.
+  if (value.mode !== 'deepseek') {
     return errorResponse(apiCopy.invalidMode, 400, 'invalid_mode', undefined, undefined, EVENT);
   }
-  // Goal runs are live only here; the goal demo runs in the browser.
-  const kind = value.kind === undefined ? 'routine' : value.kind;
-  if ((kind !== 'routine' && kind !== 'goal') || (kind === 'goal' && mode !== 'deepseek')) {
+  if (value.kind !== undefined && value.kind !== 'goal') {
     return errorResponse(apiCopy.invalidMode, 400, 'invalid_kind', undefined, undefined, EVENT);
   }
 
@@ -297,106 +251,25 @@ export async function POST(request: Request, deps?: PublicRoutineDeps): Promise<
   const db = deps?.db !== undefined ? deps.db : await resolvePublicRouteDb();
   const nowIso = deps?.nowIso ? deps.nowIso() : new Date().toISOString();
   const nowMs = deps?.nowMs ? deps.nowMs() : (Number.isNaN(Date.parse(nowIso)) ? Date.now() : Date.parse(nowIso));
-  const fetcher = deps?.intentFetcher ?? requestIntent;
   const wantsStream = (request.headers.get('accept') ?? '').includes('text/event-stream');
 
-  if (kind === 'goal') {
-    const config = await liveConfig(env);
-    if (!config) return errorResponse(apiCopy.notConfigured, 503, 'live_not_configured', undefined, undefined, EVENT);
-    if (!db) return errorResponse(apiCopy.limitsNotConfigured, 503, 'limits_not_configured', undefined, undefined, EVENT);
-    const live = liveGoalRun({
-      db,
-      config,
-      request,
-      env,
-      language,
-      nowIso,
-      nowMs,
-      slotResult: (slot) => slotResult(slot, apiCopy),
-      readGoal: deps?.readGoalFetcher,
-      draft: deps?.draftFetcher,
-    });
-    const run = goalRun(value.input, live, startedMs);
-    const keepAlive = await keepAliveFor(deps);
-    return wantsStream ? streamResponse(run, keepAlive) : jsonResponse(run, keepAlive);
-  }
-
-  let pipelineDeps: Omit<PipelineDeps, 'emit'>;
-  if (mode === 'demo') {
-    if (db) {
-      const demoLimit = await checkRateLimit(db, {
-        key: ipScopeKey(request, 'public_demo'),
-        scope: 'public_demo',
-        nowMs,
-      });
-      if (!demoLimit.allowed) {
-        return rateLimited(demoLimit.retryAfterSec, EVENT, apiCopy.rateLimited(demoLimit.retryAfterSec));
-      }
-    }
-    pipelineDeps = { mode: 'demo', now: Date.now };
-  } else {
-    const config = await liveConfig(env);
-    if (!config) return errorResponse(apiCopy.notConfigured, 503, 'live_not_configured', undefined, undefined, EVENT);
-    // Fail closed: live provider calls strictly require atomic D1 rate/quota limits.
-    if (!db) {
-      return errorResponse(apiCopy.limitsNotConfigured, 503, 'limits_not_configured', undefined, undefined, EVENT);
-    }
-    const spendCopy = stepsCopyFor(language);
-    const spendId = crypto.randomUUID();
-    let spendReserved = false;
-    const settle = async (usage: ServiceUsage | undefined, requestId: string | undefined) => {
-      // Unknown usage leaves the reservation at its worst case.
-      if (!spendReserved || !usage) return;
-      try {
-        await settleSpend(db, { id: spendId, nowIso: new Date().toISOString(), usage: { ...usage, requestId } });
-      } catch (error) {
-        console.error(JSON.stringify({ event: EVENT, reason: 'spend_settle_failed', error_name: (error as Error)?.name }));
-      }
-    };
-    pipelineDeps = {
-      mode: 'deepseek',
-      now: Date.now,
-      reserve: async (): Promise<ReserveResult> => {
-        const spend = await reserveSpend(db, { id: spendId, nowIso, nowMs });
-        if (!spend.allowed) return spendRefusal(spend, language);
-        spendReserved = true;
-        const slot = slotResult(
-          await checkAndReservePublicLiveSlot(db, {
-            request,
-            nowMs,
-            nowIso,
-            secret: typeof env.CADENCIA_SERVICE_TOKEN === 'string' ? env.CADENCIA_SERVICE_TOKEN : undefined,
-            allowIpFallback: (env as Record<string, unknown>)?.CADENCIA_ALLOW_IP_FALLBACK === 'true',
-          }),
-          apiCopy,
-        );
-        if (!slot.allowed) {
-          await cancelSpend(db, spendId);
-          spendReserved = false;
-          return slot;
-        }
-        return {
-          ...slot,
-          detail: spendCopy.detail.reserveBudget(
-            formatUsd(spend.state.dayUsedMicroUsd),
-            formatUsd(spend.state.dailyCapMicroUsd),
-          ),
-        };
-      },
-      draft: async (input) => {
-        try {
-          const result = await fetcher(input, config);
-          await settle(result.usage, result.requestId);
-          return result;
-        } catch (error) {
-          if (error instanceof ServiceFailure) await settle(error.usage, error.requestId);
-          throw error;
-        }
-      },
-    };
-  }
-
-  const keepAlive = mode === 'deepseek' ? await keepAliveFor(deps) : () => undefined;
-  const run = routineRun(value.input, pipelineDeps, startedMs);
+  const config = await liveConfig(env);
+  if (!config) return errorResponse(apiCopy.notConfigured, 503, 'live_not_configured', undefined, undefined, EVENT);
+  // Fail closed: live provider calls strictly require atomic D1 rate/quota limits.
+  if (!db) return errorResponse(apiCopy.limitsNotConfigured, 503, 'limits_not_configured', undefined, undefined, EVENT);
+  const live = liveGoalRun({
+    db,
+    config,
+    request,
+    env,
+    language,
+    nowIso,
+    nowMs,
+    slotResult: (slot) => slotResult(slot, apiCopy),
+    readGoal: deps?.readGoalFetcher,
+    draft: deps?.draftFetcher,
+  });
+  const run = goalRun(value.input, live, startedMs);
+  const keepAlive = await keepAliveFor(deps);
   return wantsStream ? streamResponse(run, keepAlive) : jsonResponse(run, keepAlive);
 }

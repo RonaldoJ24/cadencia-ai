@@ -1,9 +1,10 @@
-// Shared live intent-service client. Extracted verbatim from
-// app/api/routine/route.ts so provider behavior stays identical.
+// Client for the Python planning service: configuration from the Worker's
+// bindings, and authenticated calls that never follow a redirect, stop at a
+// deadline and read a bounded answer.
 import type { DraftPayload, ReadGoalPayload } from '../goal-stream.ts';
-import type { RoutineInput } from '../routine.ts';
 
-export const SERVICE_TIMEOUT_MS = 25_000;
+// The configured service URL may still end in the retired weekly endpoint's
+// path; normalizing to it and slicing it off finds the base for each call.
 export const SERVICE_PATH = '/v1/intents';
 export const RUNTIME_ENV_KEY = '__cadencia_runtime_env_v1';
 export const REQUEST_ID_PATTERN =
@@ -263,8 +264,6 @@ function responseBytes(value: string): number {
   return new TextEncoder().encode(value).byteLength;
 }
 
-const MAX_RESPONSE_BYTES = 32_768;
-
 async function readLimitedText(
   response: Response,
   controller: AbortController,
@@ -315,7 +314,6 @@ async function readLimitedText(
 export type ServiceCall = { path: string; timeoutMs: number; maxBytes: number };
 
 export const SERVICE_CALLS = {
-  intents: { path: SERVICE_PATH, timeoutMs: SERVICE_TIMEOUT_MS, maxBytes: MAX_RESPONSE_BYTES },
   // The service allows 30 s for a reading and 50 s for a draft; these add headroom.
   readGoal: { path: '/v1/read-goal', timeoutMs: 35_000, maxBytes: 32_768 },
   draft: { path: '/v1/draft', timeoutMs: 55_000, maxBytes: 131_072 },
@@ -416,31 +414,6 @@ async function postService(
       reason === 'upstream_fetch_failed' ? fetchDiagnostic(error) : undefined,
     );
   }
-}
-
-export async function requestIntent(
-  input: RoutineInput,
-  config: LiveConfig,
-  fetcher: typeof fetch = globalThis.fetch,
-): Promise<{ intent: unknown; scopeRefused: boolean; requestId?: string; usage?: ServiceUsage }> {
-  const { root, requestId: serviceRequestId } = await postService(config, SERVICE_CALLS.intents, {
-    request: input.request,
-    language: input.language,
-    session_count: Math.min(
-      input.days.length,
-      Math.floor(input.weeklyMinutes / input.sessionMinutes),
-    ),
-    session_minutes: input.sessionMinutes,
-  }, fetcher);
-  if (!('intent' in root) || typeof root.scope_refused !== 'boolean') {
-    throw new ServiceFailure(serviceRequestId, false, 'upstream_invalid_response');
-  }
-  return {
-    intent: root.intent,
-    scopeRefused: root.scope_refused,
-    requestId: serviceRequestId,
-    usage: serviceUsage(root.meta),
-  };
 }
 
 export type ReadGoalAnswer = { reading: unknown; scopeRefused: boolean; requestId?: string; usage?: ServiceUsage };
