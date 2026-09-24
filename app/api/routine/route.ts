@@ -1,12 +1,21 @@
-import { buildPlan, validateInput, validateIntent } from '../../../lib/routine.ts';
 import { copyFor, languageFrom } from '../../../lib/i18n.ts';
+import {
+  runPlanPipeline,
+  StageFailure,
+  type PipelineDeps,
+  type PipelineOutcome,
+  type ReserveResult,
+  type StageEvent,
+} from '../../../lib/plan-stream.ts';
+import { formatSse, SSE_HEARTBEAT } from '../../../lib/sse.ts';
 import { dict, errorResponse, json, rateLimited, readBoundedText, sameOrigin, type Dict } from '../../../lib/server/http.ts';
-import { liveConfig, requestIntent, runtimeEnv, ServiceFailure } from '../../../lib/server/live.ts';
+import { liveConfig, requestIntent, runtimeEnv } from '../../../lib/server/live.ts';
 import { envDb, type Db } from '../../../lib/server/db.ts';
 import { checkRateLimit, ipScopeKey } from '../../../lib/server/ratelimit.ts';
-import { checkAndReservePublicLiveSlot, limitsFromEnv } from '../../../lib/server/public_limits.ts';
+import { checkAndReservePublicLiveSlot, limitsFromEnv, type SlotReservationResult } from '../../../lib/server/public_limits.ts';
 
 const EVENT = 'cadencia_routine_failure';
+const HEARTBEAT_MS = 10_000;
 
 export type PublicRoutineDeps = {
   db?: Db | null;
@@ -50,6 +59,132 @@ export async function GET(request?: Request, deps?: PublicRoutineDeps): Promise<
   return json({ liveAvailable: (await liveConfig(env)) !== null });
 }
 
+type ApiCopy = ReturnType<typeof copyFor>['api'];
+
+function slotResult(slot: SlotReservationResult, apiCopy: ApiCopy): ReserveResult {
+  if (slot.allowed) return { allowed: true, release: slot.release };
+  if (slot.status === 400) {
+    return { allowed: false, status: 400, reason: 'missing_client_ip', message: 'Valid client IP is required.' };
+  }
+  const message = (() => {
+    switch (slot.reason) {
+      case 'rate_limited':
+        return apiCopy.rateLimited(slot.retryAfterSec);
+      case 'visitor_quota_exceeded':
+        return apiCopy.visitorQuotaExceeded;
+      case 'global_quota_exceeded':
+        return apiCopy.globalQuotaExceeded;
+      case 'visitor_concurrent_limit':
+        return apiCopy.visitorConcurrentLimit;
+      case 'global_concurrency_limit':
+        return apiCopy.globalConcurrentLimit;
+      default:
+        return 'Too many requests.';
+    }
+  })();
+  return { allowed: false, status: slot.status, reason: slot.reason, message, retryAfterSec: slot.retryAfterSec };
+}
+
+/** Logs a failed stage with a fresh reference, the same way errorResponse does. */
+function logFailure(failure: StageFailure): string {
+  const reference = crypto.randomUUID();
+  console.error(
+    JSON.stringify({
+      event: EVENT,
+      reference,
+      reason: failure.code,
+      stage: failure.stage,
+      status: failure.options.status ?? 500,
+      ...(failure.options.requestId ? { request_id: failure.options.requestId } : {}),
+      ...(failure.options.diagnostic ? { diagnostic: failure.options.diagnostic } : {}),
+    }),
+  );
+  return reference;
+}
+
+function meta(outcome: PipelineOutcome, mode: PipelineDeps['mode'], startedMs: number) {
+  return {
+    modelUsed: mode === 'deepseek',
+    provider: mode === 'deepseek' ? 'succeeded' : 'skipped',
+    outcome: outcome.outcome,
+    timingsMs: { total: Date.now() - startedMs },
+  };
+}
+
+async function jsonResponse(rawInput: unknown, deps: Omit<PipelineDeps, 'emit'>, startedMs: number): Promise<Response> {
+  try {
+    const outcome = await runPlanPipeline(rawInput, { ...deps, emit: () => undefined });
+    return json({ plan: outcome.plan, meta: meta(outcome, deps.mode, startedMs) }, 200, outcome.requestId);
+  } catch (error) {
+    if (!(error instanceof StageFailure)) throw error;
+    const { status = 500, retryAfterSec, requestId, diagnostic } = error.options;
+    return errorResponse(
+      error.publicMessage,
+      status,
+      error.code,
+      requestId,
+      diagnostic,
+      EVENT,
+      retryAfterSec ? { 'retry-after': String(retryAfterSec) } : undefined,
+    );
+  }
+}
+
+function streamResponse(rawInput: unknown, deps: Omit<PipelineDeps, 'emit'>, startedMs: number): Response {
+  const encoder = new TextEncoder();
+  const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
+  const writer = writable.getWriter();
+  let open = true;
+  const write = (text: string) => {
+    if (!open) return;
+    writer.write(encoder.encode(text)).catch(() => {
+      open = false;
+    });
+  };
+  // Keeps the connection alive while a slow stage (the model call) runs.
+  const heartbeat = setInterval(() => write(SSE_HEARTBEAT), HEARTBEAT_MS);
+
+  void (async () => {
+    try {
+      const outcome = await runPlanPipeline(rawInput, {
+        ...deps,
+        emit: (event: StageEvent) => write(formatSse('stage', event)),
+      });
+      write(formatSse('result', {
+        type: 'result',
+        outcome: outcome.outcome,
+        plan: outcome.plan,
+        requestId: outcome.requestId,
+        meta: meta(outcome, deps.mode, startedMs),
+      }));
+    } catch (error) {
+      const failure = error instanceof StageFailure
+        ? error
+        : new StageFailure('fit', 'internal_error', copyFor('en').api.providerError, { status: 500 });
+      const reference = logFailure(failure);
+      write(formatSse('error', {
+        type: 'error',
+        stage: failure.stage,
+        message: failure.publicMessage,
+        reference,
+        ...(failure.options.retryAfterSec ? { retryAfterSec: failure.options.retryAfterSec } : {}),
+      }));
+    } finally {
+      clearInterval(heartbeat);
+      if (open) await writer.close().catch(() => undefined);
+    }
+  })();
+
+  return new Response(readable, {
+    status: 200,
+    headers: {
+      'content-type': 'text/event-stream; charset=utf-8',
+      'cache-control': 'no-store',
+      'x-accel-buffering': 'no',
+    },
+  });
+}
+
 export async function POST(request: Request, deps?: PublicRoutineDeps): Promise<Response> {
   const startedMs = Date.now();
   let rawText: string;
@@ -70,13 +205,6 @@ export async function POST(request: Request, deps?: PublicRoutineDeps): Promise<
 
   const language = languageFrom(dict(value.input)?.language);
   const apiCopy = copyFor(language).api;
-
-  let input;
-  try {
-    input = validateInput(value.input);
-  } catch {
-    return errorResponse(apiCopy.invalidInput, 400, 'invalid_input', undefined, undefined, EVENT);
-  }
   const mode = value.mode === undefined ? 'demo' : value.mode;
   if (mode !== 'demo' && mode !== 'deepseek') {
     return errorResponse(apiCopy.invalidMode, 400, 'invalid_mode', undefined, undefined, EVENT);
@@ -87,7 +215,9 @@ export async function POST(request: Request, deps?: PublicRoutineDeps): Promise<
   const nowIso = deps?.nowIso ? deps.nowIso() : new Date().toISOString();
   const nowMs = deps?.nowMs ? deps.nowMs() : (Number.isNaN(Date.parse(nowIso)) ? Date.now() : Date.parse(nowIso));
   const fetcher = deps?.intentFetcher ?? requestIntent;
+  const wantsStream = (request.headers.get('accept') ?? '').includes('text/event-stream');
 
+  let pipelineDeps: Omit<PipelineDeps, 'emit'>;
   if (mode === 'demo') {
     if (db) {
       const demoLimit = await checkRateLimit(db, {
@@ -96,118 +226,36 @@ export async function POST(request: Request, deps?: PublicRoutineDeps): Promise<
         nowMs,
       });
       if (!demoLimit.allowed) {
-        return rateLimited(
-          demoLimit.retryAfterSec,
-          EVENT,
-          apiCopy.rateLimited(demoLimit.retryAfterSec),
-        );
+        return rateLimited(demoLimit.retryAfterSec, EVENT, apiCopy.rateLimited(demoLimit.retryAfterSec));
       }
     }
-    const planStartedMs = Date.now();
-    const plan = buildPlan(input, undefined, 'demo');
-    const doneMs = Date.now();
-    return json({
-      plan,
-      meta: {
-        modelUsed: false,
-        provider: 'skipped',
-        timingsMs: { total: doneMs - startedMs, plan: doneMs - planStartedMs },
-      },
-    });
-  }
-
-  const config = await liveConfig(env);
-  if (!config) return errorResponse(apiCopy.notConfigured, 503, 'live_not_configured', undefined, undefined, EVENT);
-
-  // Fail closed: live provider calls strictly require atomic D1 rate/quota limits.
-  if (!db) {
-    return errorResponse(apiCopy.limitsNotConfigured, 503, 'limits_not_configured', undefined, undefined, EVENT);
-  }
-
-  const slot = await checkAndReservePublicLiveSlot(db, {
-    request,
-    nowMs,
-    nowIso,
-    secret: typeof env.CADENCIA_SERVICE_TOKEN === 'string' ? env.CADENCIA_SERVICE_TOKEN : undefined,
-    limits: limitsFromEnv(env),
-    allowIpFallback: (env as Record<string, unknown>)?.CADENCIA_ALLOW_IP_FALLBACK === 'true',
-  });
-  if (!slot.allowed) {
-    if (slot.status === 400) {
-      return errorResponse('Valid client IP is required.', 400, 'missing_client_ip', undefined, undefined, EVENT);
+    pipelineDeps = { mode: 'demo', now: Date.now };
+  } else {
+    const config = await liveConfig(env);
+    if (!config) return errorResponse(apiCopy.notConfigured, 503, 'live_not_configured', undefined, undefined, EVENT);
+    // Fail closed: live provider calls strictly require atomic D1 rate/quota limits.
+    if (!db) {
+      return errorResponse(apiCopy.limitsNotConfigured, 503, 'limits_not_configured', undefined, undefined, EVENT);
     }
-    const message = (() => {
-      switch (slot.reason) {
-        case 'rate_limited':
-          return apiCopy.rateLimited(slot.retryAfterSec);
-        case 'visitor_quota_exceeded':
-          return apiCopy.visitorQuotaExceeded;
-        case 'global_quota_exceeded':
-          return apiCopy.globalQuotaExceeded;
-        case 'visitor_concurrent_limit':
-          return apiCopy.visitorConcurrentLimit;
-        case 'global_concurrency_limit':
-          return apiCopy.globalConcurrentLimit;
-        default:
-          return 'Too many requests.';
-      }
-    })();
-    return errorResponse(
-      message,
-      slot.status,
-      slot.reason,
-      undefined,
-      undefined,
-      EVENT,
-      slot.retryAfterSec ? { 'retry-after': String(slot.retryAfterSec) } : undefined,
-    );
+    pipelineDeps = {
+      mode: 'deepseek',
+      now: Date.now,
+      reserve: async () => slotResult(
+        await checkAndReservePublicLiveSlot(db, {
+          request,
+          nowMs,
+          nowIso,
+          secret: typeof env.CADENCIA_SERVICE_TOKEN === 'string' ? env.CADENCIA_SERVICE_TOKEN : undefined,
+          limits: limitsFromEnv(env),
+          allowIpFallback: (env as Record<string, unknown>)?.CADENCIA_ALLOW_IP_FALLBACK === 'true',
+        }),
+        apiCopy,
+      ),
+      draft: (input) => fetcher(input, config),
+    };
   }
 
-  let serviceRequestId: string | undefined;
-  const providerStartedMs = Date.now();
-  try {
-    const serviceResult = await fetcher(input, config);
-    serviceRequestId = serviceResult.requestId;
-    const sessionCount = Math.min(
-      input.days.length,
-      Math.floor(input.weeklyMinutes / input.sessionMinutes),
-    );
-    const intent = validateIntent(
-      serviceResult.intent,
-      serviceResult.scopeRefused
-        ? undefined
-        : { sessionCount, sessionMinutes: input.sessionMinutes },
-    );
-    const planStartedMs = Date.now();
-    const plan = buildPlan(input, intent, 'deepseek', serviceResult.scopeRefused);
-    const doneMs = Date.now();
-    return json(
-      {
-        plan,
-        meta: {
-          modelUsed: true,
-          provider: 'succeeded',
-          timingsMs: { total: doneMs - startedMs, provider: planStartedMs - providerStartedMs, plan: doneMs - planStartedMs },
-        },
-      },
-      200,
-      serviceRequestId,
-    );
-  } catch (error) {
-    const failure = error instanceof ServiceFailure ? error : null;
-    const reason = failure?.reason ?? 'upstream_invalid_response';
-    const reqId = failure?.requestId ?? serviceRequestId;
-    return errorResponse(
-      apiCopy.providerError,
-      502,
-      reason,
-      reqId,
-      failure?.diagnostic,
-      EVENT,
-    );
-  } finally {
-    if (slot && slot.allowed) {
-      await slot.release();
-    }
-  }
+  return wantsStream
+    ? streamResponse(value.input, pipelineDeps, startedMs)
+    : jsonResponse(value.input, pipelineDeps, startedMs);
 }
