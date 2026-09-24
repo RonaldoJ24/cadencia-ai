@@ -278,6 +278,11 @@ function restrictedRequest(request: string): boolean {
   return false;
 }
 
+/** The demo's local scope guard, the same check buildPlan applies in demo mode. */
+export function demoScopeRefused(request: string): boolean {
+  return restrictedRequest(request);
+}
+
 export function scopeIntent(language: Language = DEFAULT_LANGUAGE): Intent {
   const routine = copyFor(language).routine;
   return {
