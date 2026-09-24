@@ -1,5 +1,6 @@
-// Evaluation cases: parsing, checks, coverage quotas and development
-// contamination. The owner writes the cases; this code only checks them.
+// Evaluation cases: parsing, checks, provenance, coverage quotas and
+// development contamination. Cases are drafted under evals/cases/SOURCING.md
+// and reviewed by the owner; this code only checks them.
 
 import { ABSTAIN_CATEGORIES, validateGoalRequest, type AbstainCategory, type GoalControls } from '../../lib/planner/goal-input.ts';
 import { SpecError } from '../../lib/planner/spec.ts';
@@ -100,6 +101,101 @@ export function parseCases(source: string): { cases: EvalCase[]; problems: CaseP
     });
   });
   return { cases, problems };
+}
+
+export const ORIGINS = ['post', 'composite', 'constructed'] as const;
+export type Origin = (typeof ORIGINS)[number];
+export const SEGMENTS = ['busy_worker', 'shift_worker', 'parent', 'student', 'career_switcher', 'returning', 'event', 'hobbyist'] as const;
+export type Segment = (typeof SEGMENTS)[number];
+export const REVIEWS = ['accepted', 'relabeled', 'rewritten'] as const;
+export type Review = (typeof REVIEWS)[number];
+
+export type Provenance = {
+  id: string;
+  origin: Origin;
+  platform?: string;
+  community?: string;
+  source_language?: 'en' | 'es';
+  read?: 'full' | 'snippet';
+  segment: Segment;
+  collected: string;
+  review: Review;
+};
+
+const PROVENANCE_FIELDS = new Set(['id', 'origin', 'platform', 'community', 'source_language', 'read', 'segment', 'collected', 'review']);
+const SOURCE_FIELDS = ['platform', 'community', 'source_language', 'read'] as const;
+const LINK_OR_USER = /:\/\/|www\.|(^|[\s/])u\/|@\w/iu;
+
+/** Checks provenance.jsonl (SOURCING.md): one reviewed line per case, and no links or usernames. */
+export function parseProvenance(source: string, cases: readonly EvalCase[]): { lines: Provenance[]; problems: CaseProblem[] } {
+  const lines: Provenance[] = [];
+  const problems: CaseProblem[] = [];
+  const caseIds = new Set(cases.map((item) => item.id));
+  const seen = new Set<string>();
+  source.split('\n').forEach((raw, index) => {
+    const line = index + 1;
+    if (!raw.trim()) return;
+    let value: Record<string, unknown> | null;
+    try {
+      value = record(JSON.parse(raw));
+    } catch {
+      problems.push({ line, message: 'not valid JSON' });
+      return;
+    }
+    if (!value) {
+      problems.push({ line, message: 'each line must be a JSON object' });
+      return;
+    }
+    const id = typeof value.id === 'string' ? value.id.slice(0, 40) : undefined;
+    const fail = (message: string) => problems.push({ line, id, message });
+    if (!id || !caseIds.has(id)) return fail('id must be the id of a case');
+    if (seen.has(id)) return fail(`duplicate id ${id}`);
+    seen.add(id);
+    const unknown = Object.keys(value).filter((key) => !PROVENANCE_FIELDS.has(key));
+    if (unknown.length > 0) return fail(`unknown fields: ${unknown.join(', ')}`);
+    if (Object.values(value).some((field) => typeof field === 'string' && LINK_OR_USER.test(field))) {
+      return fail('provenance must not hold links or usernames; they go in sources.private.jsonl');
+    }
+    const origin = value.origin as Origin;
+    if (!ORIGINS.includes(origin)) return fail(`origin must be one of ${ORIGINS.join(', ')}`);
+    for (const [field, max] of [['platform', 40], ['community', 60]] as const) {
+      const text = value[field];
+      if (text !== undefined && (typeof text !== 'string' || !text.trim() || text.length > max)) {
+        return fail(`${field} must be 1 to ${max} characters`);
+      }
+    }
+    if (value.source_language !== undefined && value.source_language !== 'en' && value.source_language !== 'es') {
+      return fail('source_language must be en or es');
+    }
+    if (value.read !== undefined && value.read !== 'full' && value.read !== 'snippet') return fail('read must be full or snippet');
+    if (origin === 'post' && (value.platform === undefined || value.source_language === undefined || value.read === undefined)) {
+      return fail('a post needs platform, source_language and read');
+    }
+    if (origin === 'composite' && value.community !== undefined) return fail('a composite never names a community');
+    if (origin === 'constructed' && SOURCE_FIELDS.some((field) => value[field] !== undefined)) {
+      return fail('a constructed case has no source fields');
+    }
+    if (!SEGMENTS.includes(value.segment as Segment)) return fail(`segment must be one of ${SEGMENTS.join(', ')}`);
+    if (!isLocalDate(value.collected)) return fail('collected must be YYYY-MM-DD');
+    if (!REVIEWS.includes(value.review as Review)) {
+      return fail(`review must be one of ${REVIEWS.join(', ')}: the owner reviews every case`);
+    }
+    lines.push(value as Provenance);
+  });
+  const missing = cases.filter((item) => !seen.has(item.id)).map((item) => item.id);
+  if (missing.length > 0) problems.push({ line: 0, message: `no provenance line for ${missing.join(', ')}` });
+  return { lines, problems };
+}
+
+/** How many cases came from where, and what the owner's review did (reported with the results). */
+export function provenanceCounts(lines: readonly Provenance[]): Array<{ name: string; count: number }> {
+  const count = (test: (item: Provenance) => boolean) => lines.filter(test).length;
+  return [
+    ...ORIGINS.map((origin) => ({ name: `origin ${origin}`, count: count((item) => item.origin === origin) })),
+    { name: 'posts read in full', count: count((item) => item.origin === 'post' && item.read === 'full') },
+    { name: 'posts read from a search result', count: count((item) => item.origin === 'post' && item.read === 'snippet') },
+    ...REVIEWS.map((review) => ({ name: `review ${review}`, count: count((item) => item.review === review) })),
+  ];
 }
 
 export type Quota = { name: string; minimum: number; count: number };

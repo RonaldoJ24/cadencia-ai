@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { analyzeArm, percentile, renderReport } from '../evals/lib/analyze.ts';
 import { makePack, unblind, type Ratings } from '../evals/lib/blind.ts';
-import { contamination, coverage, parseCases } from '../evals/lib/cases.ts';
+import { contamination, coverage, parseCases, parseProvenance, provenanceCounts } from '../evals/lib/cases.ts';
 import type { ResultLine } from '../evals/lib/runner.ts';
 import { schedulePlan } from '../lib/planner/schedule.ts';
 import { validateGoalSpec } from '../lib/planner/spec.ts';
@@ -126,4 +126,30 @@ void test('the validator reports problems, coverage and closeness to development
   assert.equal(quotas['relative deadlines'], 1);
   assert.equal(quotas['fitness goals'], 1);
   assert.deepEqual(contamination(cases).map((item) => item.id), ['dev']);
+});
+
+void test('provenance needs one reviewed line per case and never holds links or usernames', () => {
+  const provenance = (lines: object[]) => parseProvenance(lines.map((item) => JSON.stringify(item)).join('\n'), CASES);
+  const post = { id: 'c1', origin: 'post', platform: 'reddit', community: 'r/chess', source_language: 'en', read: 'full', segment: 'hobbyist', collected: '2026-09-24', review: 'accepted' };
+  const composite = { id: 'c3', origin: 'composite', segment: 'busy_worker', collected: '2026-09-24', review: 'relabeled' };
+  const constructed = { id: 'c2', origin: 'constructed', segment: 'student', collected: '2026-09-24', review: 'rewritten' };
+
+  const clean = provenance([post, constructed, composite]);
+  assert.deepEqual(clean.problems, []);
+  const counts = Object.fromEntries(provenanceCounts(clean.lines).map((item) => [item.name, item.count]));
+  assert.equal(counts['origin post'], 1);
+  assert.equal(counts['posts read in full'], 1);
+  assert.equal(counts['review relabeled'], 1);
+
+  const messages = (lines: object[]) => provenance(lines).problems.map((problem) => problem.message);
+  assert.match(messages([post, constructed])[0], /no provenance line for c3/u);
+  assert.match(messages([post, post, constructed, composite])[0], /duplicate/u);
+  assert.match(messages([{ ...post, community: 'https://reddit.com/r/chess' }, constructed, composite])[0], /links or usernames/u);
+  assert.match(messages([{ ...post, community: 'u/someone' }, constructed, composite])[0], /links or usernames/u);
+  assert.match(messages([{ ...post, review: undefined }, constructed, composite])[0], /review must be/u);
+  assert.match(messages([{ ...post, read: undefined }, constructed, composite])[0], /a post needs/u);
+  assert.match(messages([post, constructed, { ...composite, community: 'r/loseit' }])[0], /never names a community/u);
+  assert.match(messages([post, { ...constructed, platform: 'reddit' }, composite])[0], /no source fields/u);
+  assert.match(messages([post, constructed, { ...composite, id: 'c9' }])[0], /id of a case/u);
+  assert.match(messages([{ ...post, url: 'x' }, constructed, composite])[0], /unknown fields/u);
 });
