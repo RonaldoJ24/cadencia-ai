@@ -112,7 +112,7 @@ function record(value: unknown): Record<string, unknown> | null {
 }
 
 /** Line breaks and tabs become spaces; any other control character is refused. */
-function plainText(value: unknown, field: string, max: number): string {
+export function plainText(value: unknown, field: string, max: number): string {
   if (typeof value !== 'string') throw new SpecError(field, `${field} must be text`);
   const text = value.replace(/[\t\n\r]+/gu, ' ').trim();
   if (!text || text.length > max || hasControl(text)) {

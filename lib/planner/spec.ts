@@ -26,8 +26,8 @@ export class SpecError extends Error {
   }
 }
 
-const DOMAINS: readonly Domain[] = ['fitness', 'learning', 'creative', 'general'];
-const LEVELS: readonly Level[] = ['beginner', 'intermediate', 'advanced', 'unknown'];
+export const DOMAINS: readonly Domain[] = ['fitness', 'learning', 'creative', 'general'];
+export const LEVELS: readonly Level[] = ['beginner', 'intermediate', 'advanced', 'unknown'];
 
 function record(value: unknown, field: string): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {

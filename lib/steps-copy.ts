@@ -1,4 +1,5 @@
 import type { Language } from './i18n.ts';
+import type { ReplanOptionId } from './planner/replan.ts';
 
 type SettingName = 'deadline' | 'days' | 'window' | 'weeklyMinutes' | 'sessionMinutes' | 'level';
 type DeclineReason =
@@ -36,6 +37,20 @@ export type GoalStepsCopy = {
   };
 };
 
+export type ReplanStepsCopy = {
+  options: (count: number, names: string[]) => string;
+  request: (reasonCharacters: number, options: number) => string;
+  pickReceived: string;
+  suggested: (option: ReplanOptionId) => string;
+  declined: (category: 'medical' | 'unclear') => string;
+  notOffered: string;
+  optionNames: Readonly<Record<ReplanOptionId, string>>;
+  failure: {
+    request: (field: string) => string;
+    pick: string;
+  };
+};
+
 export type StageId =
   | 'check_request'
   | 'check_availability'
@@ -43,7 +58,10 @@ export type StageId =
   | 'read_goal'
   | 'draft'
   | 'check_draft'
-  | 'fit';
+  | 'fit'
+  | 'build_options'
+  | 'pick_option'
+  | 'check_pick';
 
 export type StageActor = 'code' | 'model' | 'sample';
 
@@ -70,6 +88,7 @@ export type StepsCopy = {
     timeout: string;
   };
   goal: GoalStepsCopy;
+  replan: ReplanStepsCopy;
 };
 
 function seconds(ms: number, decimal: string): string {
@@ -127,6 +146,9 @@ const EN: StepsCopy = {
     draft: 'Drafting sessions',
     check_draft: 'Checking the draft',
     fit: 'Fitting sessions into your calendar',
+    build_options: 'Building your options',
+    pick_option: 'Reading your reason',
+    check_pick: 'Checking the suggestion',
   },
   actors: { code: 'Code', model: 'Model', sample: 'Sample' },
   running: 'Running…',
@@ -201,6 +223,23 @@ const EN: StepsCopy = {
       fit: 'The plan broke a scheduling rule, so it was not shown.',
     },
   },
+  replan: {
+    options: (count, names) => `${plural(count, 'option', 'options')} built and checked: ${list(names, 'and')}`,
+    request: (characters, options) => `${characters}-character reason; ${plural(options, 'option', 'options')} to choose from, sent as numbers only`,
+    pickReceived: 'Answer received',
+    suggested: (option) => `Suggests “${EN.replan.optionNames[option]}”, one of the options offered`,
+    declined: (category) => (category === 'medical'
+      ? 'Declined: pain, an injury or an illness calls for a professional first'
+      : 'Declined: the reason gives nothing to choose from'),
+    notOffered: 'The pick is not one of today’s options, so you choose',
+    optionNames: { keep: 'Keep going', repeat: 'Redo what was missed', extend: 'Redo it and move the deadline', lighter: 'Lighter weeks' },
+    failure: {
+      request: (field) => (field === 'reason'
+        ? 'Write a reason of up to 500 characters of plain text.'
+        : 'This adjustment could not be checked. Reload the page and try again.'),
+      pick: 'The suggestion came back malformed. Choose an option yourself, or try again.',
+    },
+  },
 };
 
 const ES: StepsCopy = {
@@ -213,6 +252,9 @@ const ES: StepsCopy = {
     draft: 'Redactando sesiones',
     check_draft: 'Revisando el borrador',
     fit: 'Acomodando sesiones en tu calendario',
+    build_options: 'Armando tus opciones',
+    pick_option: 'Leyendo tu motivo',
+    check_pick: 'Revisando la sugerencia',
   },
   actors: { code: 'Código', model: 'Modelo', sample: 'Muestra' },
   running: 'En curso…',
@@ -285,6 +327,23 @@ const ES: StepsCopy = {
       draftTwice: 'El borrador del modelo no respetó el formato esperado dos veces, así que no se programó nada.',
       noRoom: 'Tus días y horario no dejan lugar para ninguna sesión antes de la fecha límite.',
       fit: 'El plan rompió una regla de programación, así que no se mostró.',
+    },
+  },
+  replan: {
+    options: (count, names) => `${plural(count, 'opción construida y revisada', 'opciones construidas y revisadas')}: ${list(names, 'y')}`,
+    request: (characters, options) => `Motivo de ${characters} caracteres; ${plural(options, 'opción', 'opciones')} para elegir, enviadas solo como números`,
+    pickReceived: 'Respuesta recibida',
+    suggested: (option) => `Sugiere “${ES.replan.optionNames[option]}”, una de las opciones ofrecidas`,
+    declined: (category) => (category === 'medical'
+      ? 'Rechazada: el dolor, una lesión o una enfermedad piden primero a un profesional'
+      : 'Rechazada: el motivo no da con qué elegir'),
+    notOffered: 'La elección no está entre las opciones de hoy, así que eliges tú',
+    optionNames: { keep: 'Seguir igual', repeat: 'Repetir lo que faltó', extend: 'Repetir y mover la fecha límite', lighter: 'Semanas más ligeras' },
+    failure: {
+      request: (field) => (field === 'reason'
+        ? 'Escribe un motivo de hasta 500 caracteres de texto simple.'
+        : 'No se pudo revisar este ajuste. Recarga la página e inténtalo de nuevo.'),
+      pick: 'La sugerencia llegó mal formada. Elige tú una opción o inténtalo de nuevo.',
     },
   },
 };

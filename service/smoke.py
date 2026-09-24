@@ -3,8 +3,9 @@
 
 This is test tooling only. The Python provider client is replaced in memory
 with an httpx MockTransport; the production service has no fixture switch.
-One goal run plans end to end, and one gets unreadable provider output that
-must never reach the browser.
+One goal run plans end to end, one gets unreadable provider output that must
+never reach the browser, and one replan picks an option, so the Worker's
+request matches the service's strict schema field for field.
 """
 
 from __future__ import annotations
@@ -42,6 +43,7 @@ GOAL_READING = {
     "abstain": None,
 }
 GOAL_USAGE = {"prompt_tokens": 500, "completion_tokens": 300, "total_tokens": 800}
+REPLAN_PICK = {"decision": "pick", "option": "keep", "why": "You are ready to go on, so keep the plan as it is.", "abstain": None}
 
 
 def _envelope(content: dict[str, Any]) -> httpx.Response:
@@ -105,6 +107,8 @@ class SmokeProvider:
             prefix = "Plan calendar, fixed by code: "
             line = next(item for item in messages[1]["content"].splitlines() if item.startswith(prefix))
             return _envelope(_goal_draft(json.loads(line[len(prefix):])))
+        if messages[0]["content"] == planning.REPLAN_PROMPT:
+            return _envelope(REPLAN_PICK)
         return httpx.Response(500, content=b"unexpected provider request")
 
 
@@ -227,6 +231,23 @@ const result = JSON.parse(messages.at(-1)?.data ?? '{}');
 const ledger = db.raw.prepare('SELECT status, actual_microusd FROM spend_ledger').get();
 const failed = await POST(goalRequest('Goal for the leak check', '127.0.0.3', false));
 const failedBody = await failed.json();
+const summary = (id, deadline, weeksLeft) => ({ id, deadline, weeksLeft, sessionsLeft: 12, minutesLeft: 360, nextSevenDaysMinutes: 60, sessionsLeftOut: 2 });
+const replan = await POST(new Request('http://localhost/api/routine', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', 'cf-connecting-ip': '127.0.0.4', accept: 'text/event-stream' },
+  body: JSON.stringify({ mode: 'deepseek', kind: 'replan', input: {
+    language: 'en', today, domain: 'learning', level: 'unknown',
+    situation: { missedSessions: 2, missedWeeks: 1, weeksLeft: 6 },
+    options: [summary('keep', '2026-12-01', 6), summary('extend', '2026-12-08', 7)],
+    reason: 'I just forgot last week, but I am ready now.',
+  } }),
+}));
+const replanMessages = [];
+const replanParser = new SseParser((message) => replanMessages.push(message));
+replanParser.push(await replan.text());
+replanParser.end();
+const replanResult = JSON.parse(replanMessages.at(-1)?.data ?? '{}');
+const replanLedger = db.raw.prepare('SELECT status, actual_microusd FROM spend_ledger ORDER BY rowid DESC LIMIT 1').get();
 const serialized = JSON.stringify({ result, failedBody });
 console.log(JSON.stringify({
   availability: await availability.json(),
@@ -242,6 +263,17 @@ console.log(JSON.stringify({
     ledger: ledger ?? null,
   },
   failed: { status: failed.status, error: failedBody?.error ?? null },
+  replan: {
+    status: replan.status,
+    outcome: replanResult?.outcome ?? null,
+    option: replanResult?.option ?? null,
+    stages: replanMessages
+      .filter((message) => message.event === 'stage')
+      .map((message) => JSON.parse(message.data))
+      .filter((event) => event.status !== 'started')
+      .map((event) => `${event.stage}:${event.status}`),
+    ledger: replanLedger ?? null,
+  },
   returnedBodiesSafe: !serialized.includes('smoke-token') && !serialized.includes('upstream secret'),
 }));
 '''
@@ -306,6 +338,7 @@ def main() -> int:
             availability = value.get("availability")
             goal = value.get("goal")
             failed = value.get("failed")
+            replan = value.get("replan")
             if not (
                 isinstance(availability, dict)
                 and availability.get("liveAvailable") is True
@@ -328,8 +361,19 @@ def main() -> int:
                 and isinstance(failed, dict)
                 and failed.get("status") == 502
                 and failed.get("error") == "The AI provider is not available."
+                and isinstance(replan, dict)
+                and replan.get("status") == 200
+                and replan.get("outcome") == "suggested"
+                and replan.get("option") == "keep"
+                and replan.get("stages") == [
+                    "check_request:completed",
+                    "reserve:completed",
+                    "pick_option:completed",
+                    "check_pick:completed",
+                ]
+                and replan.get("ledger") == {"status": "settled", "actual_microusd": 510}
                 and value.get("returnedBodiesSafe") is True
-                and provider.calls == 3
+                and provider.calls == 4
             ):
                 raise RuntimeError("smoke assertions failed")
         finally:
