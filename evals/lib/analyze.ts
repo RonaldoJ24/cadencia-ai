@@ -116,7 +116,7 @@ function usd(microUsd: number): string {
 export type CaseSources = {
   /** From provenanceCounts; absent when the case file has no provenance beside it. */
   counts?: Array<{ name: string; count: number }>;
-  review?: { drafted: number; dropped: number };
+  review?: { drafted: number; dropped: number; spotCheck?: { agreed: number; of: number } };
   /** Kept cases close to a development text. */
   closeToDevelopment: Array<{ id: string; similarity: number }>;
 };
@@ -128,7 +128,11 @@ function renderSources(sources: CaseSources): string[] {
   } else {
     lines.push('No provenance file beside the cases.', '');
   }
-  if (sources.review) lines.push(`Drafts written: ${sources.review.drafted}. Dropped by the owner: ${sources.review.dropped}.`, '');
+  if (sources.review) {
+    lines.push(`Drafts written: ${sources.review.drafted}. Dropped in the audit and review: ${sources.review.dropped}.`, '');
+    const check = sources.review.spotCheck;
+    if (check) lines.push(`The owner's random check: agreed with ${check.agreed} of ${check.of} labels.`, '');
+  }
   const close = sources.closeToDevelopment;
   lines.push(
     `Cases close to development texts, kept: ${close.length === 0 ? 'none' : close.map((item) => `${item.id} (${item.similarity})`).join(', ')}.`,

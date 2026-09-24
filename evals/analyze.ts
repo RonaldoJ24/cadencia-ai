@@ -9,7 +9,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { analyzeArm, renderReport, type CaseSources } from './lib/analyze.ts';
-import { contamination, parseCases, parseProvenance, provenanceCounts } from './lib/cases.ts';
+import { contamination, parseCases, parseProvenance, parseReviewSummary, provenanceCounts } from './lib/cases.ts';
 import type { ResultLine } from './lib/runner.ts';
 
 const { values } = parseArgs({ options: { cases: { type: 'string' }, run: { type: 'string' } } });
@@ -23,11 +23,11 @@ const manifest = JSON.parse(readFileSync(join(values.run, 'manifest.json'), 'utf
 
 const provenancePath = join(dirname(values.cases), 'provenance.jsonl');
 const reviewPath = join(dirname(values.cases), 'review.json');
-const review = existsSync(reviewPath) ? (JSON.parse(readFileSync(reviewPath, 'utf8')) as { drafted?: unknown; dropped?: unknown }) : null;
+const review = existsSync(reviewPath) ? parseReviewSummary(JSON.parse(readFileSync(reviewPath, 'utf8')), cases).summary : undefined;
 const sources: CaseSources = {
   ...(existsSync(provenancePath) ? { counts: provenanceCounts(parseProvenance(readFileSync(provenancePath, 'utf8'), cases).lines) } : {}),
-  ...(review && Number.isInteger(review.drafted) && Number.isInteger(review.dropped)
-    ? { review: { drafted: review.drafted as number, dropped: review.dropped as number } }
+  ...(review
+    ? { review: { drafted: review.drafted, dropped: review.dropped, spotCheck: { agreed: review.spotCheck.agreed, of: review.spotCheck.ids.length } } }
     : {}),
   closeToDevelopment: contamination(cases).map((item) => ({ id: item.id, similarity: item.similarity })),
 };

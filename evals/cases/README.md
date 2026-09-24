@@ -1,8 +1,9 @@
 # Writing evaluation cases
 
 The evaluation needs 100 to 150 goals. They are drafted from goals people
-describe in public posts, following [SOURCING.md](SOURCING.md), and the owner
-reviews every case and label before the freeze. They are the test set, so they
+describe in public posts, following [SOURCING.md](SOURCING.md). A separate
+agent audits every case, and the owner decides its proposals and checks a random
+20 before the freeze. They are the test set, so they
 must not be tuned to the prompts. This guide explains the format and how to
 label each case. Coverage minimums and the rest of the protocol are in
 [`../PREREGISTRATION.md`](../PREREGISTRATION.md).

@@ -9,8 +9,10 @@ runs go in `runs/<run-id>/` and are committed with everything they produced.
 1. **Source and review the cases.** 100 to 150 goals go in `cases/cases.jsonl`,
    in the format of [cases/README.md](cases/README.md). They are drafted from
    goals people describe in public posts, following
-   [cases/SOURCING.md](cases/SOURCING.md), and the owner reviews every case and
-   label. Their origin and review go in `cases/provenance.jsonl`. Check both:
+   [cases/SOURCING.md](cases/SOURCING.md), audited by a separate agent, and the
+   owner decides the audit's proposals and checks a random 20. Their origin and
+   review go in `cases/provenance.jsonl`, and the drafts, the seed and the random
+   check in `cases/review.json`. Check them:
 
    ```bash
    node --experimental-strip-types evals/validate.ts evals/cases/cases.jsonl evals/cases/provenance.jsonl

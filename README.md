@@ -116,7 +116,8 @@ compares DeepSeek with GPT-6 Luna on the same pipeline.
 
 **No scored run exists yet, so this README makes no claim about model quality.**
 The run needs 100 to 150 cases, adapted from goals people describe in public
-posts and reviewed by the owner ([protocol](evals/cases/SOURCING.md)), and the
+posts, audited by a separate agent and spot-checked by the owner
+([protocol](evals/cases/SOURCING.md)), and the
 GPT-6 Luna settings. The steps
 are in [evals/README.md](evals/README.md), and results will be committed with the
 run under `evals/runs/`.
@@ -181,7 +182,8 @@ docker build -t cadencia-intents:local service
 
 - **Model quality is unmeasured.** The evaluation is pre-registered but not run.
   Its cases adapt goals people chose to post in public, which are not a random
-  sample; one person reviews them and is the only blind rater; and it covers
+  sample; an agent audited the labels, one person checked a random 20 and is the
+  only blind rater; and it covers
   reading and drafting, not replanning.
 - **Not advice.** Fitness limits are general rules for healthy adults, not
   individual guidance, and refusals cover the declared categories only.

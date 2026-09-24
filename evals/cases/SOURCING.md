@@ -74,7 +74,7 @@ rules. These are written from scratch and marked `constructed`.
 | `read` | for `post` | `full` if the whole post was read, `snippet` if only a search result was |
 | `segment` | yes | One of the segments above |
 | `collected` | yes | The date the source was read (`YYYY-MM-DD`) |
-| `review` | yes | The owner's review: `accepted`, `relabeled` or `rewritten` |
+| `review` | yes | The outcome after the audit and the owner's decisions: `accepted`, `relabeled` or `rewritten` |
 
 Links to posts are not committed: they would point to people, and the cases are
 written so they don't. The links are kept in `sources.private.jsonl` beside the
@@ -92,19 +92,34 @@ A clarifying answer is part of its case. If the answer names a target, a
 schedule or a detail the post leaves open, the case counts as written for
 coverage, even when the question itself comes from the post.
 
-## Edits before the owner's review
+## Edits before the audit
 
 The agent that combines the drafts may fill a label a draft left out, correct a
 note, round or drop a detail that could lead back to a post, and reword text that
 repeats a post. It changes no decision. The owner sees every such edit, by case
-id, before the review.
+id.
 
-## Owner review
+## Audit and owner check
 
-The owner reads every case with its labels, then accepts it, changes a label
-(`relabeled`), changes the text (`rewritten`) or drops it. The counts of each,
-including dropped drafts, are reported with the results. After the review, no
-agent changes a case.
+The pre-registration first had the owner read every case. Before any run, the
+owner chose this instead:
+
+- **Audit.** A separate agent reads every case from a customer's side: does it
+  read like what a person types into Cadencia, does the set cover how people
+  behave (short and messy inputs, questions, impatience, emojis), and would a
+  careful planner and a reasonable customer agree with each label. It proposes
+  rewrites, drops and label changes, and lists its doubts. Rewrites keep every
+  fact and add none.
+- **Owner decisions.** Nothing changes until the owner decides each proposal and
+  each doubt.
+- **Random check.** The owner then checks a random 20 cases, drawn from the
+  final set with a recorded seed, and says which labels they disagree with. The
+  number they agree with is reported with the results, and a label they change
+  is changed in the set.
+
+Each case's review outcome (`accepted`, `relabeled` or `rewritten`) counts every
+change the audit or the owner made, and `review.json` records the drafts
+dropped. After the owner's check, no agent changes a case.
 
 ## Isolation
 
@@ -118,10 +133,11 @@ DeepSeek or OpenAI.
 Final ids (`c001` onward) come from a shuffle with a recorded seed, so if the
 budget stops a run early, the cases it covered still mix languages, decisions
 and domains. `review.json` beside the cases records the seed, how many drafts
-were written and how many the owner dropped, and the report prints those counts.
+were written and dropped, and the random check, and the report prints them.
 
 ## What can be claimed
 
 "N goals adapted from public posts (paraphrased and de-identified) and M written
-for coverage; every label reviewed by the owner." Not "real users" and not "real
-cases": nobody typed these into Cadencia.
+for coverage; every label audited by a separate agent, and the owner agreed with
+K of 20 checked at random." Not "real users" and not "real cases": nobody typed
+these into Cadencia.
