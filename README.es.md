@@ -90,8 +90,12 @@ semana y probarlo con cuatro motivos grabados.
 ## Tus datos
 
 - Los planes y los horarios ocupados importados se guardan solo en tu navegador;
-  no hay cuentas. Una ejecución en vivo envía lo que necesita y el servidor no
-  guarda nada de eso.
+  no hay cuentas. Una ejecución en vivo envía lo que necesita y los servidores de
+  Cadencia no guardan nada de eso.
+- La IA en vivo envía el texto de tu meta, tu respuesta a una pregunta y el motivo
+  de un ajuste al proveedor del modelo, DeepSeek, un tercero. Los horarios
+  ocupados de tu calendario llegan al Worker de Cadencia pero nunca al proveedor;
+  el modelo solo ve cuánto espacio tiene cada semana. La demo no envía nada de esto.
 - El texto de tu meta y tus motivos llegan al modelo solo como datos escapados, y
   lo que el modelo responde pasa por esquemas estrictos en el servicio y otra vez
   por el código antes de usarse.
