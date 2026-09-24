@@ -23,6 +23,7 @@ const draft: Draft = {
     title: 'Types; unions, narrowing',
     minutes: 25,
     intensity: 'moderate',
+    role: 'key',
     blocks: [{ minutes: 25, activity: 'Write, compile and fix one typed function, with notes on every error message you see along the way.' }],
     deliverable: 'One typed function.',
     doneWhen: 'It compiles.',

@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildSkeleton, freeRanges, planWeeks } from '../lib/planner/availability.ts';
 import { checkPlan } from '../lib/planner/check.ts';
-import { allowedNextWeekMinutes, validateDraft } from '../lib/planner/draft.ts';
+import { ruleIssues, validateDraft } from '../lib/planner/draft.ts';
+import { keepBest, loadLimit } from '../lib/planner/load.ts';
 import { schedulePlan } from '../lib/planner/schedule.ts';
 import { SpecError, validateBusy, validateGoalSpec } from '../lib/planner/spec.ts';
 import { addDays, weekdayOf } from '../lib/planner/time.ts';
@@ -21,12 +22,13 @@ const tenK: GoalSpec = validateGoalSpec({
   weeklyCapMinutes: 180,
 });
 
-function type(id: string, minutes: number, intensity: SessionType['intensity']): SessionType {
+function type(id: string, minutes: number, intensity: SessionType['intensity'], role: SessionType['role']): SessionType {
   return {
     id,
     title: id.replace('_', ' '),
     minutes,
     intensity,
+    role,
     blocks: [
       { minutes: 10, activity: 'Warm up with brisk walking.' },
       { minutes: minutes - 15, activity: 'Main set at the planned effort.' },
@@ -38,7 +40,7 @@ function type(id: string, minutes: number, intensity: SessionType['intensity']):
 }
 
 // Weekly minutes 60, 65, 75, 80, 90, 95, 105, 110, 110, 110, then a 60-minute
-// taper: never more than 10% or 10 minutes above the week before.
+// taper: under every weekly ceiling, with no jump in load.
 const TEN_K_WEEKS: string[][] = [
   ['easy_run', 'easy_run'],
   ['easy_run', 'intervals'],
@@ -56,7 +58,11 @@ const TEN_K_WEEKS: string[][] = [
 function tenKDraft(weeks: number): Draft {
   return {
     phases: [{ title: 'Base', fromWeek: 1, toWeek: weeks, focus: 'Build easy volume.' }],
-    sessionTypes: [type('easy_run', 30, 'easy'), type('intervals', 35, 'hard'), type('long_run', 45, 'moderate')],
+    sessionTypes: [
+      type('easy_run', 30, 'easy', 'support'),
+      type('intervals', 35, 'hard', 'key'),
+      type('long_run', 45, 'moderate', 'key'),
+    ],
     weeks: Array.from({ length: weeks }, (_, index) => ({
       week: index + 1,
       sessions: [...(TEN_K_WEEKS[index] ?? ['easy_run'])],
@@ -87,8 +93,19 @@ void test('free time is the window minus busy times, including ones that cross m
 void test('the skeleton reports the real room in each week', () => {
   const allBusyFriday: BusyInterval[] = [{ start: '2026-09-25T00:00', end: '2026-09-26T00:00' }];
   const skeleton = buildSkeleton(tenK, allBusyFriday);
-  assert.deepEqual(skeleton.weeks[0], { week: 1, start: '2026-09-21', usableDays: 2, freeDays: 1, maxSessions: 1 });
+  assert.deepEqual(skeleton.weeks[0], {
+    week: 1,
+    start: '2026-09-21',
+    usableDays: 2,
+    freeDays: 1,
+    maxSessions: 1,
+    maxMinutes: 90,
+  });
   assert.equal(skeleton.weeks[1].maxSessions, 5);
+  // Fitness volume ramps from 90 minutes by 10% a week until the 180-minute cap.
+  assert.deepEqual(skeleton.weeks.map((week) => week.maxMinutes), [90, 99, 108, 118, 129, 141, 155, 170, 180, 180, 180]);
+  const learning = buildSkeleton({ ...tenK, domain: 'learning' }, []);
+  assert.ok(learning.weeks.every((week) => week.maxMinutes === 180));
   assert.deepEqual(skeleton.sessionMinutes, { min: 15, max: 180 });
 });
 
@@ -105,7 +122,9 @@ void test('specs and busy times are validated before scheduling', () => {
 
 void test('a valid 10K draft passes and each broken rule is reported', () => {
   const skeleton = buildSkeleton(tenK, []);
-  assert.equal(validateDraft(tenKDraft(skeleton.weeks.length), tenK, skeleton).ok, true);
+  const valid = validateDraft(tenKDraft(skeleton.weeks.length), tenK, skeleton);
+  assert.equal(valid.ok, true);
+  assert.deepEqual(valid.ok ? valid.overLimits : null, []);
 
   const brokenBlocks = tenKDraft(skeleton.weeks.length);
   brokenBlocks.sessionTypes[0] = { ...brokenBlocks.sessionTypes[0], blocks: [{ minutes: 20, activity: 'Run.' }] };
@@ -116,26 +135,48 @@ void test('a valid 10K draft passes and each broken rule is reported', () => {
   const unknown = tenKDraft(skeleton.weeks.length);
   unknown.weeks[1] = { week: 2, sessions: ['tempo'] };
 
+  const overCeiling = tenKDraft(skeleton.weeks.length);
+  overCeiling.weeks[1] = { week: 2, sessions: ['easy_run', 'easy_run', 'long_run'] };
+  const eightSessions = tenKDraft(skeleton.weeks.length);
+  eightSessions.weeks[4] = { week: 5, sessions: Array.from({ length: 8 }, () => 'easy_run') };
+
+  // Structural problems fail the check; weeks over their limits pass it and
+  // are listed for the scheduler to trim.
   const codes = (draft: Draft) => {
     const result = validateDraft(draft, tenK, skeleton);
-    return result.ok ? [] : result.issues.map((issue) => issue.code);
+    return result.ok ? result.overLimits.map((issue) => issue.code) : result.issues.map((issue) => `structure:${issue.code}`);
   };
-  assert.deepEqual(codes(brokenBlocks), ['blocks_sum']);
+  assert.deepEqual(codes(brokenBlocks), ['structure:blocks_sum']);
+  assert.deepEqual(codes(unknown), ['structure:week_session']);
+  assert.deepEqual(codes({ ...tenKDraft(3) }), ['structure:weeks']);
+  assert.deepEqual(codes(eightSessions), ['structure:week_length']);
   assert.ok(codes(overCap).includes('week_cap'));
   assert.deepEqual(codes(tooHard), ['hard_sessions']);
-  assert.deepEqual(codes(unknown), ['week_session']);
-  assert.deepEqual(codes({ ...tenKDraft(3) }), ['weeks']);
+  // 105 minutes in week 2, whose ceiling is 99.
+  assert.deepEqual(codes(overCeiling), ['week_minutes']);
 });
 
-void test('fitness volume may not jump more than 10% or 10 minutes a week', () => {
-  assert.equal(allowedNextWeekMinutes(60), 70);
-  assert.equal(allowedNextWeekMinutes(150), 165);
-  const skeleton = buildSkeleton(tenK, []);
-  const jump = tenKDraft(skeleton.weeks.length);
-  jump.weeks[1] = { week: 2, sessions: ['easy_run', 'easy_run', 'long_run', 'long_run'] };
-  const result = validateDraft(jump, tenK, skeleton);
-  assert.equal(result.ok, false);
-  assert.deepEqual(result.ok ? [] : result.issues.map((issue) => issue.code), ['progression']);
+void test('fitness load may not jump more than 30% above the average of the last four weeks', () => {
+  assert.equal(loadLimit([], 'beginner'), null);
+  assert.equal(loadLimit([100], 'beginner'), 130);
+  assert.equal(loadLimit([200, 200, 200, 200], 'intermediate'), 260);
+  // Only the four most recent weeks count: 500 * 1.3 / 4 = 162.5.
+  assert.equal(loadLimit([100, 100, 100, 100, 200], 'advanced'), 162);
+  // A light or empty stretch can always return to the starting volume.
+  assert.equal(loadLimit([60, 60, 60, 60], 'beginner'), 90);
+  assert.equal(loadLimit([0, 0], 'intermediate'), 120);
+});
+
+void test('trimming keeps key sessions first, then the most minutes', () => {
+  const easy = { minutes: 30, intensity: 'easy', role: 'support' } as const;
+  const long = { minutes: 45, intensity: 'moderate', role: 'key' } as const;
+  const tempo = { minutes: 40, intensity: 'hard', role: 'key' } as const;
+  const limits = { maxCount: 5, maxMinutes: 90, maxHard: 2 };
+  assert.deepEqual(keepBest([easy, long, easy, tempo], limits), [1, 3]);
+  assert.deepEqual(keepBest([easy, easy, easy], limits), [0, 1, 2]);
+  assert.deepEqual(keepBest([easy, easy, easy, easy], limits), [0, 1, 2]);
+  assert.deepEqual(keepBest([tempo, tempo, tempo], { ...limits, maxMinutes: 200 }), [0, 1]);
+  assert.deepEqual(keepBest([long, long], { ...limits, maxMinutes: 30 }), []);
 });
 
 void test('a recurring Tuesday meeting moves sessions and every rule still holds', () => {
@@ -197,6 +238,7 @@ void test('property: any draft, spec and calendar yield a plan that passes every
     const spec = validateGoalSpec({
       title: `Seed ${seed}`,
       domain: (['fitness', 'learning', 'creative', 'general'] as const)[pick(0, 3)],
+      level: (['beginner', 'intermediate', 'advanced', 'unknown'] as const)[pick(0, 3)],
       language: 'en',
       startDate: start,
       deadline: addDays(start, pick(0, 150)),
@@ -224,6 +266,7 @@ void test('property: any draft, spec and calendar yield a plan that passes every
         title: `Type ${index}`,
         minutes,
         intensity: (['easy', 'moderate', 'hard'] as const)[pick(0, 2)],
+        role: random() < 0.5 ? 'key' : 'support',
         blocks: [{ minutes, activity: 'Work.' }],
         deliverable: 'Evidence.',
         doneWhen: 'Done.',
@@ -242,7 +285,68 @@ void test('property: any draft, spec and calendar yield a plan that passes every
     const plan = schedulePlan(spec, draft, busy);
     const violations = checkPlan(plan, busy);
     if (violations.length > 0) failures.push(`seed ${seed}: ${JSON.stringify(violations.slice(0, 3))}`);
+    // What was placed also meets every rule the draft check applies.
+    const placed: Draft = { ...draft, weeks: plan.weeks.map((week) => ({ week: week.week, sessions: week.sessions.map((session) => session.typeId) })) };
+    const overLimits = ruleIssues(placed, spec, buildSkeleton(spec, busy));
+    if (overLimits.length > 0) failures.push(`seed ${seed} placed: ${JSON.stringify(overLimits.slice(0, 3))}`);
     assert.deepEqual(schedulePlan(spec, draft, busy), plan, `seed ${seed} is not deterministic`);
   }
   assert.deepEqual(failures, []);
+});
+
+
+void test('a planned lighter week does not block the return to earlier volume', () => {
+  const deload = tenKDraft(11);
+  deload.weeks[8] = { week: 9, sessions: ['easy_run', 'easy_run'] };
+  // Week 10 returns to 110 minutes after a 60-minute week: the average of
+  // weeks 6 to 9 is 92.5, so up to 120 is allowed.
+  const plan = schedulePlan(tenK, deload, []);
+  assert.deepEqual(plan.notes.filter((note) => note.kind === 'dropped'), []);
+  assert.deepEqual(checkPlan(plan, []), []);
+});
+
+void test('a jump after a light stretch is trimmed, keeping the key sessions', () => {
+  const draft = tenKDraft(11);
+  for (let index = 0; index < 11; index += 1) draft.weeks[index] = { week: index + 1, sessions: ['easy_run', 'easy_run'] };
+  // 140 minutes fits week 7's 155-minute ceiling, but after four 60-minute
+  // weeks the load limit is the 90-minute starting volume.
+  draft.weeks[6] = { week: 7, sessions: ['easy_run', 'long_run', 'intervals', 'easy_run'] };
+  const plan = schedulePlan(tenK, draft, []);
+  assert.deepEqual(plan.notes.filter((note) => note.kind === 'dropped'), [
+    { kind: 'dropped', week: 7, typeId: 'easy_run', reason: 'load' },
+    { kind: 'dropped', week: 7, typeId: 'easy_run', reason: 'load' },
+  ]);
+  assert.deepEqual(plan.weeks[6].sessions.map((session) => session.typeId), ['long_run', 'intervals']);
+  assert.deepEqual(checkPlan(plan, []), []);
+});
+
+void test('weeks over their fixed limits are trimmed to their best subset, with a reason each', () => {
+  const draft = tenKDraft(11);
+  draft.weeks[2] = { week: 3, sessions: ['intervals', 'intervals', 'intervals'] };
+  draft.weeks[4] = { week: 5, sessions: ['long_run', 'long_run', 'long_run', 'easy_run'] };
+  const plan = schedulePlan(tenK, draft, []);
+  // Week 5 first drops a long run to fit its 129-minute ceiling, then the
+  // easy run, because weeks 1 to 4 averaged under 70 minutes.
+  assert.deepEqual(plan.notes.filter((note) => note.kind === 'dropped'), [
+    { kind: 'dropped', week: 3, typeId: 'intervals', reason: 'hard_sessions' },
+    { kind: 'dropped', week: 5, typeId: 'long_run', reason: 'week_minutes' },
+    { kind: 'dropped', week: 5, typeId: 'easy_run', reason: 'load' },
+  ]);
+  assert.deepEqual(checkPlan(plan, []), []);
+});
+
+void test('the independent check catches load rules a plan breaks', () => {
+  const learning = validateGoalSpec({ ...tenK, domain: 'learning' });
+  const draft = tenKDraft(11);
+  draft.weeks[1] = { week: 2, sessions: ['intervals', 'intervals', 'intervals'] };
+  draft.weeks[2] = { week: 3, sessions: ['easy_run'] };
+  draft.weeks[3] = { week: 4, sessions: ['easy_run'] };
+  draft.weeks[4] = { week: 5, sessions: ['long_run', 'long_run', 'long_run', 'long_run'] };
+  // Scheduled as a learning goal, nothing limits load; checked as fitness, it breaks the rules.
+  const plan = schedulePlan(learning, draft, []);
+  const rules = checkPlan({ ...plan, spec: tenK }, []).map((violation) => `${violation.rule}:${violation.week ?? ''}`);
+  assert.ok(rules.includes('hard_per_week:2'));
+  assert.ok(rules.includes('week_ceiling:2'));
+  assert.ok(rules.includes('week_ceiling:5'));
+  assert.ok(rules.includes('load_jump:5'));
 });

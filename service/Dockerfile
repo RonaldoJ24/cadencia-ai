@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir uv==0.11.27 \
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-cache
 
-COPY app.py provider.py ./
+COPY app.py provider.py planning.py ./
 RUN chown -R cadencia:cadencia /app
 
 USER cadencia

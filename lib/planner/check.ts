@@ -1,7 +1,10 @@
 // An independent check of a finished plan. It shares no scheduling code:
-// weekdays, windows and overlaps are recomputed here from the raw dates, so a
-// bug in the scheduler cannot hide itself. Tests and the evaluation use it.
+// weekdays, windows, overlaps and fitness load are recomputed here from the
+// raw dates and minutes, so a bug in the scheduler cannot hide itself. Only
+// the policy numbers in FITNESS_LOAD are shared. Tests and the evaluation
+// use it.
 
+import { FITNESS_LOAD } from './load.ts';
 import type { BusyInterval, GoalPlan } from './types.ts';
 
 export type Rule =
@@ -15,7 +18,10 @@ export type Rule =
   | 'blocks_sum'
   | 'rest_spacing'
   | 'week_membership'
-  | 'draft_consistency';
+  | 'draft_consistency'
+  | 'week_ceiling'
+  | 'load_jump'
+  | 'hard_per_week';
 
 export type Violation = { rule: Rule; detail: string; sessionId?: string; week?: number };
 
@@ -95,5 +101,43 @@ export function checkPlan(plan: GoalPlan, busy: BusyInterval[]): Violation[] {
       violations.push({ rule: 'rest_spacing', detail: `hard sessions on consecutive days (${hardDays[index - 1]}, ${hardDays[index]})` });
     }
   }
+  if (spec.domain === 'fitness') violations.push(...fitnessLoad(plan));
+  return violations;
+}
+
+/**
+ * Weekly fitness volume: under a ceiling that starts at the level's volume
+ * and grows at most 10% a week, never more than 30% above the average of the
+ * four weeks before (with the starting volume as a floor), and at most two
+ * hard sessions a week.
+ */
+function fitnessLoad(plan: GoalPlan): Violation[] {
+  const { spec } = plan;
+  const violations: Violation[] = [];
+  const lastWeek = plan.weeks.reduce((last, week) => Math.max(last, week.week), 0);
+  const totals = Array.from({ length: lastWeek }, () => 0);
+  const hard = Array.from({ length: lastWeek }, () => 0);
+  for (const week of plan.weeks) {
+    for (const session of week.sessions) {
+      totals[week.week - 1] += session.minutes;
+      if (session.intensity === 'hard') hard[week.week - 1] += 1;
+    }
+  }
+  const start = FITNESS_LOAD.startMinutes[spec.level];
+  let ceiling = Math.min(spec.weeklyCapMinutes, start);
+  totals.forEach((minutes, index) => {
+    const week = index + 1;
+    if (index > 0) ceiling = Math.min(spec.weeklyCapMinutes, Math.floor((ceiling * FITNESS_LOAD.growthPercent) / 100));
+    if (minutes > ceiling) violations.push({ rule: 'week_ceiling', week, detail: `${minutes} > ${ceiling}` });
+    const recent = totals.slice(Math.max(0, index - FITNESS_LOAD.jumpWeeks), index);
+    if (recent.length > 0) {
+      const sum = recent.reduce((total, value) => total + value, 0);
+      const limit = Math.max(start, Math.floor((sum * FITNESS_LOAD.jumpPercent) / (100 * recent.length)));
+      if (minutes > limit) violations.push({ rule: 'load_jump', week, detail: `${minutes} > ${limit}` });
+    }
+    if (hard[index] > FITNESS_LOAD.maxHardPerWeek) {
+      violations.push({ rule: 'hard_per_week', week, detail: `${hard[index]} hard sessions` });
+    }
+  });
   return violations;
 }

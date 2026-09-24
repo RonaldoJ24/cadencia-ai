@@ -4,7 +4,7 @@
 
 import { isLanguage } from '../i18n.ts';
 import { daysBetween, isLocalDate, isLocalTime, minutesOf, splitDateTime } from './time.ts';
-import type { BusyInterval, Domain, GoalSpec, Weekday } from './types.ts';
+import type { BusyInterval, Domain, GoalSpec, Level, Weekday } from './types.ts';
 
 export const PLAN_LIMITS = {
   maxHorizonDays: 26 * 7,
@@ -28,6 +28,7 @@ export class SpecError extends Error {
 }
 
 const DOMAINS: readonly Domain[] = ['fitness', 'learning', 'creative', 'general'];
+const LEVELS: readonly Level[] = ['beginner', 'intermediate', 'advanced', 'unknown'];
 
 function record(value: unknown, field: string): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -86,6 +87,8 @@ export function validateGoalSpec(raw: unknown): GoalSpec {
     PLAN_LIMITS.minWeeklyCapMinutes,
     PLAN_LIMITS.maxWeeklyCapMinutes,
   );
+  const level = value.level === undefined ? 'unknown' : value.level;
+  if (!LEVELS.includes(level as Level)) throw new SpecError('level', 'level is not supported');
 
   return {
     title: title.trim(),
@@ -96,6 +99,7 @@ export function validateGoalSpec(raw: unknown): GoalSpec {
     days: [...days].sort((a, b) => a - b),
     window: { start: window.start, end: window.end },
     weeklyCapMinutes,
+    level: level as Level,
   };
 }
 
