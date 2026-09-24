@@ -3,6 +3,10 @@
 // day's and month's committed spend plus that reservation stay within the
 // caps in app_settings. The reservation is settled afterwards at the cost of
 // the reported token usage. Amounts are integers in millionths of a dollar.
+//
+// A goal run's reservation is a real upper bound: the service caps every
+// prompt in bytes and the model's output in tokens. The older routine
+// reservation bounds its input by an estimate.
 
 import type { Db } from './db.ts';
 import { secondsUntilUtcMidnight } from './public_limits.ts';
@@ -21,6 +25,20 @@ export const RATE_CARD = {
 /** Bounds of one live generation, from service/provider.py. */
 export const WORST_CASE = { attempts: 2, inputTokens: 3_000, outputTokens: 4_000 } as const;
 
+/**
+ * Bounds of one goal run, mirrored from service/planning.py and provider.py
+ * (a test checks they match): one read-goal call and up to two draft calls,
+ * each with up to two provider attempts. Byte-level BPE gives at most one
+ * token per prompt byte; `templateTokens` covers the chat template.
+ */
+export const GOAL_BOUNDS = {
+  attempts: 2,
+  templateTokens: 64,
+  draftCalls: 2,
+  read: { promptBytes: 24_576, outputTokens: 800 },
+  draft: { promptBytes: 24_576, outputTokens: 4_000 },
+} as const;
+
 export function costMicroUsd(promptTokens: number, completionTokens: number): number {
   return Math.ceil(
     promptTokens * RATE_CARD.inputUsdPerMillion + completionTokens * RATE_CARD.outputUsdPerMillion,
@@ -29,6 +47,17 @@ export function costMicroUsd(promptTokens: number, completionTokens: number): nu
 
 export const WORST_CASE_ATTEMPT_MICROUSD = costMicroUsd(WORST_CASE.inputTokens, WORST_CASE.outputTokens);
 export const WORST_CASE_MICROUSD = WORST_CASE.attempts * WORST_CASE_ATTEMPT_MICROUSD;
+
+export const GOAL_READ_ATTEMPT_MICROUSD = costMicroUsd(
+  GOAL_BOUNDS.read.promptBytes + GOAL_BOUNDS.templateTokens,
+  GOAL_BOUNDS.read.outputTokens,
+);
+export const GOAL_DRAFT_ATTEMPT_MICROUSD = costMicroUsd(
+  GOAL_BOUNDS.draft.promptBytes + GOAL_BOUNDS.templateTokens,
+  GOAL_BOUNDS.draft.outputTokens,
+);
+export const GOAL_WORST_CASE_MICROUSD = GOAL_BOUNDS.attempts *
+  (GOAL_READ_ATTEMPT_MICROUSD + GOAL_BOUNDS.draftCalls * GOAL_DRAFT_ATTEMPT_MICROUSD);
 
 export type SpendState = {
   liveEnabled: boolean;
@@ -151,6 +180,46 @@ export async function settleSpend(db: Db, args: { id: string; nowIso: string; us
        WHERE id = ? AND status = 'reserved'`,
     )
     .bind(actual, promptTokens, completionTokens, attempts, model ?? null, requestId ?? null, args.nowIso, args.id)
+    .run();
+  return actual;
+}
+
+/** One service call in a run: its reported usage, if any, and its worst attempt. */
+export type CallSpend = { usage?: SpendUsage; worstAttemptMicroUsd: number };
+
+/**
+ * Usage covers the last attempt, so earlier attempts are charged at their
+ * worst case; a call whose usage never arrived is charged in full. A call the
+ * scope guard answered reports zero attempts and costs nothing.
+ */
+export function callCostMicroUsd(call: CallSpend): number {
+  if (!call.usage) return GOAL_BOUNDS.attempts * call.worstAttemptMicroUsd;
+  return costMicroUsd(call.usage.promptTokens, call.usage.completionTokens) +
+    Math.max(0, call.usage.attempts - 1) * call.worstAttemptMicroUsd;
+}
+
+/** Settles a multi-call reservation at the sum of its calls' costs. */
+export async function settleSpendCalls(db: Db, args: { id: string; nowIso: string; calls: CallSpend[] }): Promise<number> {
+  const actual = args.calls.reduce((total, call) => total + callCostMicroUsd(call), 0);
+  const known = args.calls.flatMap((call) => (call.usage ? [call.usage] : []));
+  const sum = (pick: (usage: SpendUsage) => number) => known.reduce((total, usage) => total + pick(usage), 0);
+  await db
+    .prepare(
+      `UPDATE spend_ledger
+       SET status = 'settled', actual_microusd = ?, prompt_tokens = ?, completion_tokens = ?,
+           attempts = ?, model = ?, request_id = ?, settled_at = ?
+       WHERE id = ? AND status = 'reserved'`,
+    )
+    .bind(
+      actual,
+      sum((usage) => usage.promptTokens),
+      sum((usage) => usage.completionTokens),
+      sum((usage) => usage.attempts),
+      known.find((usage) => usage.model)?.model ?? null,
+      known.findLast((usage) => usage.requestId)?.requestId ?? null,
+      args.nowIso,
+      args.id,
+    )
     .run();
   return actual;
 }
