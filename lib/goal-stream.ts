@@ -190,6 +190,7 @@ function fitCounts(plan: GoalPlan) {
   };
 }
 
+/** A service call that failed, such as a timeout, a refusal or a bad answer. */
 function callFailure(stage: StageId, message: string) {
   return (error: unknown) =>
     new StageFailure(stage, reasonOf(error), message, {
@@ -281,7 +282,7 @@ export async function runGoalPipeline(rawInput: unknown, deps: GoalPipelineDeps)
               );
         return { value: { reading, scopeRefused: result.scopeRefused }, detail, ...(result.scopeRefused ? { actor: 'code' as const } : {}) };
       },
-      callFailure('read_goal', copy.failure.reading),
+      callFailure('read_goal', copyFor(language).api.providerError),
     );
 
     const { reading } = read;
@@ -351,7 +352,7 @@ export async function runGoalPipeline(rawInput: unknown, deps: GoalPipelineDeps)
             detail: copy.draft(lengthOf(result.draft, 'phases'), lengthOf(result.draft, 'sessionTypes'), sessionCount(result.draft)),
           };
         },
-        callFailure('draft', copy.failure.draftTwice),
+        callFailure('draft', copyFor(language).api.providerError),
         attempt,
       );
       const checked = await runStage<DraftValidation>(

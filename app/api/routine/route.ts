@@ -204,14 +204,13 @@ async function jsonResponse(run: Run, keepAlive: KeepAlive): Promise<Response> {
     return json(body, 200, requestId);
   } catch (error) {
     if (!(error instanceof StageFailure)) throw error;
-    const { status = 500, retryAfterSec, requestId, diagnostic } = error.options;
-    return errorResponse(
-      error.publicMessage,
+    // Logged like a streamed failure, with the stage that failed.
+    const reference = logFailure(error);
+    const { status = 500, retryAfterSec, requestId } = error.options;
+    return json(
+      { error: error.publicMessage, reference },
       status,
-      error.code,
       requestId,
-      diagnostic,
-      EVENT,
       retryAfterSec ? { 'retry-after': String(retryAfterSec) } : undefined,
     );
   }
