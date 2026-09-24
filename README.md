@@ -164,9 +164,9 @@ Cloud platform access logs are separate and need their own retention/access poli
   literary or fiction wrapper. This is not comprehensive moderation.
 - The Python bearer token authenticates the frontend server, not visitors. The
   only API route is the exact path `/api/routine`: the demo plus live generation
-  limited per visitor and globally in D1 (see [DEPLOYMENT.md](DEPLOYMENT.md)).
-  The limits count requests, not money. Cloudflare Access keeps every other
-  `/api/*` path private.
+  limited per visitor and globally in D1, with daily and monthly dollar caps and
+  a kill switch that needs no deploy (see [DEPLOYMENT.md](DEPLOYMENT.md)).
+  Cloudflare Access keeps every other `/api/*` path private.
 - One Monday-to-Sunday window, one session per selected day, and local floating
   calendar times. Calendar links, ICS, and shared text are one-time copies.
 - Plans are not saved on the server. There are no accounts, reminders, connected
