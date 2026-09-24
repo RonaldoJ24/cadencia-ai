@@ -9,7 +9,10 @@ export type LocalDate = string;
 export type LocalTime = string;
 
 export type Domain = 'fitness' | 'learning' | 'creative' | 'general';
+export type Level = 'beginner' | 'intermediate' | 'advanced' | 'unknown';
 export type Intensity = 'easy' | 'moderate' | 'hard';
+/** Key sessions carry the goal; support sessions are dropped first when a week is too full. */
+export type Role = 'key' | 'support';
 
 /** A same-day window, start before end. */
 export type TimeWindow = { start: LocalTime; end: LocalTime };
@@ -29,6 +32,8 @@ export type GoalSpec = {
   window: TimeWindow;
   /** Upper bound on scheduled minutes in each calendar week. */
   weeklyCapMinutes: number;
+  /** Starting fitness level; sets the first week's volume for fitness plans. */
+  level: Level;
 };
 
 /** A time the person is not available, local wall-clock, end exclusive. */
@@ -41,6 +46,7 @@ export type SessionType = {
   title: string;
   minutes: number;
   intensity: Intensity;
+  role: Role;
   blocks: Block[];
   deliverable: string;
   doneWhen: string;
@@ -81,7 +87,7 @@ export type PlanWeek = {
 };
 
 export type MoveReason = 'busy' | 'rest_spacing' | 'day_taken';
-export type DropReason = 'no_free_slot' | 'weekly_cap';
+export type DropReason = 'no_free_slot' | 'weekly_cap' | 'week_minutes' | 'hard_sessions' | 'load';
 
 export type ScheduleNote =
   | {
@@ -113,6 +119,8 @@ export type Skeleton = {
     /** Allowed days with a free stretch long enough for the shortest session. */
     freeDays: number;
     maxSessions: number;
+    /** Most minutes this week may hold: the weekly cap, or a gentler ramp for fitness. */
+    maxMinutes: number;
   }>;
   weeklyCapMinutes: number;
   /** Allowed session lengths: every multiple of 5 from min to max. */

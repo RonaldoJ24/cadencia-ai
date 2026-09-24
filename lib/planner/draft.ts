@@ -1,9 +1,10 @@
-// Checks a proposed draft against the skeleton code offered: every rule the
-// schedule depends on is verified here, and every problem is reported so a
-// retry can say exactly what to fix.
+// Checks a proposed draft against the skeleton code offered. Structural
+// problems are reported so a retry can say exactly what to fix; weeks over
+// their numeric limits are reported too, and the scheduler trims them.
 
+import { FITNESS_LOAD } from './load.ts';
 import { hasControl } from './spec.ts';
-import type { Draft, DraftPhase, GoalSpec, Intensity, SessionType, Skeleton } from './types.ts';
+import type { Draft, DraftPhase, GoalSpec, Intensity, Role, SessionType, Skeleton } from './types.ts';
 
 export type DraftIssue = { code: string; path: string; message: string };
 
@@ -13,17 +14,14 @@ export const DRAFT_LIMITS = {
   maxBlocks: 8,
   maxTitleChars: 80,
   maxTextChars: 300,
-  maxHardPerWeek: 2,
   maxIssues: 20,
+  /** One session a day at most, so no week can use more than seven. */
+  maxSessionsPerWeek: 7,
 } as const;
 
 const TYPE_ID = /^[a-z][a-z0-9_]{1,31}$/u;
 const INTENSITIES: readonly Intensity[] = ['easy', 'moderate', 'hard'];
-
-/** Fitness volume may grow by at most 10% or 10 minutes, whichever is larger. */
-export function allowedNextWeekMinutes(previous: number): number {
-  return Math.max(Math.ceil(previous * 1.1), previous + 10);
-}
+const ROLES: readonly Role[] = ['key', 'support'];
 
 export function draftWeekMinutes(draft: Draft): number[] {
   const minutes = new Map(draft.sessionTypes.map((type) => [type.id, type.minutes]));
@@ -40,7 +38,13 @@ function plainText(value: unknown, max: number): value is string {
   return typeof value === 'string' && value.trim().length > 0 && value.length <= max && !hasControl(value);
 }
 
-export type DraftValidation = { ok: true; draft: Draft } | { ok: false; issues: DraftIssue[] };
+/**
+ * A structurally valid draft can be scheduled; `overLimits` lists the weeks
+ * the scheduler will trim. Structural problems leave nothing to schedule.
+ */
+export type DraftValidation =
+  | { ok: true; draft: Draft; overLimits: DraftIssue[] }
+  | { ok: false; issues: DraftIssue[] };
 
 export function validateDraft(raw: unknown, spec: GoalSpec, skeleton: Skeleton): DraftValidation {
   const issues: DraftIssue[] = [];
@@ -116,6 +120,10 @@ export function validateDraft(raw: unknown, spec: GoalSpec, skeleton: Skeleton):
         add('intensity', `${path}.intensity`, 'intensity must be easy, moderate or hard');
         return;
       }
+      if (!ROLES.includes(type.role as Role)) {
+        add('role', `${path}.role`, 'role must be key or support');
+        return;
+      }
       if (
         !plainText(type.title, DRAFT_LIMITS.maxTitleChars) ||
         !plainText(type.deliverable, DRAFT_LIMITS.maxTextChars) ||
@@ -150,6 +158,7 @@ export function validateDraft(raw: unknown, spec: GoalSpec, skeleton: Skeleton):
         title: type.title as string,
         minutes,
         intensity: type.intensity as Intensity,
+        role: type.role as Role,
         blocks: blocks.map((block) => ({ minutes: block?.minutes as number, activity: block?.activity as string })),
         deliverable: type.deliverable as string,
         doneWhen: type.doneWhen as string,
@@ -157,7 +166,6 @@ export function validateDraft(raw: unknown, spec: GoalSpec, skeleton: Skeleton):
     });
   }
 
-  const typeById = new Map(types.map((type) => [type.id, type]));
   const weeks: Draft['weeks'] = [];
   if (!Array.isArray(value.weeks) || value.weeks.length !== weekCount) {
     add('weeks', 'weeks', `weeks must list exactly ${weekCount} weeks`);
@@ -165,28 +173,19 @@ export function validateDraft(raw: unknown, spec: GoalSpec, skeleton: Skeleton):
     value.weeks.forEach((item, index) => {
       const week = record(item);
       const path = `weeks[${index}]`;
-      const room = skeleton.weeks[index];
       if (!week || week.week !== index + 1 || !Array.isArray(week.sessions)) {
         add('week', path, `weeks[${index}] must be week ${index + 1} with a sessions list`);
         return;
       }
-      const sessions = week.sessions;
-      if (sessions.some((id) => typeof id !== 'string' || !declared.has(id))) {
+      if (week.sessions.length > DRAFT_LIMITS.maxSessionsPerWeek) {
+        add('week_length', `${path}.sessions`, `a week lists at most ${DRAFT_LIMITS.maxSessionsPerWeek} sessions, one a day`);
+        return;
+      }
+      if (week.sessions.some((id) => typeof id !== 'string' || !declared.has(id))) {
         add('week_session', `${path}.sessions`, 'sessions must use ids from sessionTypes');
         return;
       }
-      if (sessions.length > room.maxSessions) {
-        add('week_count', `${path}.sessions`, `week ${index + 1} has room for at most ${room.maxSessions} sessions`);
-      }
-      const minutes = (sessions as string[]).reduce((total, id) => total + (typeById.get(id)?.minutes ?? 0), 0);
-      if (minutes > spec.weeklyCapMinutes) {
-        add('week_cap', `${path}.sessions`, `week ${index + 1} totals ${minutes} minutes; the cap is ${spec.weeklyCapMinutes}`);
-      }
-      const hard = (sessions as string[]).filter((id) => typeById.get(id)?.intensity === 'hard').length;
-      if (spec.domain === 'fitness' && hard > DRAFT_LIMITS.maxHardPerWeek) {
-        add('hard_sessions', `${path}.sessions`, `week ${index + 1} has ${hard} hard sessions; at most ${DRAFT_LIMITS.maxHardPerWeek}`);
-      }
-      weeks.push({ week: index + 1, sessions: [...(sessions as string[])] });
+      weeks.push({ week: index + 1, sessions: [...(week.sessions as string[])] });
     });
   }
 
@@ -194,23 +193,37 @@ export function validateDraft(raw: unknown, spec: GoalSpec, skeleton: Skeleton):
     add('template', 'templateId', 'templateId must be a template id or null');
   }
 
+  if (issues.length > 0) return { ok: false, issues };
   const draft: Draft = {
     phases,
     sessionTypes: types,
     weeks,
     templateId: typeof value.templateId === 'string' ? value.templateId : null,
   };
-  if (spec.domain === 'fitness' && issues.length === 0) {
-    const totals = draftWeekMinutes(draft);
-    for (let index = 1; index < totals.length; index += 1) {
-      if (totals[index - 1] > 0 && totals[index] > allowedNextWeekMinutes(totals[index - 1])) {
-        add(
-          'progression',
-          `weeks[${index}]`,
-          `week ${index + 1} jumps from ${totals[index - 1]} to ${totals[index]} minutes; at most ${allowedNextWeekMinutes(totals[index - 1])}`,
-        );
-      }
+  return { ok: true, draft, overLimits: ruleIssues(draft, spec, skeleton) };
+}
+
+/** Weeks that ask for more than their room, ceiling, cap or hard-session limit. */
+export function ruleIssues(draft: Draft, spec: GoalSpec, skeleton: Skeleton): DraftIssue[] {
+  const issues: DraftIssue[] = [];
+  const typeById = new Map(draft.sessionTypes.map((type) => [type.id, type]));
+  const totals = draftWeekMinutes(draft);
+  draft.weeks.forEach((week, index) => {
+    const path = `weeks[${index}].sessions`;
+    const room = skeleton.weeks[index];
+    if (week.sessions.length > room.maxSessions) {
+      issues.push({ code: 'week_count', path, message: `week ${index + 1} has room for at most ${room.maxSessions} sessions` });
     }
-  }
-  return issues.length === 0 ? { ok: true, draft } : { ok: false, issues };
+    if (totals[index] > spec.weeklyCapMinutes) {
+      issues.push({ code: 'week_cap', path, message: `week ${index + 1} totals ${totals[index]} minutes; the cap is ${spec.weeklyCapMinutes}` });
+    } else if (totals[index] > room.maxMinutes) {
+      issues.push({ code: 'week_minutes', path, message: `week ${index + 1} totals ${totals[index]} minutes; at most ${room.maxMinutes} this week` });
+    }
+    if (spec.domain !== 'fitness') return;
+    const hard = week.sessions.filter((id) => typeById.get(id)?.intensity === 'hard').length;
+    if (hard > FITNESS_LOAD.maxHardPerWeek) {
+      issues.push({ code: 'hard_sessions', path, message: `week ${index + 1} has ${hard} hard sessions; at most ${FITNESS_LOAD.maxHardPerWeek}` });
+    }
+  });
+  return issues.slice(0, DRAFT_LIMITS.maxIssues);
 }

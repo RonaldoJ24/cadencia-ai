@@ -1,13 +1,17 @@
-// Places a draft on the calendar. Each week's sessions are spread evenly over
-// its allowed days and start at the beginning of the window; when that slot
-// is taken, the session moves to the next day that fits and a note records
-// why. A session with nowhere to go is dropped with a reason, never forced.
+// Places a draft on the calendar. A week over its limits is first trimmed to
+// the best-fitting subset of its sessions, key sessions first. The rest are
+// spread evenly over the allowed days and start at the beginning of the
+// window; when that slot is taken, the session moves to the next day that
+// fits and a note records why. A session with nowhere to go is dropped with a
+// reason, never forced.
 
 import { busyOn, earliestFit, planWeeks } from './availability.ts';
+import { FITNESS_LOAD, keepBest, loadLimit, weeklyCeilings, type WeekLimits } from './load.ts';
 import { addDays, dateTime, minutesOf, timeOf } from './time.ts';
 import type {
   BusyInterval,
   Draft,
+  DropReason,
   GoalPlan,
   GoalSpec,
   LocalDate,
@@ -31,32 +35,56 @@ function conflictOn(date: LocalDate, spec: GoalSpec, busy: BusyInterval[]): Busy
   return first ? { start: dateTime(date, first[0]), end: dateTime(date, Math.min(first[1], 1_439)) } : undefined;
 }
 
+/** Which fixed limit a week breaks first: its days, hard sessions, cap or ceiling. */
+function trimReason(types: SessionType[], limits: WeekLimits, spec: GoalSpec): DropReason {
+  const minutes = types.reduce((total, type) => total + type.minutes, 0);
+  if (types.length > limits.maxCount) return 'no_free_slot';
+  if (types.filter((type) => type.intensity === 'hard').length > limits.maxHard) return 'hard_sessions';
+  return minutes > spec.weeklyCapMinutes ? 'weekly_cap' : 'week_minutes';
+}
+
+/** Keeps the best-fitting subset and notes every session it leaves out. */
+function trim(types: SessionType[], limits: WeekLimits, reason: () => DropReason, week: number, notes: ScheduleNote[]) {
+  const keep = keepBest(types, limits);
+  if (keep.length === types.length) return types;
+  const why = reason();
+  types.forEach((type, position) => {
+    if (!keep.includes(position)) notes.push({ kind: 'dropped', week, typeId: type.id, reason: why });
+  });
+  return keep.map((position) => types[position]);
+}
+
 export function schedulePlan(spec: GoalSpec, draft: Draft, busy: BusyInterval[]): GoalPlan {
   const typeById = new Map(draft.sessionTypes.map((type) => [type.id, type]));
   const windowStart = minutesOf(spec.window.start);
+  const fitness = spec.domain === 'fitness';
+  const calendar = planWeeks(spec);
+  const ceilings = weeklyCeilings(spec, calendar.length);
+  const placedMinutes: number[] = [];
   const hardDates = new Set<LocalDate>();
   const notes: ScheduleNote[] = [];
   const weeks: PlanWeek[] = [];
 
-  for (const calendarWeek of planWeeks(spec)) {
+  for (const [weekIndex, calendarWeek] of calendar.entries()) {
     const week = calendarWeek.week;
-    const requested = draft.weeks.find((entry) => entry.week === week)?.sessions ?? [];
-
-    // The weekly cap is enforced here too, not only in the draft check.
-    const wanted: SessionType[] = [];
-    let minutes = 0;
-    for (const typeId of requested) {
-      const type = typeById.get(typeId);
-      if (!type) continue;
-      if (minutes + type.minutes > spec.weeklyCapMinutes) {
-        notes.push({ kind: 'dropped', week, typeId, reason: 'weekly_cap' });
-        continue;
-      }
-      minutes += type.minutes;
-      wanted.push(type);
-    }
-
     const dates = calendarWeek.dates;
+    const requested = (draft.weeks.find((entry) => entry.week === week)?.sessions ?? [])
+      .map((typeId) => typeById.get(typeId))
+      .filter((type): type is SessionType => type !== undefined);
+
+    // Every weekly limit is enforced here, not only in the draft check: first
+    // the fixed ones, then the load rule, which depends on the weeks before.
+    const fixed: WeekLimits = {
+      maxCount: dates.length,
+      maxMinutes: Math.min(spec.weeklyCapMinutes, ceilings[weekIndex]),
+      maxHard: fitness ? FITNESS_LOAD.maxHardPerWeek : Number.POSITIVE_INFINITY,
+    };
+    const withinFixed = trim(requested, fixed, () => trimReason(requested, fixed, spec), week, notes);
+    const load = fitness ? loadLimit(placedMinutes, spec.level) : null;
+    const wanted = load === null
+      ? withinFixed
+      : trim(withinFixed, { ...fixed, maxMinutes: Math.min(fixed.maxMinutes, load) }, () => 'load', week, notes);
+
     const taken = new Set<LocalDate>();
     const sessions: PlannedSession[] = [];
     wanted.forEach((type, index) => {
@@ -123,6 +151,7 @@ export function schedulePlan(spec: GoalSpec, draft: Draft, busy: BusyInterval[])
     });
 
     sessions.sort((a, b) => a.date.localeCompare(b.date));
+    placedMinutes.push(sessions.reduce((total, session) => total + session.minutes, 0));
     weeks.push({ week, start: calendarWeek.start, end: calendarWeek.end, sessions });
   }
 

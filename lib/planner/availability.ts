@@ -1,6 +1,7 @@
 // Which days and minutes the person can actually use: allowed weekdays inside
 // the date range, inside the daily window, minus busy times.
 
+import { weeklyCeilings } from './load.ts';
 import { PLAN_LIMITS } from './spec.ts';
 import { addDays, daysBetween, minutesOf, mondayOf, splitDateTime, weekdayOf } from './time.ts';
 import type { BusyInterval, GoalSpec, LocalDate, Skeleton } from './types.ts';
@@ -76,15 +77,18 @@ export function buildSkeleton(spec: GoalSpec, busy: BusyInterval[]): Skeleton {
   const longest = Math.min(PLAN_LIMITS.maxSessionMinutes, windowMinutes, spec.weeklyCapMinutes);
   const max = Math.max(PLAN_LIMITS.minSessionMinutes, longest - (longest % 5));
   const min = PLAN_LIMITS.minSessionMinutes;
+  const weeks = planWeeks(spec);
+  const ceilings = weeklyCeilings(spec, weeks.length);
   return {
-    weeks: planWeeks(spec).map((week) => {
+    weeks: weeks.map((week, index) => {
       const freeDays = week.dates.filter((date) => earliestFit(date, min, spec, busy) !== null).length;
       return {
         week: week.week,
         start: week.start,
         usableDays: week.dates.length,
         freeDays,
-        maxSessions: Math.min(freeDays, Math.floor(spec.weeklyCapMinutes / min)),
+        maxSessions: Math.min(freeDays, Math.floor(ceilings[index] / min)),
+        maxMinutes: ceilings[index],
       };
     }),
     weeklyCapMinutes: spec.weeklyCapMinutes,
