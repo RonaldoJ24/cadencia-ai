@@ -35,23 +35,52 @@ export function planWeeks(spec: GoalSpec): CalendarWeek[] {
   });
 }
 
-/** The part of a busy interval that falls on one date, in minutes of the day. */
-export function busyOn(date: LocalDate, interval: BusyInterval): Range | null {
-  const start = splitDateTime(interval.start);
-  const end = splitDateTime(interval.end);
-  if (!start || !end) return null;
-  if (date < start.date || date > end.date) return null;
-  const from = date === start.date ? start.minutes : 0;
-  const to = date === end.date ? end.minutes : 1_440;
-  return to > from ? [from, to] : null;
+/** Busy minutes of the day for each date, sorted and merged. */
+export type BusyIndex = Map<LocalDate, Range[]>;
+
+const indexes = new WeakMap<readonly BusyInterval[], BusyIndex>();
+
+/**
+ * Busy times by date, built the first time a list is used and kept with that
+ * list, so scheduling never scans every busy time for every date. Each
+ * interval is parsed once and split at midnight. Lists are not changed once
+ * planning starts, and requests clip them to the plan's dates first.
+ */
+export function busyIndex(busy: readonly BusyInterval[]): BusyIndex {
+  const cached = indexes.get(busy);
+  if (cached) return cached;
+  const days = new Map<LocalDate, Range[]>();
+  for (const interval of busy) {
+    const start = splitDateTime(interval.start);
+    const end = splitDateTime(interval.end);
+    if (!start || !end) continue;
+    for (let date = start.date; date <= end.date; date = addDays(date, 1)) {
+      const from = date === start.date ? start.minutes : 0;
+      const to = date === end.date ? end.minutes : 1_440;
+      if (to <= from) continue;
+      const ranges = days.get(date);
+      if (ranges) ranges.push([from, to]);
+      else days.set(date, [[from, to]]);
+    }
+  }
+  const index: BusyIndex = new Map();
+  for (const [date, ranges] of days) {
+    const merged: Range[] = [];
+    for (const [from, to] of ranges.sort((a, b) => a[0] - b[0])) {
+      const last = merged[merged.length - 1];
+      if (last && from <= last[1]) last[1] = Math.max(last[1], to);
+      else merged.push([from, to]);
+    }
+    index.set(date, merged);
+  }
+  indexes.set(busy, index);
+  return index;
 }
 
 /** Free minute ranges in the window on a date, after removing busy times. */
-export function freeRanges(date: LocalDate, spec: GoalSpec, busy: BusyInterval[]): Range[] {
+export function freeRanges(date: LocalDate, spec: GoalSpec, busy: readonly BusyInterval[]): Range[] {
   let free: Range[] = [[minutesOf(spec.window.start), minutesOf(spec.window.end)]];
-  for (const interval of busy) {
-    const blocked = busyOn(date, interval);
-    if (!blocked) continue;
+  for (const blocked of busyIndex(busy).get(date) ?? []) {
     free = free.flatMap(([start, end]): Range[] => {
       if (blocked[1] <= start || blocked[0] >= end) return [[start, end]];
       const pieces: Range[] = [];
@@ -64,7 +93,7 @@ export function freeRanges(date: LocalDate, spec: GoalSpec, busy: BusyInterval[]
 }
 
 /** The earliest start in a date's free ranges that fits `minutes`, if any. */
-export function earliestFit(date: LocalDate, minutes: number, spec: GoalSpec, busy: BusyInterval[]): number | null {
+export function earliestFit(date: LocalDate, minutes: number, spec: GoalSpec, busy: readonly BusyInterval[]): number | null {
   for (const [start, end] of freeRanges(date, spec, busy)) {
     if (end - start >= minutes) return start;
   }
@@ -72,7 +101,7 @@ export function earliestFit(date: LocalDate, minutes: number, spec: GoalSpec, bu
 }
 
 /** The room each week really has, offered to the model before it drafts. */
-export function buildSkeleton(spec: GoalSpec, busy: BusyInterval[]): Skeleton {
+export function buildSkeleton(spec: GoalSpec, busy: readonly BusyInterval[]): Skeleton {
   const windowMinutes = minutesOf(spec.window.end) - minutesOf(spec.window.start);
   const longest = Math.min(
     PLAN_LIMITS.maxSessionMinutes,

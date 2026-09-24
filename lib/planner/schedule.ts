@@ -5,7 +5,7 @@
 // fits and a note records why. A session with nowhere to go is dropped with a
 // reason, never forced.
 
-import { busyOn, earliestFit, planWeeks } from './availability.ts';
+import { busyIndex, earliestFit, planWeeks } from './availability.ts';
 import { FITNESS_LOAD, keepBest, loadLimit, weeklyCeilings, type WeekLimits } from './load.ts';
 import { addDays, dateTime, minutesOf, timeOf } from './time.ts';
 import type {
@@ -22,16 +22,11 @@ import type {
   SessionType,
 } from './types.ts';
 
-/** The busy time that overlaps the window on a date, clipped to that date. */
-function conflictOn(date: LocalDate, spec: GoalSpec, busy: BusyInterval[]): BusyInterval | undefined {
+/** The first busy time that overlaps the window on a date, clipped to that date. */
+function conflictOn(date: LocalDate, spec: GoalSpec, busy: readonly BusyInterval[]): BusyInterval | undefined {
   const windowStart = minutesOf(spec.window.start);
   const windowEnd = minutesOf(spec.window.end);
-  let first: [number, number] | null = null;
-  for (const interval of busy) {
-    const range = busyOn(date, interval);
-    if (!range || range[1] <= windowStart || range[0] >= windowEnd) continue;
-    if (!first || range[0] < first[0]) first = range;
-  }
+  const first = busyIndex(busy).get(date)?.find(([from, to]) => to > windowStart && from < windowEnd);
   return first ? { start: dateTime(date, first[0]), end: dateTime(date, Math.min(first[1], 1_439)) } : undefined;
 }
 
@@ -54,7 +49,7 @@ function trim(types: SessionType[], limits: WeekLimits, reason: () => DropReason
   return keep.map((position) => types[position]);
 }
 
-export function schedulePlan(spec: GoalSpec, draft: Draft, busy: BusyInterval[]): GoalPlan {
+export function schedulePlan(spec: GoalSpec, draft: Draft, busy: readonly BusyInterval[]): GoalPlan {
   const typeById = new Map(draft.sessionTypes.map((type) => [type.id, type]));
   const windowStart = minutesOf(spec.window.start);
   const fitness = spec.domain === 'fitness';
