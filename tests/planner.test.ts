@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildSkeleton, freeRanges, planWeeks } from '../lib/planner/availability.ts';
+import { buildSkeleton, busyIndex, freeRanges, planWeeks } from '../lib/planner/availability.ts';
 import { checkPlan } from '../lib/planner/check.ts';
 import { ruleIssues, validateDraft } from '../lib/planner/draft.ts';
 import { keepBest, loadLimit } from '../lib/planner/load.ts';
@@ -367,4 +367,44 @@ void test('the independent check catches load rules a plan breaks', () => {
   assert.ok(rules.includes('week_ceiling:2'));
   assert.ok(rules.includes('week_ceiling:5'));
   assert.ok(rules.includes('load_jump:5'));
+});
+
+void test('busy times are indexed by date once per list: split at midnight, sorted and merged', () => {
+  const busy: BusyInterval[] = [
+    { start: '2026-10-02T09:30', end: '2026-10-02T11:00' },
+    { start: '2026-10-01T22:00', end: '2026-10-03T01:00' },
+    { start: '2026-10-04T08:00', end: '2026-10-04T09:45' },
+    { start: '2026-10-04T07:00', end: '2026-10-04T08:00' },
+    { start: '2026-10-04T12:00', end: '2026-10-04T13:00' },
+  ];
+  const index = busyIndex(busy);
+  assert.deepEqual(Object.fromEntries(index), {
+    '2026-10-01': [[1320, 1440]],
+    '2026-10-02': [[0, 1440]],
+    '2026-10-03': [[0, 60]],
+    '2026-10-04': [[420, 585], [720, 780]],
+  });
+  assert.equal(busyIndex(busy), index, 'the index is kept with its list');
+});
+
+void test('scheduling reads each busy time once, however many there are', () => {
+  // 2,000 busy times over 26 weeks, some inside the plan's morning window.
+  const busy: BusyInterval[] = Array.from({ length: 2_000 }, (_, index) => {
+    const date = addDays('2026-09-24', index % 182);
+    const hour = 6 + 2 * Math.floor(index / 182);
+    return { start: `${date}T${String(hour).padStart(2, '0')}:00`, end: `${date}T${String(hour).padStart(2, '0')}:40` };
+  });
+  let reads = 0;
+  const watched = new Proxy(busy, {
+    get(target, key, receiver) {
+      if (typeof key === 'string' && /^\d+$/u.test(key)) reads += 1;
+      return Reflect.get(target, key, receiver) as unknown;
+    },
+  });
+  buildSkeleton(tenK, watched);
+  const plan = schedulePlan(tenK, tenKDraft(11), watched);
+  assert.equal(reads, busy.length);
+  // The independent check still reads the plain list and finds no overlap.
+  assert.deepEqual(checkPlan(plan, busy), []);
+  assert.ok(plan.notes.some((note) => note.kind === 'moved' && note.reason === 'busy'));
 });
