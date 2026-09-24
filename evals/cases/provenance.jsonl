@@ -1,0 +1,148 @@
+{"id": "c001", "origin": "post", "platform": "forum", "community": "Mumsnet", "source_language": "en", "read": "full", "segment": "event", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c002", "origin": "constructed", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c003", "origin": "constructed", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c004", "origin": "constructed", "segment": "event", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c005", "origin": "constructed", "segment": "parent", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c006", "origin": "constructed", "segment": "student", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c007", "origin": "post", "platform": "forum", "community": "Foroatletismo, Entrenamiento", "source_language": "es", "read": "full", "segment": "parent", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c008", "origin": "composite", "segment": "returning", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c009", "origin": "constructed", "segment": "busy_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c010", "origin": "post", "platform": "forum", "source_language": "en", "read": "full", "segment": "parent", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c011", "origin": "constructed", "segment": "returning", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c012", "origin": "constructed", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c013", "origin": "composite", "segment": "event", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c015", "origin": "post", "platform": "forum", "community": "Slowtwitch forum", "source_language": "en", "read": "full", "segment": "parent", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c016", "origin": "post", "platform": "forum", "community": "Foroatletismo, Entrenamiento", "source_language": "es", "read": "full", "segment": "shift_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c017", "origin": "constructed", "segment": "career_switcher", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c018", "origin": "composite", "source_language": "es", "segment": "busy_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c019", "origin": "post", "platform": "forum", "community": "Mumsnet", "source_language": "en", "read": "full", "segment": "event", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c020", "origin": "post", "platform": "forum", "source_language": "en", "read": "full", "segment": "busy_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c021", "origin": "post", "platform": "forum", "source_language": "en", "read": "full", "segment": "busy_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c022", "origin": "constructed", "segment": "busy_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c023", "origin": "post", "platform": "forum", "community": "Foroatletismo, Entrenamiento", "source_language": "es", "read": "full", "segment": "busy_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c024", "origin": "post", "platform": "forum", "community": "Hispagimnasios, Musculación y nutrición", "source_language": "es", "read": "full", "segment": "career_switcher", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c025", "origin": "constructed", "segment": "busy_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c026", "origin": "post", "platform": "forum", "source_language": "en", "read": "full", "segment": "student", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c027", "origin": "post", "platform": "forum", "community": "hispasonic", "source_language": "es", "read": "full", "segment": "busy_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c028", "origin": "constructed", "segment": "career_switcher", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c029", "origin": "post", "platform": "forum", "source_language": "en", "read": "full", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c030", "origin": "post", "platform": "forum", "community": "Mumsnet", "source_language": "en", "read": "full", "segment": "parent", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c031", "origin": "post", "platform": "forum", "community": "Singletrack forum", "source_language": "en", "read": "full", "segment": "career_switcher", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c032", "origin": "constructed", "segment": "busy_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c033", "origin": "composite", "segment": "parent", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c034", "origin": "constructed", "segment": "busy_worker", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c035", "origin": "post", "platform": "forum", "community": "forocoches", "source_language": "es", "read": "full", "segment": "student", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c036", "origin": "post", "platform": "forum", "community": "TrainerRoad forum", "source_language": "en", "read": "full", "segment": "shift_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c037", "origin": "constructed", "segment": "student", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c038", "origin": "post", "platform": "forum", "community": "CycleChat", "source_language": "en", "read": "full", "segment": "event", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c039", "origin": "constructed", "segment": "busy_worker", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c040", "origin": "constructed", "segment": "busy_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c041", "origin": "constructed", "segment": "event", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c042", "origin": "constructed", "segment": "career_switcher", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c043", "origin": "post", "platform": "forum", "community": "guiaparatejerbien", "source_language": "es", "read": "full", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c044", "origin": "constructed", "segment": "parent", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c045", "origin": "post", "platform": "forum", "community": "Hispagimnasios, Deportes de contacto", "source_language": "es", "read": "full", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c046", "origin": "composite", "source_language": "es", "segment": "busy_worker", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c047", "origin": "post", "platform": "forum", "community": "forocoches", "source_language": "es", "read": "full", "segment": "returning", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c048", "origin": "constructed", "segment": "returning", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c049", "origin": "constructed", "segment": "student", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c050", "origin": "post", "platform": "forum", "community": "foroenarm", "source_language": "es", "read": "full", "segment": "returning", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c051", "origin": "post", "platform": "forum", "community": "Foroatletismo, Triatlón", "source_language": "es", "read": "full", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c052", "origin": "post", "platform": "forum", "source_language": "en", "read": "full", "segment": "returning", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c053", "origin": "constructed", "segment": "parent", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c054", "origin": "constructed", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c055", "origin": "constructed", "segment": "busy_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c056", "origin": "post", "platform": "forum", "source_language": "en", "read": "full", "segment": "student", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c057", "origin": "post", "platform": "forum", "community": "Mumsnet", "source_language": "en", "read": "full", "segment": "hobbyist", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c058", "origin": "post", "platform": "forum", "source_language": "en", "read": "full", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c059", "origin": "constructed", "segment": "returning", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c060", "origin": "post", "platform": "forum", "community": "forosperu", "source_language": "es", "read": "full", "segment": "student", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c061", "origin": "post", "platform": "forum", "source_language": "en", "read": "full", "segment": "returning", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c062", "origin": "composite", "segment": "event", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c063", "origin": "constructed", "segment": "busy_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c064", "origin": "post", "platform": "forum", "source_language": "en", "read": "full", "segment": "busy_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c065", "origin": "constructed", "segment": "busy_worker", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c066", "origin": "post", "platform": "forum", "community": "Mumsnet", "source_language": "en", "read": "full", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c067", "origin": "constructed", "segment": "parent", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c068", "origin": "post", "platform": "forum", "community": "Foroatletismo, Entrenamiento", "source_language": "es", "read": "full", "segment": "event", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c069", "origin": "constructed", "segment": "busy_worker", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c070", "origin": "constructed", "segment": "event", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c071", "origin": "constructed", "segment": "busy_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c072", "origin": "constructed", "segment": "hobbyist", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c073", "origin": "constructed", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c074", "origin": "post", "platform": "forum", "source_language": "en", "read": "full", "segment": "career_switcher", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c075", "origin": "post", "platform": "forum", "community": "hispasonic", "source_language": "es", "read": "full", "segment": "returning", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c076", "origin": "constructed", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c077", "origin": "post", "platform": "forum", "community": "Foroatletismo, Trail running", "source_language": "es", "read": "full", "segment": "busy_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c078", "origin": "post", "platform": "forum", "community": "Mumsnet", "source_language": "en", "read": "full", "segment": "returning", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c079", "origin": "composite", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c080", "origin": "constructed", "segment": "career_switcher", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c081", "origin": "post", "platform": "forum", "community": "Mumsnet", "source_language": "en", "read": "full", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c082", "origin": "post", "platform": "forum", "community": "forocoches", "source_language": "es", "read": "full", "segment": "shift_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c083", "origin": "post", "platform": "forum", "community": "Mumsnet", "source_language": "en", "read": "full", "segment": "parent", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c084", "origin": "constructed", "segment": "hobbyist", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c085", "origin": "composite", "segment": "event", "collected": "2026-09-24", "review": "relabeled"}
+{"id": "c086", "origin": "constructed", "segment": "hobbyist", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c087", "origin": "post", "platform": "forum", "source_language": "en", "read": "full", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c088", "origin": "constructed", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c089", "origin": "constructed", "segment": "hobbyist", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c090", "origin": "post", "platform": "forum", "community": "Mumsnet", "source_language": "en", "read": "full", "segment": "parent", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c091", "origin": "constructed", "segment": "returning", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c092", "origin": "post", "platform": "forum", "community": "Mumsnet", "source_language": "en", "read": "full", "segment": "event", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c093", "origin": "constructed", "segment": "shift_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c094", "origin": "composite", "segment": "parent", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c095", "origin": "post", "platform": "forum", "source_language": "en", "read": "full", "segment": "student", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c096", "origin": "constructed", "segment": "career_switcher", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c097", "origin": "constructed", "segment": "student", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c098", "origin": "constructed", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c099", "origin": "constructed", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c100", "origin": "constructed", "segment": "event", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c101", "origin": "constructed", "segment": "event", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c102", "origin": "constructed", "segment": "busy_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c103", "origin": "composite", "segment": "event", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c104", "origin": "post", "platform": "forum", "community": "Mumsnet", "source_language": "en", "read": "full", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c105", "origin": "constructed", "segment": "career_switcher", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c106", "origin": "constructed", "segment": "student", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c107", "origin": "post", "platform": "forum", "community": "Foroatletismo, Entrenamiento", "source_language": "es", "read": "full", "segment": "event", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c108", "origin": "post", "platform": "forum", "community": "Mumsnet", "source_language": "en", "read": "full", "segment": "returning", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c110", "origin": "constructed", "segment": "event", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c111", "origin": "post", "platform": "forum", "community": "Mumsnet", "source_language": "en", "read": "full", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c112", "origin": "post", "platform": "forum", "community": "Foroatletismo, Entrenamiento", "source_language": "es", "read": "full", "segment": "parent", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c113", "origin": "constructed", "segment": "busy_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c114", "origin": "post", "platform": "forum", "community": "Foroatletismo, Entrenamiento", "source_language": "es", "read": "full", "segment": "student", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c115", "origin": "post", "platform": "forum", "community": "TrainerRoad forum", "source_language": "en", "read": "full", "segment": "shift_worker", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c116", "origin": "composite", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c117", "origin": "constructed", "segment": "event", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c118", "origin": "composite", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c119", "origin": "constructed", "segment": "busy_worker", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c120", "origin": "post", "platform": "forum", "community": "Mumsnet", "source_language": "en", "read": "full", "segment": "parent", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c121", "origin": "constructed", "segment": "busy_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c122", "origin": "post", "platform": "forum", "community": "Hispagimnasios, Musculación y nutrición", "source_language": "es", "read": "full", "segment": "returning", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c123", "origin": "post", "platform": "forum", "community": "MTBeros, Entrenamiento", "source_language": "es", "read": "full", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c124", "origin": "composite", "segment": "event", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c125", "origin": "composite", "segment": "busy_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c126", "origin": "constructed", "segment": "busy_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c127", "origin": "post", "platform": "forum", "community": "MTBeros, Running", "source_language": "es", "read": "full", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c128", "origin": "post", "platform": "forum", "community": "CycleChat", "source_language": "en", "read": "full", "segment": "busy_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c129", "origin": "constructed", "segment": "busy_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c130", "origin": "composite", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c131", "origin": "post", "platform": "forum", "source_language": "en", "read": "full", "segment": "career_switcher", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c132", "origin": "post", "platform": "forum", "community": "Mumsnet", "source_language": "en", "read": "full", "segment": "parent", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c133", "origin": "post", "platform": "forum", "community": "TrainerRoad forum", "source_language": "en", "read": "full", "segment": "shift_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c134", "origin": "composite", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c135", "origin": "constructed", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c136", "origin": "post", "platform": "forum", "source_language": "en", "read": "full", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c137", "origin": "constructed", "segment": "event", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c138", "origin": "constructed", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c139", "origin": "post", "platform": "forum", "source_language": "en", "read": "full", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c140", "origin": "constructed", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c141", "origin": "post", "platform": "forum", "community": "forocoches", "source_language": "es", "read": "full", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c142", "origin": "post", "platform": "forum", "source_language": "en", "read": "full", "segment": "student", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c143", "origin": "post", "platform": "forum", "community": "Foroatletismo, Entrenamiento", "source_language": "es", "read": "full", "segment": "shift_worker", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c144", "origin": "constructed", "segment": "student", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c145", "origin": "constructed", "segment": "career_switcher", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c146", "origin": "constructed", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c147", "origin": "constructed", "segment": "hobbyist", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c148", "origin": "constructed", "segment": "student", "collected": "2026-09-24", "review": "accepted"}
+{"id": "c149", "origin": "constructed", "segment": "parent", "collected": "2026-09-24", "review": "rewritten"}
+{"id": "c150", "origin": "composite", "source_language": "es", "segment": "busy_worker", "collected": "2026-09-24", "review": "rewritten"}
