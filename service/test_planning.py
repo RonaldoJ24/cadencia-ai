@@ -262,3 +262,62 @@ def test_retry_problems_must_be_plain_ascii(monkeypatch: pytest.MonkeyPatch) -> 
     }))
     assert response.status_code == 400
     assert received == []
+
+
+OPENAI_SETTINGS = {
+    "CADENCIA_PROVIDER": "openai",
+    "OPENAI_API_KEY": "openai-test-key",
+    "OPENAI_URL": "https://provider.example/v1/chat/completions",
+    "OPENAI_MODEL": "configured-model-1",
+    "OPENAI_TOKEN_PARAM": "max_completion_tokens",
+    "OPENAI_TEMPERATURE": "omit",
+}
+
+
+def test_an_openai_provider_uses_only_what_is_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    configure(monkeypatch)
+    for name, value in OPENAI_SETTINGS.items():
+        monkeypatch.setenv(name, value)
+    received = capture(monkeypatch, READING)
+    response = run(post("/v1/read-goal", {"text": "learn chess", "language": "en", "today": "2026-09-24"}))
+    assert response.status_code == 200
+    assert response.json()["meta"]["model"] == "configured-model-1"
+    request = received[0]
+    assert str(request.url) == OPENAI_SETTINGS["OPENAI_URL"]
+    assert request.headers["authorization"] == "Bearer openai-test-key"
+    payload = json.loads(request.content)
+    assert payload["model"] == "configured-model-1"
+    assert payload["max_completion_tokens"] == planning.READ_MAX_TOKENS
+    assert payload["response_format"] == {"type": "json_object"}
+    # DeepSeek's own fields never reach another provider.
+    assert "thinking" not in payload and "max_tokens" not in payload and "temperature" not in payload
+
+    monkeypatch.setenv("OPENAI_TOKEN_PARAM", "max_tokens")
+    monkeypatch.setenv("OPENAI_TEMPERATURE", "0.2")
+    run(post("/v1/read-goal", {"text": "learn chess", "language": "en", "today": "2026-09-24"}))
+    second = json.loads(received[1].content)
+    assert second["max_tokens"] == planning.READ_MAX_TOKENS and second["temperature"] == 0.2
+
+
+@pytest.mark.parametrize("missing", ["OPENAI_URL", "OPENAI_MODEL", "OPENAI_TOKEN_PARAM", "OPENAI_TEMPERATURE", "OPENAI_API_KEY"])
+def test_an_incomplete_openai_configuration_never_calls_a_provider(monkeypatch: pytest.MonkeyPatch, missing: str) -> None:
+    configure(monkeypatch)
+    for name, value in OPENAI_SETTINGS.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.delenv(missing)
+    received = capture(monkeypatch, READING)
+    response = run(post("/v1/read-goal", {"text": "learn chess", "language": "en", "today": "2026-09-24"}))
+    assert response.status_code == 503
+    assert received == []
+
+
+def test_the_openai_key_never_appears_as_a_model_label(monkeypatch: pytest.MonkeyPatch) -> None:
+    configure(monkeypatch)
+    for name, value in OPENAI_SETTINGS.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("OPENAI_MODEL", "prefix-openai-test-key")
+    received = capture(monkeypatch, READING)
+    response = run(post("/v1/read-goal", {"text": "learn chess", "language": "en", "today": "2026-09-24"}))
+    assert response.status_code == 503
+    assert "openai-test-key" not in response.text
+    assert received == []

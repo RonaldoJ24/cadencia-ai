@@ -45,3 +45,7 @@ next-env.d.ts
 **/.pytest_cache/
 **/.ruff_cache/
 *.py[cod]
+
+# Evaluation dry runs are never evidence (evals/dry-runs/README.md).
+evals/dry-runs/*
+!evals/dry-runs/README.md

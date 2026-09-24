@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 import time
 from collections.abc import Callable
@@ -28,8 +27,9 @@ try:
         IntentResult,
         Language,
         _call_provider,
-        _configured_model,
+        ProviderSettings,
         model_for_logging,
+        provider_settings,
         restricted_request,
     )
 except ImportError:  # Allows imports from the service directory.
@@ -38,8 +38,9 @@ except ImportError:  # Allows imports from the service directory.
         IntentResult,
         Language,
         _call_provider,
-        _configured_model,
+        ProviderSettings,
         model_for_logging,
+        provider_settings,
         restricted_request,
     )
 
@@ -513,16 +514,20 @@ def refused_reading(request: ReadGoalRequest) -> GoalReading:
     )
 
 
-def _payload(model: str, messages: list[dict[str, str]], max_tokens: int) -> dict[str, Any]:
-    return {
-        "model": model,
+def _payload(settings: ProviderSettings, messages: list[dict[str, str]], max_tokens: int) -> dict[str, Any]:
+    """JSON mode with the provider's own token-limit name and extras."""
+
+    payload: dict[str, Any] = {
+        "model": settings.model,
         "messages": messages,
         "response_format": {"type": "json_object"},
-        "thinking": {"type": "disabled"},
-        "temperature": 0.2,
-        "max_tokens": max_tokens,
-        "stream": False,
+        **settings.extra,
     }
+    if settings.temperature is not None:
+        payload["temperature"] = settings.temperature
+    payload[settings.token_param] = max_tokens
+    payload["stream"] = False
+    return payload
 
 
 async def _run(
@@ -538,23 +543,23 @@ async def _run(
     before_attempt: Callable[[], None] | None,
 ) -> IntentResult:
     started = time.monotonic()
-    api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
     try:
-        model = _configured_model(api_key)
+        settings = provider_settings()
     except ValueError:
         raise ProviderError(
             request_id=request_id, model="<redacted>", attempts=0, latency_ms=0,
             status_category="config", outcome="configuration_error", language=language,
         ) from None
-    if not api_key or len(api_key) > 4_096:
+    if not settings.api_key or len(settings.api_key) > 4_096:
         raise ProviderError(
-            request_id=request_id, model=model, attempts=0, latency_ms=0,
+            request_id=request_id, model=settings.model, attempts=0, latency_ms=0,
             status_category="config", outcome="configuration_error", language=language,
         )
     options: dict[str, Any] = {
-        "payload": _payload(model, messages, max_tokens),
-        "api_key": api_key,
-        "model": model,
+        "payload": _payload(settings, messages, max_tokens),
+        "api_key": settings.api_key,
+        "url": settings.url,
+        "model": settings.model,
         "request_id": request_id,
         "started": started,
         "language": language,
