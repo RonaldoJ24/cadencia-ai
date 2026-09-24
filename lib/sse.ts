@@ -66,10 +66,14 @@ export class SseParser {
   }
 }
 
-/** Reads a streamed response body, calling onMessage for each event. */
+/**
+ * Reads a streamed response body, calling onMessage for each event and
+ * onChunk for every chunk received, heartbeats included.
+ */
 export async function readSse(
   body: ReadableStream<Uint8Array>,
   onMessage: (message: SseMessage) => void,
+  onChunk?: () => void,
 ): Promise<void> {
   const parser = new SseParser(onMessage);
   const reader = body.getReader();
@@ -78,6 +82,7 @@ export async function readSse(
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
+      onChunk?.();
       parser.push(decoder.decode(value, { stream: true }));
     }
     parser.push(decoder.decode());
