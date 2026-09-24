@@ -14,16 +14,21 @@ export function PlanSteps({
   steps,
   note,
   language,
+  heading,
+  titleId = 'plan-steps-title',
 }: {
   steps: StepView[];
   note: string;
   language: Language;
+  /** Defaults to the plan's heading; a replan names its own. */
+  heading?: string;
+  titleId?: string;
 }) {
   const copy = stepsCopyFor(language);
   return (
-    <section className="plan-steps" aria-labelledby="plan-steps-title">
+    <section className="plan-steps" aria-labelledby={titleId}>
       <div className="plan-steps-header">
-        <h2 id="plan-steps-title">{copy.heading}</h2>
+        <h2 id={titleId}>{heading ?? copy.heading}</h2>
         <p>{note}</p>
       </div>
       <ol className="plan-steps-list" aria-live="polite">

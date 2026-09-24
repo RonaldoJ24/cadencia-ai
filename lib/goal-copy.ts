@@ -2,8 +2,9 @@
 
 import type { SampleId } from './goal-demo.ts';
 import type { Language } from './i18n.ts';
+import type { ReplanReasonId } from './replan-demo.ts';
 import type { Source } from './planner/goal-input.ts';
-import type { DropReason, Intensity, Level, MoveReason, Role } from './planner/types.ts';
+import type { DropReason, Intensity, Level, MoveReason, ReplanOptionId, Role } from './planner/types.ts';
 
 export type GoalCopy = {
   brandNote: string;
@@ -93,6 +94,36 @@ export type GoalCopy = {
     dropReasons: Readonly<Record<DropReason, string>>;
     exportIcs: string;
     exportGoogle: string;
+  };
+  replan: {
+    title: string;
+    intro: (missed: number) => string;
+    reasonLabel: string;
+    reasonPlaceholder: string;
+    suggest: string;
+    suggesting: string;
+    liveNote: string;
+    liveUnavailable: string;
+    showOptions: string;
+    demoTeaser: string;
+    simulate: string;
+    simulationBanner: (date: string) => string;
+    endSimulation: string;
+    presetsLabel: string;
+    presets: Readonly<Record<ReplanReasonId, string>>;
+    stepsHeading: string;
+    stepsNote: { live: string; demo: string };
+    suggested: string;
+    modelSays: string;
+    declinedMedical: string;
+    declinedUnclear: string;
+    open: string;
+    optionHelp: Readonly<Record<ReplanOptionId, string>>;
+    facts: { deadline: string; sessionsLeft: string; timeLeft: string; nextSevenDays: string; leftOut: string };
+    minutes: (minutes: number) => string;
+    hours: (minutes: number) => string;
+    apply: string;
+    applied: (date: string, option: string) => string;
   };
   errors: { generic: string; reference: string; wait: (seconds: number) => string };
 };
@@ -226,6 +257,44 @@ const EN: GoalCopy = {
     },
     exportIcs: 'Download calendar (.ics)',
     exportGoogle: 'Add the first session to Google Calendar',
+  },
+  replan: {
+    title: 'Missed some sessions?',
+    intro: (missed) => `You marked ${missed} ${missed === 1 ? 'session' : 'sessions'} as missed in the last two weeks. Code has built the ways to go on and checked each one against your plan’s rules. Tell Cadencia what happened and it suggests one. Nothing changes until you choose.`,
+    reasonLabel: 'What happened?',
+    reasonPlaceholder: 'For example: I was away on a work trip all week, and I’m back now.',
+    suggest: 'Suggest an adjustment',
+    suggesting: 'Reading your reason…',
+    liveNote: 'Uses one of your live AI runs for today. Only your reason and the options, in numbers, are sent.',
+    liveUnavailable: 'Live AI isn’t available right now, but you can still choose an option yourself.',
+    showOptions: 'Show the options',
+    demoTeaser: 'In the demo nothing is behind you yet. See how Cadencia adjusts a plan after a missed week:',
+    simulate: 'Pretend the second week was missed',
+    simulationBanner: (date) => `Simulation: today is ${date}. The first week is done and the second was missed. Nothing here is saved.`,
+    endSimulation: 'End simulation',
+    presetsLabel: 'Pick what happened',
+    presets: { trip: 'A work trip', swamped: 'Weeks of overload', forgot: 'I forgot', pain: 'Knee pain' },
+    stepsHeading: 'How this suggestion was made',
+    stepsNote: {
+      live: 'Code built and checked the options; the model only read your reason and picked one.',
+      demo: 'Code built and checked the options on your plan; the pick was recorded from the model for this reason.',
+    },
+    suggested: 'Suggested',
+    modelSays: 'Why, in the model’s words',
+    declinedMedical: 'Cadencia won’t suggest how to go on when there’s pain, an injury or an illness. Check with a professional first. You can still choose an option yourself.',
+    declinedUnclear: 'Your reason didn’t point to one option. Choose the one that fits.',
+    open: 'Choose the option that fits.',
+    optionHelp: {
+      keep: 'Go on as planned. What you missed is skipped.',
+      repeat: 'Redo what you missed, starting now. What no longer fits before the deadline is left out at the end.',
+      extend: 'Redo what you missed and move the deadline, so nothing is left out.',
+      lighter: 'Go on with lighter weeks that keep the most important sessions.',
+    },
+    facts: { deadline: 'Deadline', sessionsLeft: 'Sessions left', timeLeft: 'Time left', nextSevenDays: 'Next 7 days', leftOut: 'Left out' },
+    minutes: (minutes) => `${minutes} min`,
+    hours: (minutes) => `${(minutes / 60).toFixed(1).replace(/\.0$/u, '')} h`,
+    apply: 'Use this',
+    applied: (date, option) => `Adjusted on ${date}: ${option}.`,
   },
   errors: {
     generic: 'Something went wrong. Try again.',
@@ -363,6 +432,44 @@ const ES: GoalCopy = {
     },
     exportIcs: 'Descargar calendario (.ics)',
     exportGoogle: 'Agregar la primera sesión a Google Calendar',
+  },
+  replan: {
+    title: '¿Te faltaron algunas sesiones?',
+    intro: (missed) => `Marcaste ${missed} ${missed === 1 ? 'sesión' : 'sesiones'} sin hacer en las últimas dos semanas. El código armó las formas de seguir y revisó cada una contra las reglas de tu plan. Cuéntale a Cadencia qué pasó y te sugiere una. Nada cambia hasta que elijas.`,
+    reasonLabel: '¿Qué pasó?',
+    reasonPlaceholder: 'Por ejemplo: estuve de viaje de trabajo toda la semana y ya regresé.',
+    suggest: 'Sugerir un ajuste',
+    suggesting: 'Leyendo tu motivo…',
+    liveNote: 'Usa una de tus ejecuciones de IA en vivo de hoy. Solo se envían tu motivo y las opciones, en números.',
+    liveUnavailable: 'La IA en vivo no está disponible ahora, pero puedes elegir tú una opción.',
+    showOptions: 'Ver las opciones',
+    demoTeaser: 'En la demo todavía no hay nada atrás. Mira cómo Cadencia ajusta un plan después de una semana perdida:',
+    simulate: 'Simular que faltó la segunda semana',
+    simulationBanner: (date) => `Simulación: hoy es ${date}. La primera semana está hecha y la segunda no se hizo. Nada de esto se guarda.`,
+    endSimulation: 'Terminar la simulación',
+    presetsLabel: 'Elige qué pasó',
+    presets: { trip: 'Un viaje de trabajo', swamped: 'Semanas de sobrecarga', forgot: 'Se me olvidó', pain: 'Dolor de rodilla' },
+    stepsHeading: 'Cómo se hizo esta sugerencia',
+    stepsNote: {
+      live: 'El código armó y revisó las opciones; el modelo solo leyó tu motivo y eligió una.',
+      demo: 'El código armó y revisó las opciones en tu plan; la elección se grabó del modelo para este motivo.',
+    },
+    suggested: 'Sugerida',
+    modelSays: 'Por qué, en palabras del modelo',
+    declinedMedical: 'Cadencia no sugiere cómo seguir cuando hay dolor, una lesión o una enfermedad. Consulta primero con un profesional. Aun así, puedes elegir tú una opción.',
+    declinedUnclear: 'Tu motivo no apuntó a una opción. Elige la que te quede.',
+    open: 'Elige la opción que te quede.',
+    optionHelp: {
+      keep: 'Seguir como estaba planeado. Lo que faltó se omite.',
+      repeat: 'Repetir lo que faltó, empezando ahora. Lo que ya no cabe antes de la fecha límite se omite al final.',
+      extend: 'Repetir lo que faltó y mover la fecha límite, para no omitir nada.',
+      lighter: 'Seguir con semanas más ligeras que mantienen las sesiones más importantes.',
+    },
+    facts: { deadline: 'Fecha límite', sessionsLeft: 'Sesiones restantes', timeLeft: 'Tiempo restante', nextSevenDays: 'Próximos 7 días', leftOut: 'Se omiten' },
+    minutes: (minutes) => `${minutes} min`,
+    hours: (minutes) => `${(minutes / 60).toFixed(1).replace(/\.0$/u, '')} h`,
+    apply: 'Usar esta',
+    applied: (date, option) => `Ajustado el ${date}: ${option}.`,
   },
   errors: {
     generic: 'Algo salió mal. Inténtalo de nuevo.',

@@ -158,7 +158,7 @@ const EN: StepsCopy = {
   duration: (ms) => (ms < 1 ? 'under 1 ms' : ms < 1000 ? `${Math.round(ms)} ms` : `${seconds(ms, '.')} s`),
   detail: {
     reserve: 'Live AI slot reserved',
-    reserveBudget: (used, cap) => `Live AI slot reserved; ${used} of today’s ${cap} cap committed, counting this plan at its worst case`,
+    reserveBudget: (used, cap) => `Live AI slot reserved; ${used} of today’s ${cap} cap committed, counting this request at its worst case`,
   },
   spend: {
     disabled: 'Live AI is paused right now. The demo still works.',
@@ -264,7 +264,7 @@ const ES: StepsCopy = {
   duration: (ms) => (ms < 1 ? 'menos de 1 ms' : ms < 1000 ? `${Math.round(ms)} ms` : `${seconds(ms, ',')} s`),
   detail: {
     reserve: 'Turno de IA reservado',
-    reserveBudget: (used, cap) => `Turno de IA reservado; ${used} del tope diario de ${cap} comprometidos, contando este plan a su costo máximo`,
+    reserveBudget: (used, cap) => `Turno de IA reservado; ${used} del tope diario de ${cap} comprometidos, contando esta solicitud a su costo máximo`,
   },
   spend: {
     disabled: 'La IA en vivo está en pausa. La demo sigue funcionando.',

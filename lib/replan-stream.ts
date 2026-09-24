@@ -16,10 +16,10 @@ import {
   type StepView,
 } from './plan-stream.ts';
 import { GOAL_LIMITS, plainText } from './planner/goal-input.ts';
-import { REPLAN_OPTIONS, type ReplanOptionId, type ReplanSummary } from './planner/replan.ts';
+import { REPLAN_OPTIONS, type Replan, type ReplanOptionId, type ReplanSummary } from './planner/replan.ts';
 import { DOMAINS, LEVELS, SpecError } from './planner/spec.ts';
 import { daysBetween, isLocalDate } from './planner/time.ts';
-import type { Domain, Level, LocalDate } from './planner/types.ts';
+import type { Domain, GoalPlan, Level, LocalDate } from './planner/types.ts';
 import { stepsCopyFor, type ReplanStepsCopy, type StageActor, type StageId } from './steps-copy.ts';
 
 export type ReplanRequest = {
@@ -34,6 +34,20 @@ export type ReplanRequest = {
 
 /** What the service receives: the checked request, as is. */
 export type ReplanPayload = ReplanRequest;
+
+/** The request for a plan's options: the goal's area and level, numbers only, and the reason. */
+export function replanRequestFor(plan: GoalPlan, replan: Replan, today: LocalDate, language: Language, reason: string): ReplanRequest {
+  const { missedSessions, missedWeeks, weeksLeft } = replan.situation;
+  return {
+    language,
+    today,
+    domain: plan.spec.domain,
+    level: plan.spec.level,
+    situation: { missedSessions, missedWeeks, weeksLeft },
+    options: replan.options.map((option) => option.summary),
+    reason,
+  };
+}
 
 export type ReplanDecline = 'medical' | 'unclear';
 
