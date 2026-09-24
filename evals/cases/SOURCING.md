@@ -88,6 +88,17 @@ recorded link and confirms that the page exists, is public, and describes the
 case's goal and constraints. A case that fails becomes `constructed`. Only
 verified cases count as adapted from posts.
 
+A clarifying answer is part of its case. If the answer names a target, a
+schedule or a detail the post leaves open, the case counts as written for
+coverage, even when the question itself comes from the post.
+
+## Edits before the owner's review
+
+The agent that combines the drafts may fill a label a draft left out, correct a
+note, round or drop a detail that could lead back to a post, and reword text that
+repeats a post. It changes no decision. The owner sees every such edit, by case
+id, before the review.
+
 ## Owner review
 
 The owner reads every case with its labels, then accepts it, changes a label
