@@ -234,14 +234,33 @@ At the freeze, this section records for each arm:
 - the service's prompt versions for read-goal and draft;
 - the service commit.
 
-GPT-6 Luna's model id, parameters and prices will come from the owner or from
-OpenAI's API reference at that time, not from memory.
+GPT-6 Luna's model id, parameters and prices came from OpenAI's API reference,
+not from memory.
 
-Development values, not frozen: prompts `read-goal-f2bbb9b5a76f` and
-`draft-6ea4a82036d6`; DeepSeek `deepseek-flash`, the service's default and, from
-2026-09-24, the production setting, at $0.30 per million input tokens and $1.20
-per million output tokens (peak prices, pricing page read on 2026-09-24). The
-owner chose that name over `deepseek-v4-flash`, which the pricing page lists as
-retired but still accepted, so the evaluation measures the model production
-runs. The demo's recorded samples also used `deepseek-flash`. The freeze reads
-the prices again.
+**Recorded at the freeze, 2026-09-24.** The service commit is the commit the tag
+points to.
+
+| | Arm A | Arm B |
+|---|---|---|
+| Provider and API model id | DeepSeek, `deepseek-flash` | OpenAI, `gpt-6-luna` |
+| Endpoint | `https://api.deepseek.com/chat/completions` | `https://api.openai.com/v1/chat/completions` |
+| Temperature | 0.2 | 0.2 |
+| Token-limit parameter | `max_tokens` | `max_completion_tokens` |
+| JSON mode | `response_format: {"type": "json_object"}` | the same |
+| Reasoning | thinking disabled: `thinking: {"type": "disabled"}` | `reasoning_effort: "none"` |
+| Price per million input tokens, output tokens | $0.30, $1.20 (peak, cache miss) | $0.10, $0.50 (standard) |
+| Price source, read on | api-docs.deepseek.com pricing page, 2026-09-24 | developers.openai.com pricing page, 2026-09-24 |
+| Prompt versions | `read-goal-f2bbb9b5a76f`, `draft-6ea4a82036d6` | the same |
+
+Why Arm B runs without reasoning: GPT-6 Luna reasons at `medium` by default, and
+OpenAI's GPT-6 guide accepts temperature only at `none`. Arm A runs DeepSeek with
+thinking disabled, so both arms use the same pipeline, caps and temperature
+without hidden reasoning tokens.
+
+**Tokens against bytes (section 7).** Arm A: the most expensive valid read-goal
+prompt at the time, 19,846 bytes, was billed as 9,231 tokens (2026-09-24, under
+the retired name, which DeepSeek serves with the same Flash model). Arm B: the
+most expensive valid read-goal prompt under today's prompt version, 19,798 bytes
+(a 2,000-character goal, a 300-character question and a 500-character answer,
+all `<`), was billed as 9,184 tokens on 2026-09-24 with the settings above. Both
+stay under one token per byte, so no margin is applied.

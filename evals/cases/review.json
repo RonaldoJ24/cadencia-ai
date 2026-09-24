@@ -1,0 +1,33 @@
+{
+  "drafted": 150,
+  "dropped": 2,
+  "seed": 161707255,
+  "reviewed": "2026-09-24",
+  "spotCheck": {
+    "seed": 141219219,
+    "method": "random.Random(seed).sample(sorted case ids, 20) in Python 3",
+    "ids": [
+      "c002",
+      "c015",
+      "c018",
+      "c034",
+      "c036",
+      "c044",
+      "c047",
+      "c065",
+      "c079",
+      "c092",
+      "c096",
+      "c101",
+      "c102",
+      "c107",
+      "c112",
+      "c116",
+      "c118",
+      "c126",
+      "c127",
+      "c136"
+    ],
+    "agreed": 20
+  }
+}
