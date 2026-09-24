@@ -187,6 +187,11 @@ export class ServiceFailure extends Error {
   readonly diagnostic?: Dict;
   /** Usage the service reported for a failed call, when it made provider attempts. */
   usage?: ServiceUsage;
+  /**
+   * Provider attempts a rejecting service reported; 0 when it refused the call
+   * before any, so an evaluation can tell its own setup failing from the model.
+   */
+  providerAttempts?: number;
 
   constructor(
     requestId?: string,
@@ -389,7 +394,10 @@ async function postService(
     if (!response.ok) {
       const rejected = new ServiceFailure(serviceRequestId, true, 'backend_rejected');
       try {
-        rejected.usage = serviceUsage(JSON.parse(raw));
+        const body: unknown = JSON.parse(raw);
+        rejected.usage = serviceUsage(body);
+        // The service reports attempts only when it called the provider.
+        rejected.providerAttempts = tokenCount(dict(body)?.attempts) ?? 0;
       } catch {
         rejected.usage = undefined;
       }
@@ -416,7 +424,19 @@ async function postService(
   }
 }
 
-export type ReadGoalAnswer = { reading: unknown; scopeRefused: boolean; requestId?: string; usage?: ServiceUsage };
+export type ReadGoalAnswer = {
+  reading: unknown;
+  scopeRefused: boolean;
+  requestId?: string;
+  usage?: ServiceUsage;
+  /** The service's prompt version, so an evaluation can check what it ran against. */
+  promptVersion?: string;
+};
+
+function promptVersionOf(meta: unknown): string | undefined {
+  const value = dict(meta)?.prompt_version;
+  return typeof value === 'string' && /^[a-z-]{1,40}-[0-9a-f]{12}$/u.test(value) ? value : undefined;
+}
 
 /** Asks the service to read a goal: plan, clarify or abstain. */
 export async function requestReadGoal(
@@ -435,10 +455,11 @@ export async function requestReadGoal(
     scopeRefused: root.scope_refused,
     requestId: serviceRequestId,
     usage: serviceUsage(root.meta),
+    promptVersion: promptVersionOf(root.meta),
   };
 }
 
-export type DraftAnswer = { draft: unknown; requestId?: string; usage?: ServiceUsage };
+export type DraftAnswer = { draft: unknown; requestId?: string; usage?: ServiceUsage; promptVersion?: string };
 
 /** Asks the service for a draft of the weeks code has already sized. */
 export async function requestDraft(
@@ -452,5 +473,5 @@ export async function requestDraft(
     failure.usage = serviceUsage(root.meta);
     throw failure;
   }
-  return { draft: root.draft, requestId: serviceRequestId, usage: serviceUsage(root.meta) };
+  return { draft: root.draft, requestId: serviceRequestId, usage: serviceUsage(root.meta), promptVersion: promptVersionOf(root.meta) };
 }
