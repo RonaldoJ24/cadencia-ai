@@ -7,6 +7,7 @@ import { runGoalPipeline, type GoalOutcome } from './goal-stream.ts';
 import type { Language } from './i18n.ts';
 import { parseStageEvent, StageFailure, type StageEvent } from './plan-stream.ts';
 import type { GoalControls } from './planner/goal-input.ts';
+import type { BusyInterval } from './planner/types.ts';
 import { readSse } from './sse.ts';
 import type { StageId } from './steps-copy.ts';
 
@@ -15,6 +16,8 @@ export type GoalRunInput = {
   language: Language;
   today: string;
   controls: GoalControls;
+  /** Busy times from an imported calendar: only when each starts and ends. */
+  busy?: BusyInterval[];
   clarification?: { question: string; answer: string };
 };
 

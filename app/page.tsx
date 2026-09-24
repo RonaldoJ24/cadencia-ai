@@ -4,6 +4,7 @@ import { ArrowUpRight, LoaderCircle, PenLine, Sparkles, WandSparkles, X } from '
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import { DeclineCard, GoalPlanView, QuestionCard, type SessionStatus } from '@/components/goal-plan';
+import { CalendarImport, type ImportedCalendar } from '@/components/calendar-import';
 import { GoalSettings } from '@/components/goal-settings';
 import { PlanSteps } from '@/components/plan-steps';
 import { Button } from '@/components/ui/button';
@@ -32,6 +33,7 @@ type ActiveRequest = { controller: AbortController; generation: number; language
 type Result = { outcome: GoalOutcome; mode: Mode; demoRecord: { model: string; date: string } | null };
 
 const PLAN_STORAGE_KEY = 'cadencia-goal-plan-v1';
+const CALENDAR_STORAGE_KEY = 'cadencia-busy-times-v1';
 
 let clientLanguageSnapshot: Language | undefined;
 const languageSubscribers = new Set<() => void>();
@@ -128,6 +130,28 @@ function saveResult(result: Result | null) {
   }
 }
 
+/** Busy times imported earlier in this browser; the server checks them again on every run. */
+function readSavedCalendar(): ImportedCalendar | null {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(CALENDAR_STORAGE_KEY) ?? 'null') as ImportedCalendar | null;
+    const valid = saved !== null && typeof saved === 'object' && typeof saved.fileName === 'string' &&
+      Array.isArray(saved.busy) && saved.busy.every((interval) => typeof interval?.start === 'string' && typeof interval.end === 'string') &&
+      typeof saved.summary === 'object' && saved.summary !== null && Array.isArray(saved.summary.unknownZones);
+    return valid ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveCalendar(calendar: ImportedCalendar | null) {
+  try {
+    if (calendar) window.localStorage.setItem(CALENDAR_STORAGE_KEY, JSON.stringify(calendar));
+    else window.localStorage.removeItem(CALENDAR_STORAGE_KEY);
+  } catch {
+    // Busy times that cannot be saved still apply until the page is closed.
+  }
+}
+
 export default function Home() {
   const language = useSyncExternalStore(subscribeToLanguage, getLanguageSnapshot, getServerLanguageSnapshot);
   const today = useSyncExternalStore(subscribeToToday, getTodaySnapshot, getServerTodaySnapshot);
@@ -140,6 +164,7 @@ export default function Home() {
   const [sampleId, setSampleId] = useState<SampleId>('ten_k');
   const [text, setText] = useState('');
   const [controls, setControls] = useState<GoalControls>({});
+  const [calendar, setCalendar] = useState<ImportedCalendar | null>(null);
   const [steps, setSteps] = useState<StepView[] | null>(null);
   const [stepsMode, setStepsMode] = useState<Mode>('demo');
   const [result, setResult] = useState<Result | null>(null);
@@ -177,9 +202,11 @@ export default function Home() {
     void loadSamples().then((loaded) => {
       if (!active) return;
       setSamples(loaded);
-      // A plan saved in this browser comes back once the page is interactive.
+      // A plan and busy times saved in this browser come back once the page is interactive.
       const saved = readSavedResult();
       if (saved) setResult(saved);
+      const savedCalendar = readSavedCalendar();
+      if (savedCalendar) setCalendar(savedCalendar);
     });
     return () => {
       active = false;
@@ -253,6 +280,7 @@ export default function Home() {
       language: request.language,
       today,
       controls,
+      ...(calendar && calendar.busy.length > 0 ? { busy: calendar.busy } : {}),
       ...(clarification ? { clarification } : {}),
     };
     let idle: number | undefined;
@@ -455,6 +483,17 @@ export default function Home() {
                 <GoalSettings
                   controls={controls}
                   onChange={setControls}
+                  today={today}
+                  language={language}
+                  copy={copy}
+                  disabled={busy}
+                />
+                <CalendarImport
+                  calendar={calendar}
+                  onChange={(next) => {
+                    setCalendar(next);
+                    saveCalendar(next);
+                  }}
                   today={today}
                   language={language}
                   copy={copy}
