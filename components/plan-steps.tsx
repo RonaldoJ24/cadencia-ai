@@ -12,11 +12,11 @@ import { stepsCopyFor } from '@/lib/steps-copy';
  */
 export function PlanSteps({
   steps,
-  mode,
+  note,
   language,
 }: {
   steps: StepView[];
-  mode: 'demo' | 'deepseek';
+  note: string;
   language: Language;
 }) {
   const copy = stepsCopyFor(language);
@@ -24,7 +24,7 @@ export function PlanSteps({
     <section className="plan-steps" aria-labelledby="plan-steps-title">
       <div className="plan-steps-header">
         <h2 id="plan-steps-title">{copy.heading}</h2>
-        <p>{mode === 'demo' ? copy.demoNote : copy.liveNote}</p>
+        <p>{note}</p>
       </div>
       <ol className="plan-steps-list" aria-live="polite">
         {steps.map((step) => (

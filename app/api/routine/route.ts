@@ -26,6 +26,7 @@ import { checkAndReservePublicLiveSlot, type SlotReservationResult } from '../..
 import {
   cancelSpend,
   formatUsd,
+  GOAL_WORST_CASE_MICROUSD,
   liveStatusOf,
   loadSpendState,
   reserveSpend,
@@ -104,7 +105,9 @@ export async function GET(request?: Request, deps?: PublicRoutineDeps): Promise<
   let status: LiveStatus = config ? 'available' : 'disabled';
   if (config && db) {
     try {
-      status = liveStatusOf(await loadSpendState(db, nowIso));
+      // The page runs goals, so live AI is available only when a whole goal
+      // run's worst case still fits under both caps.
+      status = liveStatusOf(await loadSpendState(db, nowIso), GOAL_WORST_CASE_MICROUSD);
     } catch {
       status = 'disabled';
     }
