@@ -90,7 +90,7 @@ four recorded reasons.
 - Live AI sends your goal text, a clarifying answer and a replan reason to the
   model provider, DeepSeek, a third party. Busy times from your calendar reach
   Cadencia's Worker but never the provider; the model only sees how much room
-  each week has. The demo sends nothing.
+  each week has. The demo sends none of this.
 - Your goal text and reasons reach the model only as escaped data, and whatever
   the model returns is checked by strict schemas in the service and again in
   code before anything uses it.
