@@ -123,8 +123,9 @@ el mismo flujo.
 
 **Todavía no hay una corrida con puntaje, así que este README no afirma nada
 sobre la calidad del modelo.** La corrida necesita de 100 a 150 casos, adaptados
-de metas que la gente describe en publicaciones públicas y revisados por el
-dueño ([protocolo](evals/cases/SOURCING.md)), y la configuración de GPT-6 Luna.
+de metas que la gente describe en publicaciones públicas, auditados por otro
+agente y con una revisión al azar del dueño
+([protocolo](evals/cases/SOURCING.md)), y la configuración de GPT-6 Luna.
 Los pasos están en
 [evals/README.md](evals/README.md), y los resultados se guardarán con la corrida
 en `evals/runs/`.
@@ -193,8 +194,9 @@ docker build -t cadencia-intents:local service
 
 - **La calidad del modelo no está medida.** La evaluación está pre-registrada pero
   no se ha corrido. Sus casos adaptan metas que la gente decidió publicar, que
-  no son una muestra al azar; una sola persona los revisa y es la única que
-  califica a ciegas; y cubre la lectura y el borrador, no los ajustes.
+  no son una muestra al azar; un agente auditó las etiquetas, una sola persona
+  revisó 20 al azar y es la única que califica a ciegas; y cubre la lectura y el
+  borrador, no los ajustes.
 - **No es asesoría.** Los límites de ejercicio son reglas generales para adultos
   sanos, no una guía individual, y los rechazos cubren solo las categorías
   declaradas.

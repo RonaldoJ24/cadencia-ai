@@ -82,12 +82,23 @@ scored result yet.
   - A separate check opens every recorded source and confirms it carries the
     case's goal. A case whose source cannot be confirmed counts as written for
     coverage.
-  - The owner reviews every case and label before the freeze. Each case's origin
-    and review outcome (accepted, relabeled or rewritten) is recorded in
-    `evals/cases/provenance.jsonl`, and a scored run refuses cases without one
-    reviewed line each. These counts, and the number of drafts the owner
-    dropped, are reported with the results.
-  - After the owner's review, no agent writes, edits or relabels a case.
+  - **Changed again on 2026-09-24, before any run:** instead of reading every
+    case, the owner chose an independent audit and a random check. A separate
+    agent audited all the cases from a customer's side: whether each reads like
+    what a person types into Cadencia, whether the set covers how people
+    behave, and whether a careful planner and a reasonable customer would agree
+    with each label. The owner decided every change the audit proposed and
+    every label doubt it raised. The owner then checked a random 20 cases,
+    drawn from the final set with a recorded seed. How many of those 20 labels
+    the owner agrees with is reported with the results, and any label the owner
+    changes in that check is changed in the set.
+  - Each case's origin and review outcome (accepted, relabeled or rewritten) is
+    recorded in `evals/cases/provenance.jsonl`. `evals/cases/review.json`
+    records the drafts written and dropped, the shuffle seed and the random
+    check. A scored run refuses cases without both, and these counts are
+    reported with the results.
+  - After the owner's decisions and check, no agent writes, edits or relabels a
+    case.
 - Coverage quotas, which `evals/validate.ts` enforces:
 
   | Quota | Minimum |
@@ -204,8 +215,9 @@ Otherwise templates do not ship. A tie means they do not ship.
 ## 9. What this evaluation cannot show
 
 - That the cases represent Cadencia's users. They adapt goals that people chose
-  to post in public, which are not a random sample of anyone, and one person
-  reviewed every label.
+  to post in public, which are not a random sample of anyone. Agents drafted
+  and audited the labels; one person decided every proposed change and checked
+  a random 20.
 - Whether people follow the plans or reach their goals.
 - Safety beyond the declared abstention categories.
 - Behavior, latency or cost on the live edge, or under load.
