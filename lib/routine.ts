@@ -179,6 +179,17 @@ function mondayIndex(date: string): number {
   return (dateValue(date).getUTCDay() + 6) % 7;
 }
 
+/**
+ * The Monday that starts the week containing `now`, as YYYY-MM-DD, read in
+ * the visitor's local calendar or in UTC.
+ */
+export function weekStartOf(now: Date, calendar: 'local' | 'utc'): string {
+  const [year, month, day, weekday] = calendar === 'utc'
+    ? [now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCDay()]
+    : [now.getFullYear(), now.getMonth(), now.getDate(), now.getDay()];
+  return addDays(dateString(new Date(Date.UTC(year, month, day))), -((weekday + 6) % 7));
+}
+
 function timeMinutes(value: string): number {
   const [hours, minutes] = value.split(':').map(Number);
   return hours * 60 + minutes;
