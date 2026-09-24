@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Exercise the Python service and Next.js route over a local HTTP hop.
+"""Exercise the Python service and the public route over a local HTTP hop.
 
-This is test tooling only.  The Python provider client is replaced in memory
+This is test tooling only. The Python provider client is replaced in memory
 with an httpx MockTransport; the production service has no fixture switch.
+One goal run plans end to end, and one gets unreadable provider output that
+must never reach the browser.
 """
 
 from __future__ import annotations
@@ -21,38 +23,9 @@ from typing import Any
 import httpx
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[1]
 SERVICE_DIR = ROOT / "service"
 TOKEN = "cadencia-smoke-token"
-
-
-def _provider_body() -> bytes:
-    intent = {
-        "title": "TypeScript practice",
-        "goal": "Practice one concept with a small piece of evidence.",
-        "domain": "learning",
-        "steps": [
-            {
-                "title": "Practice and verify",
-                "instructions": "Complete one exercise with visible evidence.",
-                "blocks": [
-                    {"minutes": 5, "activity": "Define what you will demonstrate."},
-                    {"minutes": 20, "activity": "Solve one short exercise."},
-                    {"minutes": 5, "activity": "Review the result and note the next step."},
-                ],
-                "deliverable": "One solved, dated exercise.",
-                "done_when": "The exercise works and the next step is written down.",
-            },
-        ],
-    }
-    content = json.dumps(intent, ensure_ascii=False, separators=(",", ":"))
-    return json.dumps(
-        {"choices": [{"finish_reason": "stop", "message": {"content": content}}]},
-        ensure_ascii=False,
-        separators=(",", ":"),
-    ).encode("utf-8")
-
-
 GOAL_READING = {
     "decision": "plan",
     "title": "Learn TypeScript",
@@ -112,15 +85,13 @@ def _goal_draft(calendar: dict[str, Any]) -> dict[str, Any]:
 class SmokeProvider:
     def __init__(self) -> None:
         self.calls = 0
-        self.goal_calls = 0
-        self.success_body = _provider_body()
 
     async def __call__(self, request: httpx.Request) -> httpx.Response:
         import planning
 
+        self.calls += 1
         messages = json.loads(request.content)["messages"]
         if messages[0]["content"] == planning.READ_GOAL_PROMPT:
-            self.goal_calls += 1
             if "leak check" in messages[1]["content"]:
                 # Unparseable provider output must stay behind the service
                 # and the route's error boundary.
@@ -131,25 +102,10 @@ class SmokeProvider:
                 )
             return _envelope(GOAL_READING)
         if messages[0]["content"] == planning.DRAFT_PROMPT:
-            self.goal_calls += 1
             prefix = "Plan calendar, fixed by code: "
             line = next(item for item in messages[1]["content"].splitlines() if item.startswith(prefix))
             return _envelope(_goal_draft(json.loads(line[len(prefix):])))
-        self.calls += 1
-        if self.calls == 1:
-            return httpx.Response(
-                200,
-                content=self.success_body,
-                headers={"content-type": "application/json"},
-            )
-        # The second live call proves that provider details stay behind a safe
-        # service/Next.js error boundary.  The service does not retry malformed
-        # output, so this remains one provider call.
-        return httpx.Response(
-            200,
-            content=b'{"choices":[{"finish_reason":"stop","message":{"content":"upstream secret"}}]}',
-            headers={"content-type": "application/json"},
-        )
+        return httpx.Response(500, content=b"unexpected provider request")
 
 
 class LocalServer:
@@ -248,93 +204,45 @@ for (const file of ['0001_beta_loop.sql', '0002_rate_limits.sql', '0003_public_l
 }
 globalThis.__cadencia_db = db;
 const { GET, POST } = await import('./app/api/routine/route.ts');
-const input = {
-  request: 'aprender TypeScript',
-  language: 'en',
-  days: [0],
-  sessionMinutes: 30,
-  weeklyMinutes: 30,
-  startDate: '2026-08-31',
-  time: '18:00',
-};
-async function invoke(mode) {
-  return POST(new Request('http://localhost/api/routine', {
+const { SseParser } = await import('./lib/sse.ts');
+const today = new Date().toISOString().slice(0, 10);
+function goalRequest(text, ip, stream) {
+  return new Request('http://localhost/api/routine', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'cf-connecting-ip': '127.0.0.1' },
-    body: JSON.stringify({ input, mode }),
-  }));
+    headers: {
+      'content-type': 'application/json',
+      'cf-connecting-ip': ip,
+      ...(stream ? { accept: 'text/event-stream' } : {}),
+    },
+    body: JSON.stringify({ mode: 'deepseek', kind: 'goal', input: { text, language: 'en', today } }),
+  });
 }
 const availability = await GET();
-const live = await invoke('deepseek');
-const liveBody = await live.json();
-const failed = await invoke('deepseek');
-const failedBody = await failed.json();
-const demo = await invoke('demo');
-const demoBody = await demo.json();
-const livePlan = liveBody?.plan;
-const demoPlan = demoBody?.plan;
-// A goal run over the same loopback hop: read, size, draft, check and fit.
-const { SseParser } = await import('./lib/sse.ts');
-const goal = await POST(new Request('http://localhost/api/routine', {
-  method: 'POST',
-  headers: { 'content-type': 'application/json', accept: 'text/event-stream', 'cf-connecting-ip': '127.0.0.2' },
-  body: JSON.stringify({
-    mode: 'deepseek',
-    kind: 'goal',
-    input: { text: 'Learn TypeScript on Monday and Wednesday evenings', language: 'en', today: new Date().toISOString().slice(0, 10) },
-  }),
-}));
-const goalMessages = [];
-const parser = new SseParser((message) => goalMessages.push(message));
+const goal = await POST(goalRequest('Learn TypeScript on Monday and Wednesday evenings', '127.0.0.2', true));
+const messages = [];
+const parser = new SseParser((message) => messages.push(message));
 parser.push(await goal.text());
 parser.end();
-const goalResult = JSON.parse(goalMessages.at(-1)?.data ?? '{}');
-const goalLedger = db.raw.prepare("SELECT status, actual_microusd FROM spend_ledger WHERE reserved_microusd > 20000").get();
-const goalFailed = await POST(new Request('http://localhost/api/routine', {
-  method: 'POST',
-  headers: { 'content-type': 'application/json', 'cf-connecting-ip': '127.0.0.3' },
-  body: JSON.stringify({
-    mode: 'deepseek',
-    kind: 'goal',
-    input: { text: 'Goal for the leak check', language: 'en', today: new Date().toISOString().slice(0, 10) },
-  }),
-}));
-const goalFailedBody = await goalFailed.json();
-const serializedBodies = JSON.stringify({ liveBody, failedBody, demoBody, goalResult, goalFailedBody });
+const result = JSON.parse(messages.at(-1)?.data ?? '{}');
+const ledger = db.raw.prepare('SELECT status, actual_microusd FROM spend_ledger').get();
+const failed = await POST(goalRequest('Goal for the leak check', '127.0.0.3', false));
+const failedBody = await failed.json();
+const serialized = JSON.stringify({ result, failedBody });
 console.log(JSON.stringify({
   availability: await availability.json(),
-  live: {
-    status: live.status,
-    mode: livePlan?.mode,
-    intentTitle: livePlan?.intent?.title,
-    intentGoal: livePlan?.intent?.goal,
-    stepCount: livePlan?.intent?.steps?.length,
-    session: livePlan?.sessions?.[0] ?? null,
-    input: livePlan?.input ?? null,
-    checksPassed: Array.isArray(livePlan?.checks) && livePlan.checks.every((check) => check?.passed === true),
-  },
-  failed: { status: failed.status, error: failedBody?.error ?? null },
-  demo: {
-    status: demo.status,
-    mode: demoPlan?.mode,
-    session: demoPlan?.sessions?.[0] ?? null,
-    input: demoPlan?.input ?? null,
-    checksPassed: Array.isArray(demoPlan?.checks) && demoPlan.checks.every((check) => check?.passed === true),
-  },
   goal: {
     status: goal.status,
-    outcome: goalResult?.outcome ?? null,
-    stages: goalMessages
+    outcome: result?.outcome ?? null,
+    stages: messages
       .filter((message) => message.event === 'stage')
       .map((message) => JSON.parse(message.data))
       .filter((event) => event.status !== 'started')
       .map((event) => `${event.stage}:${event.status}`),
-    sessions: (goalResult?.plan?.weeks ?? []).reduce((total, week) => total + week.sessions.length, 0),
-    ledger: goalLedger ?? null,
-    failedStatus: goalFailed.status,
-    failedError: goalFailedBody?.error ?? null,
+    sessions: (result?.plan?.weeks ?? []).reduce((total, week) => total + week.sessions.length, 0),
+    ledger: ledger ?? null,
   },
-  returnedBodiesSafe: !serializedBodies.includes('smoke-token') && !serializedBodies.includes('upstream secret'),
+  failed: { status: failed.status, error: failedBody?.error ?? null },
+  returnedBodiesSafe: !serialized.includes('smoke-token') && !serialized.includes('upstream secret'),
 }));
 '''
 
@@ -395,46 +303,12 @@ def main() -> int:
             server = LocalServer(app, provider)
             server.start()
             value = _run_node(ROOT, server.port)
-            live = value.get("live")
-            failed = value.get("failed")
-            demo = value.get("demo")
             availability = value.get("availability")
             goal = value.get("goal")
-            returned_bodies_safe = value.get("returnedBodiesSafe")
+            failed = value.get("failed")
             if not (
                 isinstance(availability, dict)
                 and availability.get("liveAvailable") is True
-                and isinstance(live, dict)
-                and live.get("status") == 200
-                and live.get("mode") == "deepseek"
-                and live.get("intentTitle") == "TypeScript practice"
-                and live.get("intentGoal") == "Practice one concept with a small piece of evidence."
-                and live.get("stepCount") == 1
-                and isinstance(live.get("input"), dict)
-                and live["input"].get("sessionMinutes") == 30
-                and live["input"].get("startDate") == "2026-08-31"
-                and live["input"].get("language") == "en"
-                and isinstance(live.get("session"), dict)
-                and live["session"].get("date") == "2026-08-31"
-                and live["session"].get("minutes") == 30
-                and live["session"].get("instructions") == "Complete one exercise with visible evidence."
-                and live["session"].get("deliverable") == "One solved, dated exercise."
-                and live["session"].get("doneWhen") == "The exercise works and the next step is written down."
-                and live.get("checksPassed") is True
-                and isinstance(failed, dict)
-                and failed.get("status") == 502
-                and failed.get("error") == "The AI provider is not available."
-                and isinstance(demo, dict)
-                and demo.get("status") == 200
-                and demo.get("mode") == "demo"
-                and isinstance(demo.get("input"), dict)
-                and demo["input"].get("sessionMinutes") == 30
-                and demo["input"].get("language") == "en"
-                and isinstance(demo.get("session"), dict)
-                and demo["session"].get("date") == "2026-08-31"
-                and demo["session"].get("minutes") == 30
-                and demo["session"].get("instructions", "").startswith("Complete session")
-                and demo.get("checksPassed") is True
                 and isinstance(goal, dict)
                 and goal.get("status") == 200
                 and goal.get("outcome") == "ready"
@@ -451,23 +325,17 @@ def main() -> int:
                 and goal["sessions"] > 0
                 # Two calls at 500 in and 300 out settle at 510 micro-USD each.
                 and goal.get("ledger") == {"status": "settled", "actual_microusd": 1_020}
-                and goal.get("failedStatus") == 502
-                and goal.get("failedError") == "The AI provider is not available."
-                and returned_bodies_safe is True
-                and provider.calls == 2
-                and provider.goal_calls == 3
+                and isinstance(failed, dict)
+                and failed.get("status") == 502
+                and failed.get("error") == "The AI provider is not available."
+                and value.get("returnedBodiesSafe") is True
+                and provider.calls == 3
             ):
                 raise RuntimeError("smoke assertions failed")
         finally:
             if server is not None:
                 server.stop()
-        print(json.dumps({
-            "status": "ok",
-            "provider_calls": provider.calls,
-            "goal_provider_calls": provider.goal_calls,
-            "demo_preserved_no_provider_call": True,
-            "service_transport": "loopback",
-        }))
+        print(json.dumps({"status": "ok", "provider_calls": provider.calls, "service_transport": "loopback"}))
         return 0
     except (ImportError, OSError, RuntimeError, subprocess.SubprocessError) as error:
         print(f"Smoke test failed: {error}", file=sys.stderr)

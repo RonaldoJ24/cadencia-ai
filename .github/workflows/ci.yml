@@ -53,22 +53,9 @@ jobs:
       - name: Python lint
         run: uv run --project service --frozen ruff check service
 
-      - name: Deterministic evaluation (no provider calls)
-        run: >-
-          uv run --project service --frozen python service/evals/run.py
-          --run-id ci-${{ github.run_id }} --repeat-id ${{ github.run_attempt }}
-          --output outputs/evals/ci-${{ github.run_id }}-${{ github.run_attempt }}/report.json
-
       - name: Local HTTP integration smoke (fake provider)
-        run: uv run --project service --frozen python service/evals/smoke.py
+        run: uv run --project service --frozen python service/smoke.py
 
       - name: Python container build
         run: docker build --tag cadencia-intents:ci service
 
-      - name: Preserve deterministic evaluation report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: deterministic-evaluation
-          path: outputs/evals/ci-*/report.json
-          if-no-files-found: warn

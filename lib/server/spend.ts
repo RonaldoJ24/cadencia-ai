@@ -1,12 +1,11 @@
-// Dollar caps and the kill switch for live AI. Every live generation
-// reserves its worst-case cost before the model is called, and only when the
-// day's and month's committed spend plus that reservation stay within the
-// caps in app_settings. The reservation is settled afterwards at the cost of
-// the reported token usage. Amounts are integers in millionths of a dollar.
+// Dollar caps and the kill switch for live AI. Every live goal run reserves
+// its worst-case cost before the model is called, and only when the day's
+// and month's committed spend plus that reservation stay within the caps in
+// app_settings. The reservation is settled afterwards at the cost of the
+// reported token usage. Amounts are integers in millionths of a dollar.
 //
-// A goal run's reservation is a real upper bound: the service caps every
-// prompt in bytes and the model's output in tokens. The older routine
-// reservation bounds its input by an estimate.
+// The reservation is a real upper bound: the service caps every prompt in
+// bytes and the model's output in tokens.
 
 import type { Db } from './db.ts';
 import { secondsUntilUtcMidnight } from './public_limits.ts';
@@ -21,9 +20,6 @@ export const RATE_CARD = {
   outputUsdPerMillion: 1.2,
   source: 'https://api-docs.deepseek.com/quick_start/pricing (read 2026-09-24)',
 } as const;
-
-/** Bounds of one live generation, from service/provider.py. */
-export const WORST_CASE = { attempts: 2, inputTokens: 3_000, outputTokens: 4_000 } as const;
 
 /**
  * Bounds of one goal run, mirrored from service/planning.py and provider.py
@@ -44,9 +40,6 @@ export function costMicroUsd(promptTokens: number, completionTokens: number): nu
     promptTokens * RATE_CARD.inputUsdPerMillion + completionTokens * RATE_CARD.outputUsdPerMillion,
   );
 }
-
-export const WORST_CASE_ATTEMPT_MICROUSD = costMicroUsd(WORST_CASE.inputTokens, WORST_CASE.outputTokens);
-export const WORST_CASE_MICROUSD = WORST_CASE.attempts * WORST_CASE_ATTEMPT_MICROUSD;
 
 export const GOAL_READ_ATTEMPT_MICROUSD = costMicroUsd(
   GOAL_BOUNDS.read.promptBytes + GOAL_BOUNDS.templateTokens,
@@ -103,7 +96,7 @@ export async function loadSpendState(db: Db, nowIso: string): Promise<SpendState
   };
 }
 
-export function liveStatusOf(state: SpendState, amount = WORST_CASE_MICROUSD): LiveStatus {
+export function liveStatusOf(state: SpendState, amount = GOAL_WORST_CASE_MICROUSD): LiveStatus {
   if (!state.liveEnabled) return 'disabled';
   if (state.monthUsedMicroUsd + amount > state.monthlyCapMicroUsd) return 'monthly_cap';
   if (state.dayUsedMicroUsd + amount > state.dailyCapMicroUsd) return 'daily_cap';
@@ -125,7 +118,7 @@ export async function reserveSpend(
   db: Db,
   args: { id: string; nowIso: string; nowMs: number; amountMicroUsd?: number },
 ): Promise<SpendDecision> {
-  const amount = args.amountMicroUsd ?? WORST_CASE_MICROUSD;
+  const amount = args.amountMicroUsd ?? GOAL_WORST_CASE_MICROUSD;
   const day = args.nowIso.slice(0, 10);
   const month = args.nowIso.slice(0, 7);
   const inserted = await db
@@ -163,26 +156,6 @@ export type SpendUsage = {
   model?: string;
   requestId?: string;
 };
-
-/**
- * Settles a reservation from reported usage. Usage covers the successful
- * attempt only, so each earlier attempt is charged at its worst case.
- */
-export async function settleSpend(db: Db, args: { id: string; nowIso: string; usage: SpendUsage }): Promise<number> {
-  const { promptTokens, completionTokens, attempts, model, requestId } = args.usage;
-  const actual = costMicroUsd(promptTokens, completionTokens) +
-    Math.max(0, attempts - 1) * WORST_CASE_ATTEMPT_MICROUSD;
-  await db
-    .prepare(
-      `UPDATE spend_ledger
-       SET status = 'settled', actual_microusd = ?, prompt_tokens = ?, completion_tokens = ?,
-           attempts = ?, model = ?, request_id = ?, settled_at = ?
-       WHERE id = ? AND status = 'reserved'`,
-    )
-    .bind(actual, promptTokens, completionTokens, attempts, model ?? null, requestId ?? null, args.nowIso, args.id)
-    .run();
-  return actual;
-}
 
 /** One service call in a run: its reported usage, if any, and its worst attempt. */
 export type CallSpend = { usage?: SpendUsage; worstAttemptMicroUsd: number };

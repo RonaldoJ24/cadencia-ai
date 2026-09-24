@@ -1,6 +1,6 @@
 // Types shared by the goal planner. Dates are local calendar dates
 // (YYYY-MM-DD), times are local wall-clock times (HH:mm), and weekday 0 is
-// Monday, matching the week compiler in lib/routine.ts.
+// Monday.
 
 import type { Language } from '../i18n.ts';
 

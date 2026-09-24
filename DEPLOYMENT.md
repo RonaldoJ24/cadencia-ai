@@ -5,8 +5,14 @@ Cadencia runs in two places:
 1. **Cloudflare Worker `cadencia-ai`**: the Vinext app (UI and `/api/routine`) on
    `https://cadencia-ai.ronaldo-jesus-alvarez.workers.dev`, with a D1 database for
    public limits.
-2. **Cloud Run service `cadencia-intents`**: the FastAPI intent service that calls
-   DeepSeek. Only the Worker calls it, with a shared bearer token.
+2. **Cloud Run service `cadencia-intents`**: the FastAPI planning service that
+   calls DeepSeek. Only the Worker calls it, with a shared bearer token. (The
+   service keeps its original name from the weekly-routine era.)
+
+**Deploy order.** When a Worker change stops calling a service endpoint, deploy
+and verify the Worker first, and only then deploy a service that drops the
+endpoint. The Worker that is live at any moment, and the one you would roll back
+to, must find every endpoint it calls.
 
 ---
 
@@ -21,16 +27,17 @@ Cadencia runs in two places:
     ▼
 [ Worker: cadencia-ai ]
     ├─ Serves the page and static assets
-    ├─ /api/routine: demo plans, and live plans when CADENCIA_ENABLE_LIVE is "true"
+    ├─ /api/routine: live goal runs when CADENCIA_ENABLE_LIVE is "true" (the demo
+    │  runs in the browser and never calls it)
     ├─ D1 cadencia_beta: kill switch, dollar caps, spend ledger, request limits
     │
     ▼  HTTPS, Authorization: Bearer <CADENCIA_SERVICE_TOKEN>
 [ Cloud Run: cadencia-intents ]  (us-central1)
     ├─ GET  /livez        public liveness
-    ├─ POST /v1/intents   the current weekly routine (constant-time token check,
-    │                     strict schemas, scope guard)
     ├─ POST /v1/read-goal reads a free-text goal: plan, clarify or abstain
     ├─ POST /v1/draft     drafts sessions for the weeks code has already sized
+    │                     (both: constant-time token check, strict schemas,
+    │                     prompt byte ceilings, scope guard on the reading)
     │
     ▼  HTTPS, Bearer <DEEPSEEK_API_KEY>
 [ DeepSeek API ]  https://api.deepseek.com/chat/completions
@@ -194,21 +201,24 @@ Zero Trust dashboard with the values above.
 ```bash
 # Cloud Run liveness and auth
 curl -fsS "https://cadencia-intents-675488596560.us-central1.run.app/livez"      # {"status":"ok"}
-curl -i -X POST "https://cadencia-intents-675488596560.us-central1.run.app/v1/intents" \
-  -H 'content-type: application/json' -d '{"request":"test"}'                   # 401
-curl -i -X POST "https://cadencia-intents-675488596560.us-central1.run.app/v1/read-goal" \
-  -H 'content-type: application/json' -d '{"text":"test"}'                      # 401
+for endpoint in read-goal draft; do
+  curl -s -o /dev/null -w "$endpoint %{http_code}\n" -X POST \
+    "https://cadencia-intents-675488596560.us-central1.run.app/v1/$endpoint" \
+    -H 'content-type: application/json' -d '{}'                                 # 401
+done
 
 # Worker readiness: {"liveAvailable":true} when live mode is configured
 curl -fsS "https://cadencia-ai.ronaldo-jesus-alvarez.workers.dev/api/routine"
 
-# Server-side demo plan (no model call); startDate must be a Monday
-curl -i -X POST "https://cadencia-ai.ronaldo-jesus-alvarez.workers.dev/api/routine" \
-  -H 'content-type: application/json' \
-  -d '{"mode":"demo","input":{"request":"learn piano","days":[0,2],"sessionMinutes":30,"weeklyMinutes":60,"startDate":"2026-09-21","time":"18:00","language":"en"}}'
+# One streamed live goal run: every stage, then the result (use today's date)
+W=https://cadencia-ai.ronaldo-jesus-alvarez.workers.dev
+curl -sN -X POST "$W/api/routine" -H "origin: $W" -H 'content-type: application/json' \
+  -H 'accept: text/event-stream' \
+  -d '{"mode":"deepseek","kind":"goal","input":{"text":"Learn guitar chords by December, Tuesday and Thursday evenings","language":"en","today":"YYYY-MM-DD"}}'
 ```
 
-A live check costs a real model call (about $0.001 at current prices).
+A live goal run makes two or three model calls and settles at a few tenths of a
+cent; it counts toward the caller's five live runs a day.
 
 ---
 

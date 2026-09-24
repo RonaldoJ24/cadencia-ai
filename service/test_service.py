@@ -23,32 +23,6 @@ TOKEN = "service-token-for-tests"
 API_KEY = "deepseek-test-key"
 MODEL = "deepseek-v4-flash"
 REQUEST_ID = "test-request-id"
-# /v1/intents only; remove with that endpoint.
-INTENT = {
-    "title": "Practicar acuarela",
-    "goal": "Crear una muestra breve.",
-    "domain": "creative",
-    "steps": [{"title": "Boceto", "instructions": "Haz una primera versión pequeña."}],
-}
-ROUTINE_INTENT = {
-    "title": "Practicar acuarela",
-    "goal": "Crear dos muestras breves.",
-    "domain": "creative",
-    "steps": [
-        {
-            "title": f"Muestra {index}",
-            "instructions": "Crea y revisa una muestra concreta.",
-            "blocks": [
-                {"minutes": 5, "activity": "Prepara materiales."},
-                {"minutes": 20, "activity": "Crea la muestra."},
-                {"minutes": 5, "activity": "Revísala y guárdala."},
-            ],
-            "deliverable": f"Muestra fechada {index}.",
-            "done_when": "La muestra existe y tiene una nota de revisión.",
-        }
-        for index in (1, 2)
-    ],
-}
 PADDING = " trama narrativa " * 25
 READ_BODY = {"text": "learn watercolor", "language": "en", "today": "2026-09-24"}
 READING = {
@@ -260,99 +234,6 @@ def test_provider_request_is_json_mode_without_tools(
     assert payload["stream"] is False
     assert "tools" not in payload
     assert payload["max_tokens"] == max_tokens
-
-
-# /v1/intents only; remove with that endpoint.
-def test_valid_provider_response_contract_and_request(monkeypatch: pytest.MonkeyPatch) -> None:
-    configure(monkeypatch)
-    received: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        received.append(request)
-        return envelope(
-            ROUTINE_INTENT,
-            usage={"prompt_tokens": 12, "completion_tokens": 20, "total_tokens": 32},
-        )
-
-    client = mock_client(handler)
-    app.state.provider_client = client
-    response = run(
-        app_request(
-            body=json.dumps(
-                {
-                    "request": "practicar acuarela",
-                    "session_count": 2,
-                    "session_minutes": 30,
-                }
-            ),
-            path="/v1/intents",
-        )
-    )
-    run(client.aclose())
-    assert response.status_code == 200
-    body = response.json()
-    assert set(body) == {"intent", "scope_refused", "meta"}
-    assert body["intent"] == ROUTINE_INTENT
-    assert body["scope_refused"] is False
-    assert body["meta"]["prompt_version"] == provider.PROMPT_VERSION
-    assert body["meta"]["model"] == MODEL
-    assert body["meta"]["attempts"] == 1
-    assert body["meta"]["usage"] == {"prompt_tokens": 12, "completion_tokens": 20, "total_tokens": 32}
-    assert response.headers["x-request-id"] == body["meta"]["request_id"]
-    payload = json.loads(received[0].content)
-    assert received[0].url == provider.DEEPSEEK_URL
-    assert received[0].headers["authorization"] == f"Bearer {API_KEY}"
-    assert received[0].headers["accept-encoding"] == "identity"
-    assert payload["response_format"] == {"type": "json_object"}
-    assert payload["thinking"] == {"type": "disabled"}
-    assert payload["temperature"] == 0.2
-    assert payload["max_tokens"] == 4_000
-    assert payload["stream"] is False
-    assert "tools" not in payload
-    assert "session_count=2" in payload["messages"][1]["content"]
-    assert "session_minutes=30" in payload["messages"][1]["content"]
-    assert "language=en" in payload["messages"][1]["content"]
-    assert "done_when" in payload["messages"][0]["content"]
-
-
-# /v1/intents only; remove with that endpoint.
-@pytest.mark.parametrize(
-    ("language", "prompt_marker"),
-    [("en", "Every user-visible content value must be written in English."),
-     ("es", "Cada valor visible para el usuario debe estar escrito en español.")],
-)
-def test_language_selects_provider_prompt_without_request_text_inference(
-    monkeypatch: pytest.MonkeyPatch,
-    language: str,
-    prompt_marker: str,
-) -> None:
-    configure(monkeypatch)
-    received: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        received.append(request)
-        return envelope(ROUTINE_INTENT)
-
-    client = mock_client(handler)
-    app.state.provider_client = client
-    response = run(
-        app_request(
-            body=json.dumps(
-                {
-                    "request": "learn watercolor",
-                    "language": language,
-                    "session_count": 2,
-                    "session_minutes": 30,
-                }
-            ),
-            path="/v1/intents",
-        )
-    )
-    run(client.aclose())
-    assert response.status_code == 200
-    payload = json.loads(received[0].content)
-    assert prompt_marker in payload["messages"][0]["content"]
-    assert f"language={language}" in payload["messages"][1]["content"]
 
 
 def test_scope_refusal_is_exact_and_skips_provider(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -688,26 +569,6 @@ def test_empty_malformed_and_schema_invalid_provider_output(
     assert raised.value.SAFE_MESSAGE not in {""}
 
 
-# /v1/intents only; remove with that endpoint.
-def test_scheduled_output_must_match_count_and_minutes(monkeypatch: pytest.MonkeyPatch) -> None:
-    configure(monkeypatch)
-    client = mock_client(lambda request: envelope(INTENT))
-    with pytest.raises(provider.ProviderError) as raised:
-        run(
-            provider.generate_intent(
-                "practicar acuarela",
-                request_id=REQUEST_ID,
-                session_count=2,
-                session_minutes=30,
-                client=client,
-            )
-        )
-    run(client.aclose())
-    assert raised.value.outcome == "malformed_response"
-    assert raised.value.provider_completed is True
-    assert raised.value.schema_valid is False
-
-
 class OversizedStream(AsyncByteStream):
     async def __aiter__(self):
         yield b"x" * provider.MAX_RESPONSE_BYTES
@@ -863,45 +724,6 @@ def test_model_containing_an_opaque_credential_is_rejected_and_redacted(
     event = json.loads(captured)
     assert event["event"] == "read_goal_request"
     assert event["model"] == "<redacted>"
-
-
-# /v1/intents only; remove with that endpoint.
-def test_public_output_model_is_strict_and_utf16_limited(monkeypatch: pytest.MonkeyPatch) -> None:
-    configure(monkeypatch)
-    valid = provider.Intent.model_validate(INTENT, strict=True)
-    assert provider.IntentResponse(
-        intent=valid,
-        scope_refused=False,
-        meta=provider.IntentMeta(
-            request_id=REQUEST_ID,
-            prompt_version=provider.PROMPT_VERSION,
-            model=MODEL,
-            latency_ms=0,
-            attempts=1,
-        ),
-    )
-    with pytest.raises(Exception):
-        provider.IntentResponse.model_validate(
-            {
-                "intent": INTENT,
-                "scope_refused": "false",
-                "meta": {
-                    "request_id": REQUEST_ID,
-                    "prompt_version": provider.PROMPT_VERSION,
-                    "model": MODEL,
-                    "latency_ms": 0,
-                    "attempts": 1,
-                },
-            },
-            strict=True,
-        )
-    with pytest.raises(Exception):
-        provider.Intent.model_validate({**INTENT, "extra": "rejected"}, strict=True)
-    with pytest.raises(Exception):
-        provider.Intent.model_validate(
-            {**INTENT, "title": "😀" * 81},
-            strict=True,
-        )
 
 
 class SlowRequestStream(AsyncByteStream):
