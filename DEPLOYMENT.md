@@ -74,8 +74,7 @@ Production as read on 2026-09-23 with `gcloud run services describe`: 1 CPU,
 on 2026-09-02 that serves prompt `cadencia-routine-v2`.
 
 `/v1/draft` allows 40 s per provider attempt and 50 s in total, so the service
-needs a 60 s request timeout; the release that adds it raises the timeout (see
-below).
+needs a 60 s request timeout, which the deploy command below sets.
 
 Cloud Run reserves some paths ending in `z`: `/healthz` never reaches the
 container there, so health checks use `/livez`.
@@ -101,13 +100,18 @@ gcloud builds submit "$CONTEXT" --project "$CADENCIA_GCP_PROJECT" --config "$CON
   --substitutions _REGION=us-central1,_REPOSITORY=cadencia,_SERVICE=cadencia-intents,COMMIT_SHA="$CADENCIA_IMAGE_TAG"
 ```
 
-A new image for an existing service only needs the image flag; the revision
-keeps the service's settings, secrets and scaling limits. The first release with
-`/v1/draft` also passes `--timeout 60s` once:
+A new image for an existing service needs the image and the timeout; the
+revision keeps the service's other settings, secrets and scaling limits. Passing
+the timeout every time is harmless and keeps a 30 s value from coming back:
 
 ```bash
 gcloud run deploy cadencia-intents --project "$CADENCIA_GCP_PROJECT" --region us-central1 \
-  --image "us-central1-docker.pkg.dev/$CADENCIA_GCP_PROJECT/cadencia/cadencia-intents:$CADENCIA_IMAGE_TAG"
+  --image "us-central1-docker.pkg.dev/$CADENCIA_GCP_PROJECT/cadencia/cadencia-intents:$CADENCIA_IMAGE_TAG" \
+  --timeout 60s
+
+# Expect 60
+gcloud run services describe cadencia-intents --project "$CADENCIA_GCP_PROJECT" --region us-central1 \
+  --format='value(spec.template.spec.timeoutSeconds)'
 ```
 
 For a first deployment, create the service with every setting production uses:
