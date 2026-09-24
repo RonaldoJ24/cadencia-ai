@@ -32,6 +32,8 @@ DEFAULT_MODEL = "deepseek-v4-flash"
 PROMPT_VERSION = "cadencia-routine-v2"
 REQUEST_TIMEOUT_SECONDS = 10.0
 TOTAL_TIMEOUT_SECONDS = 20.0
+# Provider attempts per call; the Worker's spend reservation counts on it.
+MAX_ATTEMPTS = 2
 MAX_RESPONSE_BYTES = 32_768
 MAX_REQUEST_UTF16_UNITS = 2_000
 MAX_TITLE_UTF16_UNITS = 160
@@ -890,7 +892,7 @@ async def _call_provider(
     total_timeout = TOTAL_TIMEOUT_SECONDS if total_timeout is None else total_timeout
     try:
         async with asyncio.timeout(total_timeout):
-            while attempts < 2:
+            while attempts < MAX_ATTEMPTS:
                 try:
                     if before_attempt is not None:
                         before_attempt()

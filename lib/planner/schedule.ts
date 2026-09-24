@@ -60,6 +60,10 @@ export function schedulePlan(spec: GoalSpec, draft: Draft, busy: BusyInterval[])
   const fitness = spec.domain === 'fitness';
   const calendar = planWeeks(spec);
   const ceilings = weeklyCeilings(spec, calendar.length);
+  // A first week cut short by the start date says nothing about training
+  // load, so it stays out of the recent average the load rule uses.
+  const firstWeek = calendar[0]?.start;
+  const firstWeekCut = firstWeek !== undefined && spec.days.some((day) => addDays(firstWeek, day) < spec.startDate);
   const placedMinutes: number[] = [];
   const hardDates = new Set<LocalDate>();
   const notes: ScheduleNote[] = [];
@@ -151,7 +155,7 @@ export function schedulePlan(spec: GoalSpec, draft: Draft, busy: BusyInterval[])
     });
 
     sessions.sort((a, b) => a.date.localeCompare(b.date));
-    placedMinutes.push(sessions.reduce((total, session) => total + session.minutes, 0));
+    if (weekIndex > 0 || !firstWeekCut) placedMinutes.push(sessions.reduce((total, session) => total + session.minutes, 0));
     weeks.push({ week, start: calendarWeek.start, end: calendarWeek.end, sessions });
   }
 

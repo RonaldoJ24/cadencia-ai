@@ -34,6 +34,8 @@ export type GoalSpec = {
   weeklyCapMinutes: number;
   /** Starting fitness level; sets the first week's volume for fitness plans. */
   level: Level;
+  /** Longest session the person asked for, when they gave one. */
+  maxSessionMinutes?: number;
 };
 
 /** A time the person is not available, local wall-clock, end exclusive. */

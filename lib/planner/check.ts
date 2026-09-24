@@ -21,7 +21,8 @@ export type Rule =
   | 'draft_consistency'
   | 'week_ceiling'
   | 'load_jump'
-  | 'hard_per_week';
+  | 'hard_per_week'
+  | 'session_length';
 
 export type Violation = { rule: Rule; detail: string; sessionId?: string; week?: number };
 
@@ -83,6 +84,9 @@ export function checkPlan(plan: GoalPlan, busy: BusyInterval[]): Violation[] {
       if (session.blocks.reduce((total, block) => total + block.minutes, 0) !== session.minutes) {
         violations.push({ rule: 'blocks_sum', ...at, detail: session.id });
       }
+      if (spec.maxSessionMinutes !== undefined && session.minutes > spec.maxSessionMinutes) {
+        violations.push({ rule: 'session_length', ...at, detail: `${session.minutes} > ${spec.maxSessionMinutes}` });
+      }
       const slot = requested.indexOf(session.typeId);
       if (slot === -1) violations.push({ rule: 'draft_consistency', ...at, detail: `${session.typeId} not requested` });
       else requested.splice(slot, 1);
@@ -108,8 +112,9 @@ export function checkPlan(plan: GoalPlan, busy: BusyInterval[]): Violation[] {
 /**
  * Weekly fitness volume: under a ceiling that starts at the level's volume
  * and grows at most 10% a week, never more than 30% above the average of the
- * four weeks before (with the starting volume as a floor), and at most two
- * hard sessions a week.
+ * four weeks before (with the starting volume as a floor, and without a
+ * first week cut short by the start date), and at most two hard sessions a
+ * week.
  */
 function fitnessLoad(plan: GoalPlan): Violation[] {
   const { spec } = plan;
@@ -124,12 +129,19 @@ function fitnessLoad(plan: GoalPlan): Violation[] {
     }
   }
   const start = FITNESS_LOAD.startMinutes[spec.level];
+  // Week 1 is cut when an allowed weekday of it falls before the start date.
+  const firstMonday = plan.weeks.find((week) => week.week === 1)?.start;
+  const firstWeekCut = firstMonday !== undefined && Array.from({ length: 7 }, (_, offset) => {
+    const date = new Date(Date.parse(`${firstMonday}T00:00:00Z`) + offset * 86_400_000).toISOString().slice(0, 10);
+    return date < spec.startDate && spec.days.includes(mondayBasedWeekday(date) as (typeof spec.days)[number]);
+  }).some(Boolean);
   let ceiling = Math.min(spec.weeklyCapMinutes, start);
   totals.forEach((minutes, index) => {
     const week = index + 1;
     if (index > 0) ceiling = Math.min(spec.weeklyCapMinutes, Math.floor((ceiling * FITNESS_LOAD.growthPercent) / 100));
     if (minutes > ceiling) violations.push({ rule: 'week_ceiling', week, detail: `${minutes} > ${ceiling}` });
-    const recent = totals.slice(Math.max(0, index - FITNESS_LOAD.jumpWeeks), index);
+    const counted = firstWeekCut ? 1 : 0;
+    const recent = totals.slice(Math.max(counted, index - FITNESS_LOAD.jumpWeeks), index);
     if (recent.length > 0) {
       const sum = recent.reduce((total, value) => total + value, 0);
       const limit = Math.max(start, Math.floor((sum * FITNESS_LOAD.jumpPercent) / (100 * recent.length)));

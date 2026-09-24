@@ -52,7 +52,9 @@ try:
         DraftRequest,
         ReadGoalRequest,
         draft_plan,
+        draft_request,
         read_goal,
+        read_goal_request,
     )
 except ImportError:  # Allows `uvicorn app:app` from the service directory.
     from planning import (  # type: ignore[no-redef]
@@ -61,7 +63,9 @@ except ImportError:  # Allows `uvicorn app:app` from the service directory.
         DraftRequest,
         ReadGoalRequest,
         draft_plan,
+        draft_request,
         read_goal,
+        read_goal_request,
     )
 
 MAX_BODY_BYTES = 32_768
@@ -466,7 +470,7 @@ async def read_goal_endpoint(request: Request) -> JSONResponse:
         request,
         event_name="read_goal_request",
         prompt_version=READ_GOAL_VERSION,
-        parse=lambda value: ReadGoalRequest.model_validate(value, strict=True),
+        parse=read_goal_request,
         call=call,
         respond=lambda reading, meta: {
             "reading": reading.model_dump(mode="json"),
@@ -490,7 +494,7 @@ async def draft_endpoint(request: Request) -> JSONResponse:
         request,
         event_name="draft_request",
         prompt_version=DRAFT_VERSION,
-        parse=lambda value: DraftRequest.model_validate(value, strict=True),
+        parse=draft_request,
         call=call,
         respond=lambda draft, meta: {"draft": draft.model_dump(mode="json"), "meta": meta},
     )

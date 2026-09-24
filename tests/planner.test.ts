@@ -177,6 +177,10 @@ void test('trimming keeps key sessions first, then the most minutes', () => {
   assert.deepEqual(keepBest([easy, easy, easy, easy], limits), [0, 1, 2]);
   assert.deepEqual(keepBest([tempo, tempo, tempo], { ...limits, maxMinutes: 200 }), [0, 1]);
   assert.deepEqual(keepBest([long, long], { ...limits, maxMinutes: 30 }), []);
+  // Only one key session fits in 80 minutes. The long run is kept over tempo
+  // work even though tempo plus two support sessions would fill all 80.
+  const stretch = { minutes: 10, intensity: 'easy', role: 'support' } as const;
+  assert.deepEqual(keepBest([easy, long, tempo, stretch], { ...limits, maxMinutes: 80 }), [0, 1]);
 });
 
 void test('a recurring Tuesday meeting moves sessions and every rule still holds', () => {
@@ -302,6 +306,20 @@ void test('a planned lighter week does not block the return to earlier volume', 
   // weeks 6 to 9 is 92.5, so up to 120 is allowed.
   const plan = schedulePlan(tenK, deload, []);
   assert.deepEqual(plan.notes.filter((note) => note.kind === 'dropped'), []);
+  assert.deepEqual(checkPlan(plan, []), []);
+});
+
+void test('a first week cut short by the start date does not hold back later weeks', () => {
+  // The plan starts on a Thursday, so week 1 holds only Thursday and Friday.
+  const draft = tenKDraft(11);
+  draft.weeks[0] = { week: 1, sessions: ['easy_run'] };
+  for (const index of [1, 2, 3]) draft.weeks[index] = { week: index + 1, sessions: ['easy_run', 'easy_run', 'easy_run'] };
+  // 110 minutes is within 30% of the 90-minute weeks 2 to 4; counting the
+  // 30-minute partial week would have capped it at 97.
+  draft.weeks[4] = { week: 5, sessions: ['long_run', 'intervals', 'easy_run'] };
+  const plan = schedulePlan(tenK, draft, []);
+  assert.deepEqual(plan.notes.filter((note) => note.kind === 'dropped'), []);
+  assert.equal(plan.weeks[4].sessions.reduce((total, session) => total + session.minutes, 0), 110);
   assert.deepEqual(checkPlan(plan, []), []);
 });
 

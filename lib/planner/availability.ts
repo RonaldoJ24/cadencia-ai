@@ -74,7 +74,12 @@ export function earliestFit(date: LocalDate, minutes: number, spec: GoalSpec, bu
 /** The room each week really has, offered to the model before it drafts. */
 export function buildSkeleton(spec: GoalSpec, busy: BusyInterval[]): Skeleton {
   const windowMinutes = minutesOf(spec.window.end) - minutesOf(spec.window.start);
-  const longest = Math.min(PLAN_LIMITS.maxSessionMinutes, windowMinutes, spec.weeklyCapMinutes);
+  const longest = Math.min(
+    PLAN_LIMITS.maxSessionMinutes,
+    windowMinutes,
+    spec.weeklyCapMinutes,
+    spec.maxSessionMinutes ?? PLAN_LIMITS.maxSessionMinutes,
+  );
   const max = Math.max(PLAN_LIMITS.minSessionMinutes, longest - (longest % 5));
   const min = PLAN_LIMITS.minSessionMinutes;
   const weeks = planWeeks(spec);
