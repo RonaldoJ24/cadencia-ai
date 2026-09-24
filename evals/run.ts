@@ -11,7 +11,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { coverage, parseCases } from './lib/cases.ts';
-import { runEvaluation, type Arm } from './lib/runner.ts';
+import { RunRefused, runEvaluation, type Arm, type RunSummary } from './lib/runner.ts';
 
 const { values } = parseArgs({
   options: {
@@ -55,14 +55,20 @@ if (arms.length !== wanted.length) fail(`unknown arm in ${wanted.join(',')}`);
 
 const outDir = join('evals', dryRun ? 'dry-runs' : 'runs', runId);
 mkdirSync(outDir, { recursive: true });
-const summary = await runEvaluation({
-  runId,
-  outDir,
-  cases,
-  arms,
-  token,
-  budgetMicroUsd: Math.floor(budget * 1_000_000),
-  gitSha: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
-  log: (line) => console.log(line),
-});
+let summary: RunSummary;
+try {
+  summary = await runEvaluation({
+    runId,
+    outDir,
+    cases,
+    arms,
+    token,
+    budgetMicroUsd: Math.floor(budget * 1_000_000),
+    gitSha: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+    log: (line) => console.log(line),
+  });
+} catch (error) {
+  if (error instanceof RunRefused) fail(`refused: ${error.message}`);
+  throw error;
+}
 console.log(JSON.stringify({ outDir, ...summary }));

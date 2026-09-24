@@ -371,7 +371,8 @@ export async function runEvaluation(options: RunOptions): Promise<RunSummary> {
     if (!line.harness) scored.set(key(line.caseId, line.arm, line.round), line);
     spent += line.costMicroUsd;
     runs += 1;
-    options.log?.(`${line.caseId} ${line.arm} round ${line.round}: ${line.harness ? 'harness failure' : line.outcome} $${(line.costMicroUsd / 1e6).toFixed(4)}`);
+    const status = line.harness ? `harness failure (${line.failedCode})` : line.outcome;
+    options.log?.(`${line.caseId} ${line.arm} round ${line.round}: ${status} $${(line.costMicroUsd / 1e6).toFixed(4)}`);
   };
   const stop = (reason: NonNullable<RunSummary['stopReason']>, caseId: string): RunSummary => {
     writeManifest({ status: `stopped_by_${reason}`, stoppedBeforeCase: caseId, spentMicroUsd: spent });
