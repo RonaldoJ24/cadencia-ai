@@ -55,9 +55,10 @@ runs go in `runs/<run-id>/` and are committed with everything they produced.
 
 5. **Rate blind, before reading any table.** Make the pack, open
    `rate/index.html` from disk, load `rating-pack.json`, rate every pair, and
-   export the ratings into the run folder. The shuffle seed is random and goes
-   only into `rating-key.json`; leave that file closed until the ratings are
-   exported.
+   export. Move the exported `ratings-<pack>.json` into the run folder. The
+   shuffle seed is random and goes only into `rating-key.json`; leave that file
+   closed until the ratings are exported. The page makes no network requests and
+   keeps progress in the browser, so a pack can be rated over several sittings.
 
    ```bash
    node --experimental-strip-types evals/blind.ts --cases evals/cases/cases.jsonl \
@@ -68,7 +69,7 @@ runs go in `runs/<run-id>/` and are committed with everything they produced.
 
    ```bash
    node --experimental-strip-types evals/analyze.ts --cases evals/cases/cases.jsonl --run evals/runs/<run-id>
-   node --experimental-strip-types evals/unblind.ts --run evals/runs/<run-id> --ratings evals/runs/<run-id>/ratings.json
+   node --experimental-strip-types evals/unblind.ts --run evals/runs/<run-id> --ratings evals/runs/<run-id>/ratings-<pack>.json
    ```
 
 `--dry-run` skips the freeze, quota and clean checkout checks, so the harness

@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Blind plan rating</title>
+<link rel="icon" href="data:,">
+<!--
+  Blind rating page for the evaluation (evals/PREREGISTRATION.md, section 6).
+  Open this file from disk and load a RatingPack JSON made by makePack() in
+  evals/lib/blind.ts. Each pair is shown as "Plan 1" and "Plan 2", and the page
+  exports a Ratings JSON for unblind(). It never loads the pack key, the policy
+  above blocks every network request, and pack text is only ever set as text.
+-->
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f5f6f8;
+    --surface: #fff;
+    --text: #1f2328;
+    --muted: #59636e;
+    --border: #d1d9e0;
+    --strong-border: #818b98;
+    --accent: #0b57d0;
+    --accent-soft: #e8f0fe;
+    --warn-bg: #fff8c5;
+    --warn-border: #bf8700;
+    --error-bg: #ffebe9;
+    --error-border: #cf222e;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-padding-bottom: 96px; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 0; }
+  h1 { font-size: 1.6rem; line-height: 1.25; margin: 0 0 16px; }
+  h2 { font-size: 1.25rem; line-height: 1.3; margin: 0 0 8px; }
+  h3 { font-size: 1rem; margin: 20px 0 8px; }
+  p { margin: 0 0 8px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; margin: 0 0 20px; }
+  .note { background: var(--accent-soft); border-left: 4px solid var(--accent); border-radius: 6px; padding: 12px 16px; margin: 0 0 20px; }
+  .warn, .error { border-radius: 6px; padding: 10px 14px; }
+  .warn { background: var(--warn-bg); border: 1px solid var(--warn-border); margin: 0 0 20px; }
+  .error { background: var(--error-bg); border: 1px solid var(--error-border); }
+  .muted { color: var(--muted); }
+  .small { font-size: .92rem; }
+  .text { overflow-wrap: anywhere; }
+  .setup { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .setup p { margin: 8px 0 0; }
+  .step { display: block; font-weight: 600; margin: 0 0 6px; }
+  .setup p.step { margin: 0 0 6px; }
+  input[type=text] { width: 100%; font: inherit; color: inherit; padding: 8px 10px; border: 1px solid var(--strong-border); border-radius: 6px; }
+  input[type=file] { font: inherit; max-width: 100%; }
+  button { font: inherit; min-height: 40px; padding: 8px 18px; border: 1px solid var(--strong-border); border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { background: #eff2f5; border-color: var(--border); color: var(--muted); cursor: not-allowed; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .goal { white-space: pre-wrap; font-size: 1.1rem; margin: 0; }
+  .plans { display: grid; gap: 20px; margin: 0 0 20px; }
+  .plan { display: flex; flex-direction: column; min-width: 0; margin: 0; }
+  .scores { margin-top: auto; padding-top: 8px; }
+  dl.facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 16px; margin: 0; }
+  dl.facts dt { color: var(--muted); }
+  dl.facts dd { margin: 0; min-width: 0; }
+  ul.plain { list-style: none; margin: 0; padding: 0; }
+  ul.plain > li + li { margin-top: 8px; }
+  ol.blocks { margin: 0; padding-left: 1.25rem; }
+  details { border: 1px solid var(--border); border-radius: 6px; background: var(--surface); margin: 0 0 8px; }
+  summary { cursor: pointer; padding: 8px 12px; }
+  details.week > summary { font-weight: 600; }
+  details[open] > summary { border-bottom: 1px solid var(--border); }
+  details.session { background: #fafbfc; }
+  .body { padding: 10px 12px; }
+  .body > details:last-child { margin-bottom: 0; }
+  fieldset { border: 1px solid var(--border); border-radius: 8px; margin: 0 0 12px; padding: 8px 12px 12px; min-width: 0; }
+  legend { font-weight: 600; padding: 0 4px; }
+  .scale { display: flex; flex-wrap: wrap; gap: 8px; }
+  .choice { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 6px 14px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); cursor: pointer; }
+  .choice:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+  .choice input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+  .scale.score { gap: 6px; max-width: 22rem; }
+  .score .choice { flex: 1 1 0; justify-content: center; gap: 5px; padding: 6px; }
+  .prefer { padding: 12px 20px 16px; }
+  .prefer p { margin: 10px 0 0; }
+  .pager {
+    position: sticky; bottom: 0; z-index: 1;
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px;
+    margin: 0 -16px; padding: 12px 16px;
+    background: var(--surface); border-top: 1px solid var(--border); box-shadow: 0 -2px 8px rgba(31, 35, 40, .06);
+  }
+  .pager p { margin: 0; font-weight: 600; text-align: center; }
+  .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  [hidden] { display: none !important; }
+  @media (max-width: 480px) {
+    .card { padding: 14px; }
+    .prefer { padding: 10px 14px 14px; }
+  }
+  @media (min-width: 900px) {
+    .setup { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .plans { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Blind plan rating</h1>
+  <p class="note">You are rating plans without knowing which system made them. Rate every pair before looking at any automatic results.</p>
+  <p id="storage-warning" class="warn" role="alert" hidden>This browser is not saving your progress. Keep this page open and export your ratings before you close it.</p>
+
+  <section class="card setup" aria-label="Setup">
+    <div>
+      <label class="step" for="pack-file">1. Rating pack (JSON file)</label>
+      <input type="file" id="pack-file" accept=".json,application/json">
+      <p id="pack-status" class="muted small text">No pack loaded yet.</p>
+      <p id="load-error" class="error text" role="alert" hidden></p>
+    </div>
+    <div>
+      <label class="step" for="rater">2. Your name</label>
+      <input type="text" id="rater" maxlength="100" autocomplete="name" spellcheck="false" aria-describedby="rater-hint">
+      <p id="rater-hint" class="muted small">Required to export. It goes into the ratings file.</p>
+    </div>
+    <div>
+      <p class="step">3. Export</p>
+      <button type="button" id="export" class="primary" aria-describedby="export-note" disabled>Export ratings</button>
+      <p id="export-note" class="muted small text">Load a pack to start.</p>
+    </div>
+  </section>
+
+  <section id="rating" aria-label="Pair to rate" hidden>
+    <div id="item"></div>
+    <nav class="pager" aria-label="Pairs">
+      <button type="button" id="prev">Previous</button>
+      <p id="progress" aria-live="polite"></p>
+      <button type="button" id="next">Next</button>
+    </nav>
+  </section>
+</main>
+<script>
+'use strict';
+(() => {
+  const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const LANGUAGES = { en: 'English', es: 'Spanish' };
+  const STATEMENTS = [
+    ['fit', 'It fits my constraints'],
+    ['progression', 'The progression makes sense'],
+    ['clarity', 'The sessions are clear and doable'],
+  ];
+  const PREFERENCES = [['1', 'Plan 1 is better'], ['2', 'Plan 2 is better'], ['tie', 'About the same']];
+  const PLANS = ['plan1', 'plan2'];
+  const ANSWERS_PER_PAIR = PLANS.length * STATEMENTS.length + 1;
+  const PACK_KEY_PREFIX = 'cadencia-rating/pack/';
+  const RATER_KEY = 'cadencia-rating/rater';
+  const MAX_NAME = 100;
+
+  const byId = (id) => document.getElementById(id);
+  const fileInput = byId('pack-file');
+  const packStatus = byId('pack-status');
+  const loadError = byId('load-error');
+  const raterInput = byId('rater');
+  const exportButton = byId('export');
+  const exportNote = byId('export-note');
+  const storageWarning = byId('storage-warning');
+  const ratingSection = byId('rating');
+  const itemEl = byId('item');
+  const progressEl = byId('progress');
+  const prevButton = byId('prev');
+  const nextButton = byId('next');
+
+  let pack = null; // the loaded, validated RatingPack
+  let index = 0; // position of the pair on screen
+  let answers = new Map(); // item id -> { plan1: { fit, progression, clarity }, plan2: {...}, preferred }
+  let storageWorks = true;
+
+  // Builds an element. Children are appended as nodes or as plain text, never parsed as HTML.
+  function el(tag, attributes, ...children) {
+    const node = document.createElement(tag);
+    for (const [name, value] of Object.entries(attributes || {})) {
+      if (value === true) node.setAttribute(name, '');
+      else if (value !== false && value !== null && value !== undefined) node.setAttribute(name, String(value));
+    }
+    for (const child of children.flat(Infinity)) {
+      if (child !== null && child !== undefined && child !== false) node.append(child);
+    }
+    return node;
+  }
+
+  // ---- Pack validation: the file is untrusted, so check every field the page reads ----
+  const PLAN_SHAPE = {
+    settings: { deadline: 'text', days: ['weekday'], window: { start: 'text', end: 'text' }, weeklyCapMinutes: 'number', 'maxSessionMinutes?': 'number' },
+    phases: [{ title: 'text', fromWeek: 'number', toWeek: 'number', focus: 'text' }],
+    sessionTypes: [{ id: 'text', title: 'text', minutes: 'number', intensity: 'text', role: 'text', blocks: [{ minutes: 'number', activity: 'text' }], deliverable: 'text', doneWhen: 'text' }],
+    weeks: [{ week: 'number', start: 'text', sessions: [{ date: 'text', start: 'text', typeId: 'text', minutes: 'number' }] }],
+  };
+  const PACK_SHAPE = { pack: 'name', items: [{ id: 'name', text: 'text', language: 'language', plans: [PLAN_SHAPE, PLAN_SHAPE] }] };
+  const KINDS = {
+    text: [(value) => typeof value === 'string', 'should be text'],
+    name: [(value) => typeof value === 'string' && value.trim() !== '', 'should be non-empty text'],
+    number: [(value) => typeof value === 'number' && Number.isFinite(value), 'should be a number'],
+    weekday: [(value) => Number.isInteger(value) && value >= 0 && value <= 6, 'should be a weekday from 0 (Monday) to 6 (Sunday)'],
+    language: [(value) => value === 'en' || value === 'es', 'should be "en" or "es"'],
+  };
+
+  // A string shape is a kind, a one-entry array is a list of that shape, a longer
+  // array is a fixed-length tuple, and an object lists its keys ("?" = optional).
+  function check(value, shape, path) {
+    const where = path || 'the file';
+    if (typeof shape === 'string') {
+      const [ok, expected] = KINDS[shape];
+      if (!ok(value)) throw new Error(`${where} ${expected}.`);
+    } else if (Array.isArray(shape)) {
+      if (!Array.isArray(value)) throw new Error(`${where} should be a list.`);
+      if (shape.length > 1 && value.length !== shape.length) throw new Error(`${where} should hold exactly ${shape.length} entries, not ${value.length}.`);
+      value.forEach((entry, i) => check(entry, shape.length > 1 ? shape[i] : shape[0], `${where}[${i}]`));
+    } else {
+      if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${where} should be an object.`);
+      for (const [rawKey, inner] of Object.entries(shape)) {
+        const key = rawKey.replace(/\?$/, '');
+        if (key !== rawKey && value[key] === undefined) continue;
+        check(value[key], inner, path ? `${path}.${key}` : key);
+      }
+    }
+  }
+
+  function validatePack(data) {
+    check(data, PACK_SHAPE, '');
+    if (data.items.length === 0) throw new Error('it has no pairs to rate.');
+    const ids = new Set();
+    for (const item of data.items) {
+      if (ids.has(item.id)) throw new Error(`the item id "${item.id}" appears more than once.`);
+      ids.add(item.id);
+    }
+  }
+
+  // ---- Formatting (dates are local calendar dates, handled in UTC so no time zone shifts a day) ----
+  function weekdayOf(date) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+    if (!match) return '';
+    const [year, month, day] = match.slice(1).map(Number);
+    const value = new Date(Date.UTC(year, month - 1, day));
+    if (value.getUTCFullYear() !== year || value.getUTCMonth() !== month - 1 || value.getUTCDate() !== day) return '';
+    return DAYS[(value.getUTCDay() + 6) % 7];
+  }
+  const showDate = (date) => (weekdayOf(date) ? `${weekdayOf(date)} ${date}` : date);
+  const count = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  const hours = (minutes) => {
+    const value = Math.round(minutes / 6) / 10;
+    return `${value} ${value === 1 ? 'hour' : 'hours'}`;
+  };
+
+  // ---- Answers ----
+  const blank = () => ({ plan1: {}, plan2: {}, preferred: null });
+  const isScore = (value) => Number.isInteger(value) && value >= 1 && value <= 5;
+  const isPreference = (value) => PREFERENCES.some(([option]) => option === value);
+
+  function cleanAnswer(raw) {
+    const answer = blank();
+    if (!raw || typeof raw !== 'object') return answer;
+    for (const plan of PLANS) {
+      for (const [statement] of STATEMENTS) {
+        const score = raw[plan] && typeof raw[plan] === 'object' ? raw[plan][statement] : undefined;
+        if (isScore(score)) answer[plan][statement] = score;
+      }
+    }
+    if (isPreference(raw.preferred)) answer.preferred = raw.preferred;
+    return answer;
+  }
+
+  function answerCount(answer) {
+    if (!answer) return 0;
+    let given = isPreference(answer.preferred) ? 1 : 0;
+    for (const plan of PLANS) for (const [statement] of STATEMENTS) if (isScore(answer[plan][statement])) given += 1;
+    return given;
+  }
+  const isRated = (answer) => answerCount(answer) === ANSWERS_PER_PAIR;
+  const ratedCount = () => (pack ? pack.items.filter((item) => isRated(answers.get(item.id))).length : 0);
+
+  // ---- Storage: any access can throw (private windows, blocked site data), so the page works without it ----
+  function storageGet(key) {
+    try { return window.localStorage.getItem(key); } catch { return null; }
+  }
+  function storageSet(key, value) {
+    try { window.localStorage.setItem(key, value); return true; } catch { return false; }
+  }
+
+  function save() {
+    if (!pack) return;
+    const state = { version: 1, rater: raterInput.value.trim(), index, answers: Object.fromEntries(answers) };
+    storageWorks = storageSet(PACK_KEY_PREFIX + pack.pack, JSON.stringify(state));
+    storageWarning.hidden = storageWorks;
+  }
+
+  function restore() {
+    answers = new Map();
+    index = 0;
+    let saved = null;
+    try { saved = JSON.parse(storageGet(PACK_KEY_PREFIX + pack.pack) || 'null'); } catch { saved = null; }
+    if (!saved || typeof saved !== 'object') return;
+    const ids = new Set(pack.items.map((item) => item.id));
+    if (saved.answers && typeof saved.answers === 'object') {
+      for (const [id, raw] of Object.entries(saved.answers)) if (ids.has(id)) answers.set(id, cleanAnswer(raw));
+    }
+    if (Number.isInteger(saved.index)) index = Math.min(Math.max(saved.index, 0), pack.items.length - 1);
+    if (!raterInput.value.trim() && typeof saved.rater === 'string') raterInput.value = saved.rater.slice(0, MAX_NAME);
+  }
+
+  // ---- Rendering ----
+  function factList(pairs) {
+    return el('dl', { class: 'facts' }, pairs.map(([term, value]) => [el('dt', {}, term), el('dd', { class: 'text' }, value)]));
+  }
+
+  function choice(name, value, label, checked, data) {
+    const id = `${name}-${value}`;
+    return el('label', { class: 'choice', for: id }, el('input', { type: 'radio', id, name, value, checked, ...data }), label);
+  }
+
+  function renderSession(session, type) {
+    const title = type ? type.title : `Unknown session type "${session.typeId}"`;
+    const details = type
+      ? factList([
+        ['Intensity', type.intensity],
+        ['Role', type.role],
+        ['Blocks', type.blocks.length ? el('ol', { class: 'blocks' }, type.blocks.map((block) => el('li', {}, `${block.minutes} min: ${block.activity}`))) : 'none'],
+        ['Deliverable', type.deliverable],
+        ['Done when', type.doneWhen],
+      ])
+      : el('p', { class: 'muted' }, 'This plan has no session type with that id.');
+    return el('details', { class: 'session' },
+      el('summary', { class: 'text' }, `${showDate(session.date)}, ${session.start} · ${title} · ${session.minutes} min`),
+      el('div', { class: 'body' }, details));
+  }
+
+  function renderWeek(week, types, open) {
+    const total = week.sessions.reduce((sum, session) => sum + session.minutes, 0);
+    const size = week.sessions.length ? `${count(week.sessions.length, 'session')}, ${total} min` : 'no sessions';
+    return el('details', { class: 'week', open },
+      el('summary', {}, `Week ${week.week} · ${showDate(week.start)} · ${size}`),
+      el('div', { class: 'body' }, week.sessions.length
+        ? week.sessions.map((session) => renderSession(session, types.get(session.typeId)))
+        : el('p', { class: 'muted' }, 'No sessions this week.')));
+  }
+
+  function renderPhase(phase) {
+    const weeks = phase.fromWeek === phase.toWeek ? `Week ${phase.fromWeek}` : `Weeks ${phase.fromWeek}–${phase.toWeek}`;
+    return el('li', { class: 'text' }, el('strong', {}, phase.title), el('span', { class: 'muted' }, ` · ${weeks}`), el('div', {}, phase.focus));
+  }
+
+  function renderScores(key, n, answer) {
+    return el('div', { class: 'scores' },
+      el('h3', {}, `Rate Plan ${n}`),
+      el('p', { class: 'muted small' }, '1 = disagree, 5 = agree'),
+      STATEMENTS.map(([statement, text]) => el('fieldset', {},
+        el('legend', {}, text, el('span', { class: 'sr-only' }, ` (Plan ${n})`)),
+        el('div', { class: 'scale score' }, [1, 2, 3, 4, 5].map((score) => choice(`${key}-${statement}`, String(score), String(score),
+          answer[key][statement] === score, { 'data-plan': key, 'data-statement': statement }))))));
+  }
+
+  function renderPlan(plan, n, answer) {
+    const key = `plan${n}`;
+    const { settings } = plan;
+    const types = new Map(plan.sessionTypes.map((type) => [type.id, type]));
+    const sessions = plan.weeks.flatMap((week) => week.sessions);
+    const days = [...new Set(settings.days)].sort((a, b) => a - b).map((day) => DAYS[day]).join(', ');
+    const facts = [
+      ['Deadline', showDate(settings.deadline)],
+      ['Days', days || 'none'],
+      ['Time window', `${settings.window.start}–${settings.window.end}`],
+      ['Weekly cap', `${settings.weeklyCapMinutes} min`],
+    ];
+    if (settings.maxSessionMinutes !== undefined) facts.push(['Longest session', `${settings.maxSessionMinutes} min`]);
+    facts.push(['Totals', `${count(sessions.length, 'session')}, ${hours(sessions.reduce((sum, session) => sum + session.minutes, 0))}`]);
+    const firstOpen = plan.weeks.findIndex((week) => week.sessions.length > 0);
+    return el('section', { class: 'card plan', 'aria-labelledby': `${key}-title` },
+      el('h2', { id: `${key}-title` }, `Plan ${n}`),
+      factList(facts),
+      el('h3', {}, 'Phases'),
+      plan.phases.length ? el('ul', { class: 'plain' }, plan.phases.map(renderPhase)) : el('p', { class: 'muted' }, 'No phases.'),
+      el('h3', {}, 'Weeks'),
+      plan.weeks.length ? plan.weeks.map((week, i) => renderWeek(week, types, i === firstOpen)) : el('p', { class: 'muted' }, 'No weeks.'),
+      renderScores(key, n, answer));
+  }
+
+  function renderItem() {
+    const item = pack.items[index];
+    const answer = answers.get(item.id) || blank();
+    itemEl.replaceChildren(
+      el('section', { class: 'card', 'aria-labelledby': 'goal-title' },
+        el('h2', { id: 'goal-title', tabindex: -1 }, 'Goal'),
+        el('p', { class: 'muted small' }, `${LANGUAGES[item.language]} · item ${item.id}`),
+        el('p', { class: 'goal text', lang: item.language }, item.text)),
+      el('div', { class: 'plans' }, item.plans.map((plan, i) => renderPlan(plan, i + 1, answer))),
+      el('fieldset', { class: 'card prefer' },
+        el('legend', {}, 'Which plan is better overall?'),
+        el('div', { class: 'scale' }, PREFERENCES.map(([value, text]) => choice('preferred', value, text, answer.preferred === value, {}))),
+        el('p', { id: 'item-status', class: 'muted small' })));
+    updateStatus();
+  }
+
+  // ---- Status and export ----
+  function updateStatus() {
+    const rated = ratedCount();
+    const progress = `Pair ${index + 1} of ${pack.items.length}, ${rated} rated`;
+    if (progressEl.textContent !== progress) progressEl.textContent = progress;
+    prevButton.disabled = index === 0;
+    nextButton.disabled = index === pack.items.length - 1;
+    const given = answerCount(answers.get(pack.items[index].id));
+    byId('item-status').textContent = given === ANSWERS_PER_PAIR
+      ? 'This pair is fully rated.'
+      : `${given} of ${ANSWERS_PER_PAIR} answers given. A pair is exported only when all ${ANSWERS_PER_PAIR} are set.`;
+    updateExport(rated);
+  }
+
+  function updateExport(rated = ratedCount()) {
+    const named = raterInput.value.trim() !== '';
+    exportButton.disabled = !pack || !named || rated === 0;
+    if (!pack) {
+      exportNote.textContent = 'Load a pack to start.';
+    } else if (exportButton.disabled) {
+      exportNote.textContent = `To export, ${[!named && 'enter your name', rated === 0 && 'rate at least one pair'].filter(Boolean).join(' and ')}.`;
+    } else {
+      const missing = pack.items.length - rated;
+      exportNote.textContent = missing
+        ? `Ready: ${count(rated, 'rated pair')} will be exported, ${missing} not rated yet.`
+        : 'Ready: every pair is rated.';
+    }
+  }
+
+  function exportRatings() {
+    const rater = raterInput.value.trim();
+    if (!pack || !rater) return;
+    const ratings = [];
+    for (const item of pack.items) {
+      const answer = answers.get(item.id);
+      if (!isRated(answer)) continue;
+      const scores = (plan) => ({ fit: answer[plan].fit, progression: answer[plan].progression, clarity: answer[plan].clarity });
+      ratings.push({ id: item.id, plan1: scores('plan1'), plan2: scores('plan2'), preferred: answer.preferred });
+    }
+    if (ratings.length === 0) return;
+    const missing = pack.items.length - ratings.length;
+    if (missing > 0 && !window.confirm(`${count(missing, 'pair')} of ${pack.items.length} ${missing === 1 ? 'is' : 'are'} not fully rated and will be left out of the file. Export the ${count(ratings.length, 'rated pair')} anyway?`)) return;
+    const data = { pack: pack.pack, rater, ratedAt: new Date().toISOString(), ratings };
+    const fileName = `ratings-${pack.pack.replace(/[^A-Za-z0-9._-]+/g, '_').slice(0, 120)}.json`;
+    const url = URL.createObjectURL(new Blob([`${JSON.stringify(data, null, 2)}\n`], { type: 'application/json' }));
+    const link = el('a', { href: url, download: fileName, hidden: true });
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    exportNote.textContent = `Exported ${count(ratings.length, 'rated pair')} to ${fileName}.`;
+  }
+
+  // ---- Events ----
+  function showError(message) {
+    loadError.textContent = message;
+    loadError.hidden = false;
+  }
+
+  async function readJson(file) {
+    try { return { data: JSON.parse(await file.text()) }; } catch { return null; }
+  }
+
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+    const parsed = await readJson(file);
+    fileInput.value = '';
+    const still = pack ? ' The pack you were rating is still loaded.' : '';
+    if (!parsed) return showError(`${file.name} could not be read as JSON.${still}`);
+    try {
+      validatePack(parsed.data);
+    } catch (error) {
+      return showError(`${file.name} is not a rating pack: ${error.message}${still}`);
+    }
+    const data = parsed.data;
+    loadError.hidden = true;
+    if (pack && pack.pack === data.pack) {
+      // The same pack again: the answers in memory are the newest, even when storage fails.
+      const ids = new Set(data.items.map((item) => item.id));
+      answers = new Map([...answers].filter(([id]) => ids.has(id)));
+      pack = data;
+      index = Math.min(index, pack.items.length - 1);
+    } else {
+      pack = data;
+      restore();
+    }
+    save();
+    packStatus.textContent = `Loaded pack ${pack.pack}: ${count(pack.items.length, 'pair')}, ${ratedCount()} rated so far.`;
+    ratingSection.hidden = false;
+    renderItem();
+  });
+
+  itemEl.addEventListener('change', (event) => {
+    const input = event.target;
+    if (!pack || !(input instanceof HTMLInputElement) || input.type !== 'radio') return;
+    const id = pack.items[index].id;
+    const answer = answers.get(id) || blank();
+    if (input.name === 'preferred') {
+      if (isPreference(input.value)) answer.preferred = input.value;
+    } else {
+      const { plan, statement } = input.dataset;
+      const score = Number(input.value);
+      if (PLANS.includes(plan) && STATEMENTS.some(([name]) => name === statement) && isScore(score)) answer[plan][statement] = score;
+    }
+    answers.set(id, answer);
+    save();
+    updateStatus();
+  });
+
+  function go(step) {
+    const target = index + step;
+    if (!pack || target < 0 || target >= pack.items.length) return;
+    index = target;
+    save();
+    renderItem();
+    itemEl.scrollIntoView({ block: 'start' });
+    byId('goal-title').focus({ preventScroll: true });
+  }
+  prevButton.addEventListener('click', () => go(-1));
+  nextButton.addEventListener('click', () => go(1));
+
+  raterInput.addEventListener('input', () => {
+    storageSet(RATER_KEY, raterInput.value.trim());
+    save();
+    updateExport();
+  });
+
+  exportButton.addEventListener('click', exportRatings);
+
+  window.addEventListener('beforeunload', (event) => {
+    if (!storageWorks && answers.size > 0) {
+      event.preventDefault();
+      event.returnValue = '';
+    }
+  });
+
+  raterInput.value = (storageGet(RATER_KEY) || '').slice(0, MAX_NAME);
+  updateExport();
+})();
+</script>
+</body>
+</html>
