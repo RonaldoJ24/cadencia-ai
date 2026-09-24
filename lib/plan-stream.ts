@@ -52,7 +52,7 @@ export type PlanStreamEvent = StageEvent | ResultEvent | ErrorEvent;
 export type DraftResult = { intent: unknown; scopeRefused: boolean; requestId?: string };
 
 export type ReserveResult =
-  | { allowed: true; release: () => Promise<void> }
+  | { allowed: true; release: () => Promise<void>; detail?: string }
   | { allowed: false; status: number; reason: string; message: string; retryAfterSec?: number };
 
 export type PipelineDeps = {
@@ -232,7 +232,7 @@ export async function runPlanPipeline(rawInput: unknown, deps: PipelineDeps): Pr
             retryAfterSec: result.retryAfterSec,
           });
         }
-        return { value: result, detail: copy.detail.reserve };
+        return { value: result, detail: result.detail ?? copy.detail.reserve };
       },
       () => new StageFailure('reserve', 'limits_unavailable', baseCopy.api.limitsNotConfigured, { status: 503 }),
     );

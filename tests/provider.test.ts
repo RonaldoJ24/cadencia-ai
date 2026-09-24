@@ -57,7 +57,7 @@ function sqliteDb(): Db & { raw: DatabaseSync } {
 async function migrated(): Promise<Db> {
   const db = sqliteDb();
   db.raw.exec('PRAGMA foreign_keys = ON');
-  for (const file of ['0001_beta_loop.sql', '0002_rate_limits.sql', '0003_public_limits.sql']) {
+  for (const file of ['0001_beta_loop.sql', '0002_rate_limits.sql', '0003_public_limits.sql', '0005_spend_controls.sql']) {
     db.raw.exec(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'));
   }
   return db;
@@ -225,7 +225,7 @@ async function withErrorLogs<T>(callback: () => Promise<T>): Promise<{ value: T;
   }
 }
 
-void test('demo mode is local and GET exposes only boolean live readiness', async () => {
+void test('demo mode is local and GET exposes only live readiness and a coarse reason', async () => {
   await withEnvironment(
     {
       CADENCIA_ENABLE_LIVE: undefined,
@@ -241,7 +241,7 @@ void test('demo mode is local and GET exposes only boolean live readiness', asyn
         throw new Error('network must not be called in demo mode');
       };
       const get = await GET();
-      assert.deepEqual(await get.json(), { liveAvailable: false });
+      assert.deepEqual(await get.json(), { liveAvailable: false, liveStatus: 'paused' });
       const result = await withFetch(fetcher, () => POST(routeRequest({ input, mode: 'demo' })));
       assert.equal(result.status, 200);
       const payload = await result.json() as { plan: { mode: string; input: { request: string } } };
@@ -260,7 +260,7 @@ void test('GET reports readiness only for a valid authenticated service config',
       CADENCIA_SERVICE_TOKEN: 'server-secret',
     },
     async () => {
-      assert.deepEqual(await (await GET()).json(), { liveAvailable: true });
+      assert.deepEqual(await (await GET()).json(), { liveAvailable: true, liveStatus: 'available' });
     },
   );
   for (const serviceUrl of [
@@ -275,7 +275,7 @@ void test('GET reports readiness only for a valid authenticated service config',
         CADENCIA_SERVICE_TOKEN: 'server-secret',
       },
       async () => {
-        assert.deepEqual(await (await GET()).json(), { liveAvailable: false });
+        assert.deepEqual(await (await GET()).json(), { liveAvailable: false, liveStatus: 'paused' });
       },
     );
   }
@@ -296,7 +296,7 @@ void test('GET accepts the private Worker binding bridge when process.env is una
           CADENCIA_SERVICE_TOKEN: 'server-secret',
         },
         async () => {
-          assert.deepEqual(await (await GET()).json(), { liveAvailable: true });
+          assert.deepEqual(await (await GET()).json(), { liveAvailable: true, liveStatus: 'available' });
         },
       ),
   );

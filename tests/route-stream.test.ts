@@ -88,7 +88,7 @@ void test('the demo streams its stages and then the plan', async () => {
 });
 
 void test('a live run streams the limits check and the model stage before the result', async () => {
-  const db = migratedDb(['0001_beta_loop.sql', '0002_rate_limits.sql', '0003_public_limits.sql']);
+  const db = migratedDb(['0001_beta_loop.sql', '0002_rate_limits.sql', '0003_public_limits.sql', '0005_spend_controls.sql']);
   let calls = 0;
   const response = await POST(streamRequest({ input, mode: 'deepseek' }), {
     db,
@@ -110,7 +110,7 @@ void test('a live run streams the limits check and the model stage before the re
 });
 
 void test('a failed model call ends the stream with an error that names the stage', async () => {
-  const db = migratedDb(['0001_beta_loop.sql', '0002_rate_limits.sql', '0003_public_limits.sql']);
+  const db = migratedDb(['0001_beta_loop.sql', '0002_rate_limits.sql', '0003_public_limits.sql', '0005_spend_controls.sql']);
   const original = console.error;
   console.error = () => undefined;
   try {
@@ -134,7 +134,7 @@ void test('a failed model call ends the stream with an error that names the stag
 });
 
 void test('a quota refusal is streamed as a failed limits stage with retry time', async () => {
-  const db = migratedDb(['0001_beta_loop.sql', '0002_rate_limits.sql', '0003_public_limits.sql']);
+  const db = migratedDb(['0001_beta_loop.sql', '0002_rate_limits.sql', '0003_public_limits.sql', '0005_spend_controls.sql']);
   db.raw.exec("UPDATE public_limits_config SET value = 0 WHERE key = 'visitor_daily_quota'");
   const original = console.error;
   console.error = () => undefined;

@@ -9,10 +9,20 @@ import {
 } from '../../../lib/plan-stream.ts';
 import { formatSse, SSE_HEARTBEAT } from '../../../lib/sse.ts';
 import { dict, errorResponse, json, rateLimited, readBoundedText, sameOrigin, type Dict } from '../../../lib/server/http.ts';
-import { liveConfig, requestIntent, runtimeEnv } from '../../../lib/server/live.ts';
+import { liveConfig, requestIntent, runtimeEnv, ServiceFailure, type ServiceUsage } from '../../../lib/server/live.ts';
 import { envDb, type Db } from '../../../lib/server/db.ts';
 import { checkRateLimit, ipScopeKey } from '../../../lib/server/ratelimit.ts';
-import { checkAndReservePublicLiveSlot, limitsFromEnv, type SlotReservationResult } from '../../../lib/server/public_limits.ts';
+import { checkAndReservePublicLiveSlot, type SlotReservationResult } from '../../../lib/server/public_limits.ts';
+import {
+  cancelSpend,
+  formatUsd,
+  liveStatusOf,
+  loadSpendState,
+  reserveSpend,
+  settleSpend,
+  type LiveStatus,
+} from '../../../lib/server/spend.ts';
+import { stepsCopyFor } from '../../../lib/steps-copy.ts';
 
 const EVENT = 'cadencia_routine_failure';
 const HEARTBEAT_MS = 10_000;
@@ -56,7 +66,19 @@ export async function GET(request?: Request, deps?: PublicRoutineDeps): Promise<
     }
   }
 
-  return json({ liveAvailable: (await liveConfig(env)) !== null });
+  // Only a coarse reason leaves the server: configuration problems and the
+  // kill switch all read as 'paused'.
+  const config = await liveConfig(env);
+  let status: LiveStatus = config ? 'available' : 'disabled';
+  if (config && db) {
+    try {
+      status = liveStatusOf(await loadSpendState(db, nowIso));
+    } catch {
+      status = 'disabled';
+    }
+  }
+  const liveStatus = status === 'disabled' ? 'paused' : status;
+  return json({ liveAvailable: liveStatus === 'available', liveStatus });
 }
 
 type ApiCopy = ReturnType<typeof copyFor>['api'];
@@ -237,21 +259,68 @@ export async function POST(request: Request, deps?: PublicRoutineDeps): Promise<
     if (!db) {
       return errorResponse(apiCopy.limitsNotConfigured, 503, 'limits_not_configured', undefined, undefined, EVENT);
     }
+    const spendCopy = stepsCopyFor(language);
+    const spendId = crypto.randomUUID();
+    let spendReserved = false;
+    const settle = async (usage: ServiceUsage | undefined, requestId: string | undefined) => {
+      // Unknown usage leaves the reservation at its worst case.
+      if (!spendReserved || !usage) return;
+      try {
+        await settleSpend(db, { id: spendId, nowIso: new Date().toISOString(), usage: { ...usage, requestId } });
+      } catch (error) {
+        console.error(JSON.stringify({ event: EVENT, reason: 'spend_settle_failed', error_name: (error as Error)?.name }));
+      }
+    };
     pipelineDeps = {
       mode: 'deepseek',
       now: Date.now,
-      reserve: async () => slotResult(
-        await checkAndReservePublicLiveSlot(db, {
-          request,
-          nowMs,
-          nowIso,
-          secret: typeof env.CADENCIA_SERVICE_TOKEN === 'string' ? env.CADENCIA_SERVICE_TOKEN : undefined,
-          limits: limitsFromEnv(env),
-          allowIpFallback: (env as Record<string, unknown>)?.CADENCIA_ALLOW_IP_FALLBACK === 'true',
-        }),
-        apiCopy,
-      ),
-      draft: (input) => fetcher(input, config),
+      reserve: async (): Promise<ReserveResult> => {
+        const spend = await reserveSpend(db, { id: spendId, nowIso, nowMs });
+        if (!spend.allowed) {
+          return {
+            allowed: false,
+            status: spend.reason === 'disabled' ? 503 : 429,
+            reason: spend.reason === 'disabled' ? 'live_disabled' : `spend_${spend.reason}`,
+            message: spend.reason === 'disabled'
+              ? spendCopy.spend.disabled
+              : spend.reason === 'daily_cap' ? spendCopy.spend.dailyCap : spendCopy.spend.monthlyCap,
+            retryAfterSec: spend.retryAfterSec,
+          };
+        }
+        spendReserved = true;
+        const slot = slotResult(
+          await checkAndReservePublicLiveSlot(db, {
+            request,
+            nowMs,
+            nowIso,
+            secret: typeof env.CADENCIA_SERVICE_TOKEN === 'string' ? env.CADENCIA_SERVICE_TOKEN : undefined,
+            allowIpFallback: (env as Record<string, unknown>)?.CADENCIA_ALLOW_IP_FALLBACK === 'true',
+          }),
+          apiCopy,
+        );
+        if (!slot.allowed) {
+          await cancelSpend(db, spendId);
+          spendReserved = false;
+          return slot;
+        }
+        return {
+          ...slot,
+          detail: spendCopy.detail.reserveBudget(
+            formatUsd(spend.state.dayUsedMicroUsd),
+            formatUsd(spend.state.dailyCapMicroUsd),
+          ),
+        };
+      },
+      draft: async (input) => {
+        try {
+          const result = await fetcher(input, config);
+          await settle(result.usage, result.requestId);
+          return result;
+        } catch (error) {
+          if (error instanceof ServiceFailure) await settle(error.usage, error.requestId);
+          throw error;
+        }
+      },
     };
   }
 
