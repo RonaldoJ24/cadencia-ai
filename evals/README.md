@@ -6,11 +6,14 @@ runs go in `runs/<run-id>/` and are committed with everything they produced.
 
 ## Steps
 
-1. **Write the cases.** The owner writes 100 to 150 goals in `cases/cases.jsonl`,
-   following [cases/README.md](cases/README.md), then checks them:
+1. **Source and review the cases.** 100 to 150 goals go in `cases/cases.jsonl`,
+   in the format of [cases/README.md](cases/README.md). They are drafted from
+   goals people describe in public posts, following
+   [cases/SOURCING.md](cases/SOURCING.md), and the owner reviews every case and
+   label. Their origin and review go in `cases/provenance.jsonl`. Check both:
 
    ```bash
-   node --experimental-strip-types evals/validate.ts evals/cases/cases.jsonl
+   node --experimental-strip-types evals/validate.ts evals/cases/cases.jsonl evals/cases/provenance.jsonl
    ```
 
 2. **Freeze Part B.** Fill in `systems.json` for each arm: model id, rate card

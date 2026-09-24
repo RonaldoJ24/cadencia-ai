@@ -115,7 +115,9 @@ rating protocol, a $10 budget and the rule for shipping retrieval templates. It
 compares DeepSeek with GPT-6 Luna on the same pipeline.
 
 **No scored run exists yet, so this README makes no claim about model quality.**
-The run needs the owner's 100 to 150 cases and the GPT-6 Luna settings. The steps
+The run needs 100 to 150 cases, adapted from goals people describe in public
+posts and reviewed by the owner ([protocol](evals/cases/SOURCING.md)), and the
+GPT-6 Luna settings. The steps
 are in [evals/README.md](evals/README.md), and results will be committed with the
 run under `evals/runs/`.
 
@@ -178,8 +180,9 @@ docker build -t cadencia-intents:local service
 ## Limitations
 
 - **Model quality is unmeasured.** The evaluation is pre-registered but not run.
-  Its cases will come from one person, its blind rating has one rater, and it
-  covers reading and drafting, not replanning.
+  Its cases adapt goals people chose to post in public, which are not a random
+  sample; one person reviews them and is the only blind rater; and it covers
+  reading and drafting, not replanning.
 - **Not advice.** Fitness limits are general rules for healthy adults, not
   individual guidance, and refusals cover the declared categories only.
 - **Calendar import covers the common cases.** Daily and weekly repeats are

@@ -134,7 +134,8 @@ approved adjustments, and misses on or before the latest one count as answered.
 
 ## What is not claimed
 
-Model quality. The scored evaluation needs the owner's 100 to 150 cases and the
-GPT-6 Luna settings. Until it runs, the project claims how the system is built
+Model quality. The scored evaluation needs its 100 to 150 cases, adapted from
+goals people describe in public posts and reviewed by the owner, and the GPT-6
+Luna settings. Until it runs, the project claims how the system is built
 and checked, not how good its plans are. Retrieval templates were not built:
 they ship only if the evaluation shows a gain.
