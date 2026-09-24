@@ -43,11 +43,14 @@ import {
   replan,
   toICS,
   toMarkdown,
+  weekStartOf,
   type RoutineInput,
   type RoutinePlan,
   type Session,
 } from '@/lib/routine';
 
+// Placeholder for the static examples; the page swaps in the current week's
+// Monday before an example is shown or planned.
 const DEFAULT_START_DATE = '2026-08-31';
 
 const UUID_PATTERN =
@@ -197,6 +200,20 @@ function subscribeToLanguage(listener: () => void) {
     languageSubscribers.delete(listener);
     window.removeEventListener('storage', handleStorage);
   };
+}
+
+// The server renders the UTC week; after hydration the page uses the
+// visitor's own local Monday.
+function subscribeToWeekStart() {
+  return () => undefined;
+}
+
+function getWeekStartSnapshot() {
+  return weekStartOf(new Date(), 'local');
+}
+
+function getServerWeekStartSnapshot() {
+  return weekStartOf(new Date(), 'utc');
 }
 
 function setLanguagePreference(language: Language) {
@@ -750,6 +767,11 @@ export default function Home() {
     getLanguageSnapshot,
     getServerLanguageSnapshot,
   );
+  const weekStart = useSyncExternalStore(
+    subscribeToWeekStart,
+    getWeekStartSnapshot,
+    getServerWeekStartSnapshot,
+  );
   const [draftInput, setDraftInput] = useState<RoutineInput>(
     EXAMPLES[DEFAULT_LANGUAGE][0].input,
   );
@@ -775,9 +797,13 @@ export default function Home() {
 
   const input = useMemo(
     () => usingDefaultSample
-      ? { ...EXAMPLES[language][0].input, days: [...EXAMPLES[language][0].input.days] }
+      ? {
+        ...EXAMPLES[language][0].input,
+        days: [...EXAMPLES[language][0].input.days],
+        startDate: weekStart,
+      }
       : { ...draftInput, language },
-    [draftInput, language, usingDefaultSample],
+    [draftInput, language, usingDefaultSample, weekStart],
   );
 
   useEffect(() => {
@@ -871,7 +897,7 @@ export default function Home() {
 
   const applyExample = (example: Example) => {
     setUsingDefaultSample(example.input.request === EXAMPLES[language][0].input.request);
-    setDraftInput({ ...example.input, days: [...example.input.days] });
+    setDraftInput({ ...example.input, days: [...example.input.days], startDate: weekStart });
     setPlan(null);
     setSelectedSessionId(null);
     setError(null);

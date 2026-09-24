@@ -8,8 +8,9 @@
   "scripts": {
     "dev": "vinext dev",
     "dev:live": "node --env-file-if-exists=service/.env.local scripts/dev-live.mjs",
-    "build": "node scripts/build-guard.mjs build",
-    "deploy": "vinext-cloudflare deploy --config dist/server/wrangler.json",
+    "build": "node scripts/build-guard.mjs build && node scripts/check-dist.mjs",
+    "deploy": "bash scripts/deploy.sh --prod",
+    "deploy:check": "bash scripts/deploy.sh --dry-run",
     "start": "wrangler dev --config dist/server/wrangler.json",
     "lint": "oxlint",
     "format": "oxfmt",

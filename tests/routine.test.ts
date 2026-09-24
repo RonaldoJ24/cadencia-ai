@@ -9,6 +9,7 @@ import {
   toMarkdown,
   validateInput,
   validateIntent,
+  weekStartOf,
   type Intent,
   type RoutineInput,
 } from '../lib/routine.ts';
@@ -440,4 +441,26 @@ void test('Markdown exports generated content as text, including escaped session
   assert.match(markdown, /&lt;Título&gt;/u);
   assert.match(markdown, /&lt;script&gt;alert\\\(1\\\)&lt;\/script&gt;/u);
   assert.match(markdown, /\\\[paso\\\]/u);
+});
+
+void test('weekStartOf returns the Monday of the current week', () => {
+  // Thursday, Sunday and Monday of the week that starts on 2026-09-21.
+  assert.equal(weekStartOf(new Date(Date.UTC(2026, 8, 24, 12)), 'utc'), '2026-09-21');
+  assert.equal(weekStartOf(new Date(Date.UTC(2026, 8, 27, 23, 59)), 'utc'), '2026-09-21');
+  assert.equal(weekStartOf(new Date(Date.UTC(2026, 8, 21, 0, 0)), 'utc'), '2026-09-21');
+  // Local calendar, built from local fields so the result is the same in any time zone.
+  assert.equal(weekStartOf(new Date(2026, 8, 27, 23, 30), 'local'), '2026-09-21');
+  assert.equal(weekStartOf(new Date(2026, 8, 28, 0, 5), 'local'), '2026-09-28');
+  // Across a month boundary.
+  assert.equal(weekStartOf(new Date(Date.UTC(2026, 9, 1, 8)), 'utc'), '2026-09-28');
+  // The result always passes the planner's Monday check.
+  assert.doesNotThrow(() => validateInput({
+    request: 'learn TypeScript',
+    days: [0],
+    sessionMinutes: 30,
+    weeklyMinutes: 30,
+    startDate: weekStartOf(new Date(), 'local'),
+    time: '08:00',
+    language: 'en',
+  }));
 });

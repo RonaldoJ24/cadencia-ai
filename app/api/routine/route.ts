@@ -1,17 +1,12 @@
-import { validateInput, validateIntent } from '../../../lib/routine.ts';
-import { ADAPT_POLICY_VERSION, compileWithTrace, PLANNER_VERSION } from '../../../lib/trace.ts';
+import { buildPlan, validateInput, validateIntent } from '../../../lib/routine.ts';
 import { copyFor, languageFrom } from '../../../lib/i18n.ts';
 import { dict, errorResponse, json, rateLimited, readBoundedText, sameOrigin, type Dict } from '../../../lib/server/http.ts';
 import { liveConfig, requestIntent, runtimeEnv, ServiceFailure } from '../../../lib/server/live.ts';
 import { envDb, type Db } from '../../../lib/server/db.ts';
 import { checkRateLimit, ipScopeKey } from '../../../lib/server/ratelimit.ts';
 import { checkAndReservePublicLiveSlot, limitsFromEnv } from '../../../lib/server/public_limits.ts';
-import { handleReplayGet, handleReplayPatch, handleReplayStart, type ReplayDeps } from '../../../lib/server/replay.ts';
-import { bindingWorkflowPorts } from '../../../lib/server/workflow-binding.ts';
-import type { WorkflowPorts } from '../../../lib/server/workflow-coord.ts';
 
 const EVENT = 'cadencia_routine_failure';
-const REPLAY_NO_STORE: Record<string, string> = { 'cache-control': 'private, no-store' };
 
 export type PublicRoutineDeps = {
   db?: Db | null;
@@ -19,14 +14,7 @@ export type PublicRoutineDeps = {
   intentFetcher?: typeof requestIntent;
   nowIso?: () => string;
   nowMs?: () => number;
-  /** Injected Workflow ports for Reviewer Replay (tests). Undefined resolves the real binding, null forces local fallback. */
-  workflowPorts?: WorkflowPorts | null;
-  workflowBackend?: 'cloudflare' | 'local-fallback';
 };
-
-export function replayMethodNotAllowed(): Response {
-  return errorResponse('Method not allowed.', 405, 'method_not_allowed', undefined, undefined, EVENT, { ...REPLAY_NO_STORE });
-}
 
 export async function resolvePublicRouteDb(): Promise<Db | null> {
   const scope = globalThis as Record<string, unknown>;
@@ -48,14 +36,6 @@ export async function GET(request?: Request, deps?: PublicRoutineDeps): Promise<
   const nowIso = deps?.nowIso ? deps.nowIso() : new Date().toISOString();
   const nowMs = deps?.nowMs ? deps.nowMs() : (Number.isNaN(Date.parse(nowIso)) ? Date.now() : Date.parse(nowIso));
 
-  // Reviewer Replay sandbox state on the exact path. Ordinary callers
-  // without a replay cookie see the unchanged availability response below.
-  if (request && db) {
-    const replayDeps: ReplayDeps = { db, env, nowIso, nowMs, workflowPorts: deps?.workflowPorts };
-    const replay = await handleReplayGet(request, replayDeps);
-    if (replay) return replay;
-  }
-
   if (request && db) {
     const readLimit = await checkRateLimit(db, {
       key: ipScopeKey(request, 'read'),
@@ -72,26 +52,12 @@ export async function GET(request?: Request, deps?: PublicRoutineDeps): Promise<
 
 export async function POST(request: Request, deps?: PublicRoutineDeps): Promise<Response> {
   const startedMs = Date.now();
-  // Single bounded body read shared by the replay probe and the compile
-  // path (never clone the request: cancelling a cloned tee branch can
-  // stall and wedge the handler).
   let rawText: string;
   try {
     rawText = await readBoundedText(request);
   } catch {
     return errorResponse(copyFor('en').api.invalidBody, 400, 'invalid_body', undefined, undefined, EVENT);
   }
-  const replayProbe = deps?.db === null
-    ? null
-    : await (async () => {
-      const db = deps?.db !== undefined ? deps.db : await resolvePublicRouteDb();
-      if (!db) return null;
-      const nowIso = deps?.nowIso ? deps.nowIso() : new Date().toISOString();
-      const nowMs = deps?.nowMs ? deps.nowMs() : (Number.isNaN(Date.parse(nowIso)) ? Date.now() : Date.parse(nowIso));
-      const env = { ...(await runtimeEnv()), ...deps?.env };
-      return handleReplayStart(request, { db, env, nowIso, nowMs, workflowPorts: deps?.workflowPorts }, rawText);
-    })().catch(() => null);
-  if (replayProbe) return replayProbe;
   if (!sameOrigin(request)) return errorResponse(copyFor('en').api.invalidOrigin, 403, 'invalid_origin', undefined, undefined, EVENT);
 
   let value: Dict | null;
@@ -138,15 +104,11 @@ export async function POST(request: Request, deps?: PublicRoutineDeps): Promise<
       }
     }
     const planStartedMs = Date.now();
-    const compiled = compileWithTrace(input, undefined, 'demo', { timezone: 'UTC' });
+    const plan = buildPlan(input, undefined, 'demo');
     const doneMs = Date.now();
     return json({
-      plan: compiled.plan,
-      trace: compiled.trace,
-      hashes: { inputHash: compiled.trace.inputHash, scheduleHash: compiled.trace.scheduleHash },
+      plan,
       meta: {
-        plannerVersion: PLANNER_VERSION,
-        policyVersion: ADAPT_POLICY_VERSION,
         modelUsed: false,
         provider: 'skipped',
         timingsMs: { total: doneMs - startedMs, plan: doneMs - planStartedMs },
@@ -217,20 +179,12 @@ export async function POST(request: Request, deps?: PublicRoutineDeps): Promise<
         : { sessionCount, sessionMinutes: input.sessionMinutes },
     );
     const planStartedMs = Date.now();
-    const compiled = compileWithTrace(input, intent, 'deepseek', {
-      timezone: 'UTC',
-      scopeRefused: serviceResult.scopeRefused,
-      provider: 'succeeded',
-    });
+    const plan = buildPlan(input, intent, 'deepseek', serviceResult.scopeRefused);
     const doneMs = Date.now();
     return json(
       {
-        plan: compiled.plan,
-        trace: compiled.trace,
-        hashes: { inputHash: compiled.trace.inputHash, scheduleHash: compiled.trace.scheduleHash },
+        plan,
         meta: {
-          plannerVersion: PLANNER_VERSION,
-          policyVersion: ADAPT_POLICY_VERSION,
           modelUsed: true,
           provider: 'succeeded',
           timingsMs: { total: doneMs - startedMs, provider: planStartedMs - providerStartedMs, plan: doneMs - planStartedMs },
@@ -256,26 +210,4 @@ export async function POST(request: Request, deps?: PublicRoutineDeps): Promise<
       await slot.release();
     }
   }
-}
-
-/**
- * Reviewer Replay decisions on the exact path. Allowlist only:
- * replay-missed-tuesday | approve | reject. Never falls through to owner
- * handlers; method-override headers are never honored.
- */
-export async function PATCH(request: Request, deps?: PublicRoutineDeps): Promise<Response> {
-  const db = deps?.db !== undefined ? deps.db : await resolvePublicRouteDb();
-  if (!db) {
-    return errorResponse('Routine storage is not configured.', 503, 'persistence_not_configured', undefined, undefined, EVENT, { ...REPLAY_NO_STORE });
-  }
-  const nowIso = deps?.nowIso ? deps.nowIso() : new Date().toISOString();
-  const nowMs = deps?.nowMs ? deps.nowMs() : (Number.isNaN(Date.parse(nowIso)) ? Date.now() : Date.parse(nowIso));
-  const env = { ...(await runtimeEnv()), ...deps?.env };
-  let workflowPorts = deps?.workflowPorts;
-  let workflowBackend = deps?.workflowBackend;
-  if (workflowPorts === undefined) {
-    workflowPorts = await bindingWorkflowPorts();
-    workflowBackend = workflowPorts ? 'cloudflare' : 'local-fallback';
-  }
-  return handleReplayPatch(request, { db, env, nowIso, nowMs, workflowPorts, workflowBackend });
 }

@@ -105,3 +105,30 @@ void test('English insights use English capacity, questions, and progress signal
   assert.match(insights.recommendation, /check-in/u);
   assert.doesNotMatch(insights.capacity, /Elegiste|sesiones programadas/u);
 });
+
+void test('English requests that already name evidence, format, or limits get no repeat questions', () => {
+  const learning = buildInsights(
+    plan({
+      language: 'en',
+      request: 'learn TypeScript from scratch in four weeks and finish a small project',
+    }),
+  ).clarifyingQuestions.join(' ');
+  assert.doesNotMatch(learning, /evidence would show progress/u);
+
+  const creative = buildInsights(
+    plan({
+      language: 'en',
+      request: 'practice watercolor sketches and publish one piece',
+    }),
+  ).clarifyingQuestions.join(' ');
+  assert.doesNotMatch(creative, /format or material/u);
+  assert.doesNotMatch(creative, /piece or sample will you save/u);
+
+  const general = buildInsights(
+    plan({
+      language: 'en',
+      request: 'organize my home office move around a hard deadline and a tight budget',
+    }),
+  ).clarifyingQuestions.join(' ');
+  assert.doesNotMatch(general, /limit or dependency/u);
+});
