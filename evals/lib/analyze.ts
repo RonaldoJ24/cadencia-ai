@@ -112,8 +112,33 @@ function usd(microUsd: number): string {
   return `$${(microUsd / 1_000_000).toFixed(4)}`;
 }
 
+/** Where the cases came from and what the owner's review did (pre-registration, section 4). */
+export type CaseSources = {
+  /** From provenanceCounts; absent when the case file has no provenance beside it. */
+  counts?: Array<{ name: string; count: number }>;
+  review?: { drafted: number; dropped: number };
+  /** Kept cases close to a development text. */
+  closeToDevelopment: Array<{ id: string; similarity: number }>;
+};
+
+function renderSources(sources: CaseSources): string[] {
+  const lines = ['## Cases', ''];
+  if (sources.counts) {
+    lines.push('| Origin and review | Cases |', '|---|---:|', ...sources.counts.map((item) => `| ${item.name} | ${item.count} |`), '');
+  } else {
+    lines.push('No provenance file beside the cases.', '');
+  }
+  if (sources.review) lines.push(`Drafts written: ${sources.review.drafted}. Dropped by the owner: ${sources.review.dropped}.`, '');
+  const close = sources.closeToDevelopment;
+  lines.push(
+    `Cases close to development texts, kept: ${close.length === 0 ? 'none' : close.map((item) => `${item.id} (${item.similarity})`).join(', ')}.`,
+    '',
+  );
+  return lines;
+}
+
 /** The report as Markdown tables, one column per arm. */
-export function renderReport(reports: ArmReport[], context: { runId: string; cases: number }): string {
+export function renderReport(reports: ArmReport[], context: { runId: string; cases: number; sources?: CaseSources }): string {
   const head = (title: string) => `| ${title} | ${reports.map((report) => `Arm ${report.arm}`).join(' | ')} |\n|---|${reports.map(() => '---:|').join('')}`;
   const row = (label: string, cell: (report: ArmReport) => string | number) => `| ${label} | ${reports.map((report) => String(cell(report))).join(' | ')} |`;
   const lines: string[] = [
@@ -121,6 +146,7 @@ export function renderReport(reports: ArmReport[], context: { runId: string; cas
     '',
     `Counts with their denominators, as pre-registered in \`evals/PREREGISTRATION.md\`. ${context.cases} cases in the file.`,
     '',
+    ...(context.sources ? renderSources(context.sources) : []),
     '## M1 Valid readings',
     '',
     head('Metric'),

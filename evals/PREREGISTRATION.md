@@ -17,7 +17,7 @@ No result exists yet. Nothing in this file is a finding.
 
 ## 1. Questions
 
-1. How often does the planner turn a goal written by a person into the right
+1. How often does the planner turn a goal, as people describe one, into the right
    decision (plan, one question, or a reasoned abstention) and, when it plans,
    into a plan that passes every scheduling rule?
 2. With the same pipeline, prompts and code checks, how do two models compare:
@@ -68,8 +68,26 @@ scored result yet.
 
 ## 4. Cases
 
-- The owner writes 100 to 150 cases in `evals/cases/cases.jsonl`, following
-  `evals/cases/README.md`. An agent does not write, edit or relabel them.
+- 100 to 150 cases go in `evals/cases/cases.jsonl`, in the format of
+  `evals/cases/README.md`. **Changed on 2026-09-24, before any case was
+  written:** the owner first planned to write every case, then chose to ground
+  them in goals people describe in public posts instead of goals one person
+  imagines. The protocol is `evals/cases/SOURCING.md`:
+  - Agents running a Claude model, which is neither arm, find public posts, turn
+    each goal into a new text with no copied sentences and no identifying
+    details, and draft its labels. Cases no post covers, such as adversarial
+    texts, are written for coverage and marked as such.
+  - The agents never see the service's prompts, the demo samples or any output
+    of the arms, and never call either arm's provider.
+  - A separate check opens every recorded source and confirms it carries the
+    case's goal. A case whose source cannot be confirmed counts as written for
+    coverage.
+  - The owner reviews every case and label before the freeze. Each case's origin
+    and review outcome (accepted, relabeled or rewritten) is recorded in
+    `evals/cases/provenance.jsonl`, and a scored run refuses cases without one
+    reviewed line each. These counts, and the number of drafts the owner
+    dropped, are reported with the results.
+  - After the owner's review, no agent writes, edits or relabels a case.
 - Coverage quotas, which `evals/validate.ts` enforces:
 
   | Quota | Minimum |
@@ -95,9 +113,8 @@ scored result yet.
     noche, máximo 2 horas por semana";
   - a 2,000-character string of `<` used to measure token counts.
 
-  The validator flags any owner case that matches one of these closely. The
-  owner decides whether to keep it, and kept matches are listed with the
-  results.
+  The validator flags any case that matches one of these closely. The owner
+  decides whether to keep it, and kept matches are listed with the results.
 - **Exclusions.** A case is excluded only for a validator error before the run.
   No case is removed after results are seen.
 - **Harness failures.** A run fails because of the harness when the runner
@@ -186,7 +203,9 @@ Otherwise templates do not ship. A tie means they do not ship.
 
 ## 9. What this evaluation cannot show
 
-- That the cases represent real users. One person wrote them.
+- That the cases represent Cadencia's users. They adapt goals that people chose
+  to post in public, which are not a random sample of anyone, and one person
+  reviewed every label.
 - Whether people follow the plans or reach their goals.
 - Safety beyond the declared abstention categories.
 - Behavior, latency or cost on the live edge, or under load.

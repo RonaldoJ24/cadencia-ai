@@ -7,11 +7,13 @@
 //     --run-id 2026-10-01-main --budget-usd 10 [--arms A,B] [--dry-run]
 
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { coverage, parseCases } from './lib/cases.ts';
+import { coverage, parseCases, parseProvenance } from './lib/cases.ts';
 import { RunRefused, runEvaluation, type Arm, type RunSummary } from './lib/runner.ts';
+
+const PROVENANCE = 'evals/cases/provenance.jsonl';
 
 const { values } = parseArgs({
   options: {
@@ -38,7 +40,7 @@ const token = process.env.CADENCIA_SERVICE_TOKEN?.trim();
 if (!token) fail('CADENCIA_SERVICE_TOKEN must be set to the local services\' token');
 
 const dryRun = values['dry-run'];
-// Scored runs use the owner's cases; dry runs never see them (pre-registration, section 7).
+// Scored runs use the evaluation cases; dry runs never see them (pre-registration, section 7).
 const evaluationCases = resolve(values.cases) === resolve('evals/cases/cases.jsonl');
 if (dryRun && evaluationCases) fail('a dry run never uses the evaluation cases; try evals/cases/TEMPLATE.jsonl');
 if (!dryRun && !evaluationCases) fail('a scored run uses evals/cases/cases.jsonl');
@@ -49,6 +51,10 @@ if (!dryRun) {
   if (!systems.frozen) fail('Part B is not frozen; a scored run needs systems.json frozen at tag eval-freeze-v1');
   const short = coverage(cases).filter((quota) => quota.count < quota.minimum);
   if (short.length > 0) fail(`coverage quotas not met: ${short.map((quota) => quota.name).join(', ')}`);
+  // Every case needs one provenance line with the owner's review (pre-registration, section 4).
+  const provenance = existsSync(PROVENANCE) ? parseProvenance(readFileSync(PROVENANCE, 'utf8'), cases).problems : null;
+  if (provenance === null) fail(`a scored run needs ${PROVENANCE}`);
+  if (provenance.length > 0) fail(`${PROVENANCE} has ${provenance.length} problems; run evals/validate.ts with it first`);
   // The manifest records the commit, so the commit must be all there is.
   const changed = execFileSync('git', ['status', '--porcelain', '--', '.', ':(exclude)evals/runs'], { encoding: 'utf8' }).trim();
   if (changed) fail('commit every change before a scored run (only evals/runs/ may differ)');

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { analyzeArm, percentile, renderReport } from '../evals/lib/analyze.ts';
 import { makePack, unblind, type Ratings } from '../evals/lib/blind.ts';
-import { contamination, coverage, parseCases } from '../evals/lib/cases.ts';
+import { contamination, coverage, parseCases, parseProvenance, provenanceCounts } from '../evals/lib/cases.ts';
 import type { ResultLine } from '../evals/lib/runner.ts';
 import { schedulePlan } from '../lib/planner/schedule.ts';
 import { validateGoalSpec } from '../lib/planner/spec.ts';
@@ -73,6 +73,16 @@ void test('the report counts decisions, drafts, trims and cost per arm, with den
   assert.match(report, /\| Rules broken in those runs \| none \| week_ceiling 1, load_jump 1 \|/u);
   assert.match(report, /\| Runs stopped by the harness, not scored \| 1, \$0\.0007 \| 0, \$0\.0000 \|/u);
   assert.doesNotMatch(report, /%/u);
+  assert.doesNotMatch(report, /## Cases/u);
+  const withSources = renderReport([a, b], {
+    runId: 'test',
+    cases: CASES.length,
+    sources: { counts: [{ name: 'origin post', count: 2 }], review: { drafted: 5, dropped: 2 }, closeToDevelopment: [{ id: 'c3', similarity: 0.6 }] },
+  });
+  assert.match(withSources, /\| origin post \| 2 \|/u);
+  assert.match(withSources, /Drafts written: 5\. Dropped by the owner: 2\./u);
+  assert.match(withSources, /close to development texts, kept: c3 \(0\.6\)/u);
+  assert.match(renderReport([a], { runId: 'test', cases: 3, sources: { closeToDevelopment: [] } }), /No provenance file[\s\S]*kept: none\./u);
 });
 
 void test('percentiles use the nearest rank', () => {
@@ -126,4 +136,30 @@ void test('the validator reports problems, coverage and closeness to development
   assert.equal(quotas['relative deadlines'], 1);
   assert.equal(quotas['fitness goals'], 1);
   assert.deepEqual(contamination(cases).map((item) => item.id), ['dev']);
+});
+
+void test('provenance needs one reviewed line per case and never holds links or usernames', () => {
+  const provenance = (lines: object[]) => parseProvenance(lines.map((item) => JSON.stringify(item)).join('\n'), CASES);
+  const post = { id: 'c1', origin: 'post', platform: 'reddit', community: 'r/chess', source_language: 'en', read: 'full', segment: 'hobbyist', collected: '2026-09-24', review: 'accepted' };
+  const composite = { id: 'c3', origin: 'composite', segment: 'busy_worker', collected: '2026-09-24', review: 'relabeled' };
+  const constructed = { id: 'c2', origin: 'constructed', segment: 'student', collected: '2026-09-24', review: 'rewritten' };
+
+  const clean = provenance([post, constructed, composite]);
+  assert.deepEqual(clean.problems, []);
+  const counts = Object.fromEntries(provenanceCounts(clean.lines).map((item) => [item.name, item.count]));
+  assert.equal(counts['origin post'], 1);
+  assert.equal(counts['posts read in full'], 1);
+  assert.equal(counts['review relabeled'], 1);
+
+  const messages = (lines: object[]) => provenance(lines).problems.map((problem) => problem.message);
+  assert.match(messages([post, constructed])[0], /no provenance line for c3/u);
+  assert.match(messages([post, post, constructed, composite])[0], /duplicate/u);
+  assert.match(messages([{ ...post, community: 'https://reddit.com/r/chess' }, constructed, composite])[0], /links or usernames/u);
+  assert.match(messages([{ ...post, community: 'u/someone' }, constructed, composite])[0], /links or usernames/u);
+  assert.match(messages([{ ...post, review: undefined }, constructed, composite])[0], /review must be/u);
+  assert.match(messages([{ ...post, read: undefined }, constructed, composite])[0], /a post needs/u);
+  assert.match(messages([post, constructed, { ...composite, community: 'r/loseit' }])[0], /never names a community/u);
+  assert.match(messages([post, { ...constructed, platform: 'reddit' }, composite])[0], /no source fields/u);
+  assert.match(messages([post, constructed, { ...composite, id: 'c9' }])[0], /id of a case/u);
+  assert.match(messages([{ ...post, url: 'x' }, constructed, composite])[0], /unknown fields/u);
 });
