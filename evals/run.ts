@@ -8,7 +8,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { coverage, parseCases } from './lib/cases.ts';
 import { RunRefused, runEvaluation, type Arm, type RunSummary } from './lib/runner.ts';
@@ -37,10 +37,14 @@ if (!values.cases || !runId || !/^[A-Za-z0-9._-]{1,60}$/u.test(runId) || !(budge
 const token = process.env.CADENCIA_SERVICE_TOKEN?.trim();
 if (!token) fail('CADENCIA_SERVICE_TOKEN must be set to the local services\' token');
 
+const dryRun = values['dry-run'];
+// Scored runs use the owner's cases; dry runs never see them (pre-registration, section 7).
+const evaluationCases = resolve(values.cases) === resolve('evals/cases/cases.jsonl');
+if (dryRun && evaluationCases) fail('a dry run never uses the evaluation cases; try evals/cases/TEMPLATE.jsonl');
+if (!dryRun && !evaluationCases) fail('a scored run uses evals/cases/cases.jsonl');
 const { cases, problems } = parseCases(readFileSync(values.cases, 'utf8'));
 if (problems.length > 0) fail(`the cases have ${problems.length} problems; run evals/validate.ts first`);
 const systems = JSON.parse(readFileSync(values.systems, 'utf8')) as { frozen: boolean; arms: Arm[] };
-const dryRun = values['dry-run'];
 if (!dryRun) {
   if (!systems.frozen) fail('Part B is not frozen; a scored run needs systems.json frozen at tag eval-freeze-v1');
   const short = coverage(cases).filter((quota) => quota.count < quota.minimum);

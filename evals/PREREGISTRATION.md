@@ -156,8 +156,11 @@ are reported as they are.
 
 ## 7. Budget
 
-- **Ceiling.** $10 in total, across every arm and any re-runs. Dry runs against
-  a fake service cost nothing.
+- **Ceiling.** $10 in total for scored runs, across every arm and any re-runs.
+- **Dry runs** try the harness on the template cases, never on
+  `evals/cases/cases.jsonl`, so no evaluation case is seen before the scored
+  run. They call the real services and cost real money, which is logged as
+  development spend apart from the $10. They are never evidence.
 - **Worst case per run.** One reading and two drafts, each with two provider
   attempts, priced at the arm's rates. Prompt tokens are taken as the service's
   prompt byte ceiling plus 64 template tokens, and output as the service's
