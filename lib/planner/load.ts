@@ -52,10 +52,11 @@ export type WeekLimits = { maxCount: number; maxMinutes: number; maxHard: number
 /** Only this many items are weighed; a week can hold at most seven sessions. */
 const MAX_WEIGHED = 12;
 
-type Candidate = { keep: number[]; key: number; minutes: number };
+type Candidate = { keep: number[]; key: number; keyMinutes: number; minutes: number };
 
 function better(a: Candidate, b: Candidate): boolean {
   if (a.key !== b.key) return a.key > b.key;
+  if (a.keyMinutes !== b.keyMinutes) return a.keyMinutes > b.keyMinutes;
   if (a.minutes !== b.minutes) return a.minutes > b.minutes;
   if (a.keep.length !== b.keep.length) return a.keep.length > b.keep.length;
   const differs = a.keep.findIndex((position, index) => position !== b.keep[index]);
@@ -70,7 +71,8 @@ export function fits(items: readonly Trimmable[], limits: WeekLimits): boolean {
 
 /**
  * Positions of the items to keep, in their original order, so a week fits
- * its limits: the most key sessions, then the most minutes, then the most
+ * its limits: the most key sessions, then the longest key sessions (so a
+ * long run outlasts shorter work), then the most minutes, then the most
  * sessions, then the earliest ones. Nothing is added or shortened.
  */
 export function keepBest(items: readonly Trimmable[], limits: WeekLimits): number[] {
@@ -78,7 +80,7 @@ export function keepBest(items: readonly Trimmable[], limits: WeekLimits): numbe
   const count = Math.min(items.length, MAX_WEIGHED);
   let best: Candidate | null = null;
   for (let mask = 0; mask < 1 << count; mask += 1) {
-    const candidate: Candidate = { keep: [], key: 0, minutes: 0 };
+    const candidate: Candidate = { keep: [], key: 0, keyMinutes: 0, minutes: 0 };
     let hard = 0;
     for (let index = 0; index < count; index += 1) {
       if ((mask & (1 << index)) === 0) continue;
@@ -86,7 +88,10 @@ export function keepBest(items: readonly Trimmable[], limits: WeekLimits): numbe
       candidate.keep.push(index);
       candidate.minutes += item.minutes;
       if (item.intensity === 'hard') hard += 1;
-      if (item.role === 'key') candidate.key += 1;
+      if (item.role === 'key') {
+        candidate.key += 1;
+        candidate.keyMinutes += item.minutes;
+      }
     }
     if (candidate.keep.length > limits.maxCount || candidate.minutes > limits.maxMinutes || hard > limits.maxHard) continue;
     if (!best || better(candidate, best)) best = candidate;
