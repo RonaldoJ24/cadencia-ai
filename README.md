@@ -162,21 +162,15 @@ Cloud platform access logs are separate and need their own retention/access poli
   cues and the documented literary and fiction cases. A direct request signal plus
   an unambiguous medical or legal action anywhere in one request outranks a
   literary or fiction wrapper. This is not comprehensive moderation.
-- The Python bearer token authenticates the frontend server, not visitors. Private
-  beta routes authenticate end users with Cloudflare Access JWT verification
-  (`Cf-Access-Jwt-Assertion` signature, issuer, application audience, expiration;
-  identity only from verified claims) plus per-user ownership checks, and fail
-  closed. The only anonymous surface is the exact path `/api/routine` (local demo
-  plus quota-bound live generation: 5/day per visitor, 50/day global, 2/min,
-  1 in-flight per visitor; plus Reviewer Replay sandboxes on the same path:
-  capability-scoped, fixed seeded fixture only, short expiry, 10 sandboxes/day
-  per visitor, 200/day global, 1 active Workflow per sandbox, UI at `/replay`);
-  every other `/api/*` route is owner-only.
+- The Python bearer token authenticates the frontend server, not visitors. The
+  only API route is the exact path `/api/routine`: the demo plus live generation
+  limited per visitor and globally in D1 (see [DEPLOYMENT.md](DEPLOYMENT.md)).
+  The limits count requests, not money. Cloudflare Access keeps every other
+  `/api/*` path private.
 - One Monday-to-Sunday window, one session per selected day, and local floating
   calendar times. Calendar links, ICS, and shared text are one-time copies.
-- Owner-only beta accounts with D1 persistence (routines, immutable versions,
-  sessions, quotas, idempotency), feedback, and cascade account deletion exist;
-  there are no reminders, connected calendars, payments, or background jobs.
+- Plans are not saved on the server. There are no accounts, reminders, connected
+  calendars, payments, or background jobs.
 - No claim of production scale, representative model accuracy, real users, or cost reduction.
 - Fixture evaluation does not represent production quality. Synthetic transport
   responses validate code behavior; they cannot measure language understanding.
