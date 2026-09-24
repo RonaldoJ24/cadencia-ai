@@ -85,7 +85,11 @@ async function withFetch<T>(fetcher: typeof fetch, run: () => Promise<T>): Promi
 async function withLogs<T>(run: () => Promise<T>): Promise<{ value: T; logs: string[] }> {
   const previous = console.error;
   const logs: string[] = [];
-  console.error = (...values: unknown[]) => logs.push(values.map(String).join(' '));
+  // Keep only the route's JSON log lines; runtimes may print warnings too.
+  console.error = (...values: unknown[]) => {
+    const line = values.map(String).join(' ');
+    if (line.startsWith('{')) logs.push(line);
+  };
   try {
     return { value: await run(), logs };
   } finally {
