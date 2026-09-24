@@ -51,23 +51,23 @@ function hasEvidence(
 ): boolean {
   const patterns = {
     learning:
-      /\b(?:ejercicio|problema|proyecto|examen|certificacion|tema|concepto|explicar|aplicar|resolver|demostrar|portafolio|resultado|evidencia|conversar)\b/u,
+      /\b(?:ejercicio|problema|proyecto|examen|certificacion|tema|concepto|explicar|aplicar|resolver|demostrar|portafolio|resultado|evidencia|conversar|exercise|problem|project|exam|certification|topic|concept|explain|apply|solve|demonstrate|portfolio|result|evidence|conversation)\b/u,
     creative:
-      /\b(?:pieza|muestra|boceto|obra|ilustracion|cancion|cuento|poema|novela|diseno|portafolio|version|publicar|exhibir)\b/u,
+      /\b(?:pieza|muestra|boceto|obra|ilustracion|cancion|cuento|poema|novela|diseno|portafolio|version|publicar|exhibir|piece|sample|sketch(?:es)?|artwork|illustration|song|story|poem|novel|design|portfolio|publish|exhibit)\b/u,
     general:
-      /\b(?:resultado|entregable|tarea|documento|lista|plan|proyecto|entregar|terminar|decision|siguiente paso)\b/u,
+      /\b(?:resultado|entregable|tarea|documento|lista|plan|proyecto|entregar|terminar|decision|siguiente paso|result|deliverable|task|document|list|project|deliver|finish|next step)\b/u,
   };
   return patterns[domain].test(request);
 }
 
 function hasFormat(request: string): boolean {
-  return /\b(?:acuarela|oleo|digital|lapiz|tinta|arcilla|camara|audio|video|fotografia|musica|cuento|poema|novela|ilustracion|diseno|formato|material|papel|lienzo|instrumento|software|app)\b/u.test(
+  return /\b(?:acuarela|oleo|digital|lapiz|tinta|arcilla|camara|audio|video|fotografia|musica|cuento|poema|novela|ilustracion|diseno|formato|material|papel|lienzo|instrumento|software|app|watercolou?r|oil|pencil|ink|clay|camera|photography|music|story|poem|novel|illustration|design|format|paper|canvas|instrument)\b/u.test(
     request,
   );
 }
 
 function hasConstraint(request: string): boolean {
-  return /\b(?:limite|restriccion|presupuesto|bloqueo|bloqueado|dependencia|prioridad|tiempo|disponible|minutos?|horas?|dias?|semanas?|deadline|constraint)\b/u.test(
+  return /\b(?:limite|restriccion|presupuesto|bloqueo|bloqueado|dependencia|prioridad|tiempo|disponible|minutos?|horas?|dias?|semanas?|deadline|constraint|limit|restriction|budget|blocker|blocked|dependency|priority|time|available|minutes?|hours?|days?|weeks?)\b/u.test(
     request,
   );
 }
