@@ -1,0 +1,15 @@
+command: node --experimental-strip-types scripts/bench-busy.mts
+date: 2026-09-24
+machine: Apple M5, macOS 27.0
+runtime: Node v26.3.1
+
+The same script (scripts/bench-busy.mts as of 2b8edaf) against two versions of the planner.
+It runs buildSkeleton, schedulePlan and checkPlan 25 times on one plan over the longest
+horizon (182 days, 27 calendar weeks) with 2,000 busy times, rebuilding the busy list
+each run as a new request would.
+
+--- before the per-date busy index (planner at 04dcb69, main before PR #16)
+27 weeks, 2000 busy times: median 389.7 ms, max 391.4 ms over 25 runs
+
+--- with the index (planner at 2b8edaf)
+27 weeks, 2000 busy times: median 6.4 ms, max 12.7 ms over 25 runs

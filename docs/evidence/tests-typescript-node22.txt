@@ -1,0 +1,198 @@
+command: npx --package=node@22 -- node --experimental-strip-types --test --test-reporter=spec tests/*.test.*
+code: 2b8edaf (RonaldoJ24/cadencia-ai)
+date: 2026-09-24
+machine: Apple M5, macOS 27.0
+runtime: Node v22.23.3
+
+✔ UTC and floating times land on the local clock, and nothing else about an event is read (56.275042ms)
+✔ a weekly meeting keeps its own clock across a daylight-saving change elsewhere (1.508875ms)
+✔ Windows and path-style zone names resolve; unknown ones read as local and are reported (0.669125ms)
+✔ all-day events block whole local days (0.144667ms)
+✔ weekly rules follow BYDAY, INTERVAL and WKST as in RFC 5545 (0.759292ms)
+✔ EXDATE removes occurrences but still counts toward COUNT (0.218ms)
+✔ a changed occurrence replaces the original, and a cancelled one removes it (1.141416ms)
+✔ rules this reader does not expand count once and are reported (0.256041ms)
+✔ old repeating events jump to the window and keep their rhythm (5.595542ms)
+✔ times are clipped to the window, and overlapping or touching times merge (0.620125ms)
+✔ the hours clocks repeat or skip keep events whole (0.320041ms)
+✔ folded lines, bare line feeds and alarms inside events parse correctly (0.55825ms)
+✔ limits: size, events and busy times (273.357958ms)
+✔ flags a font URL that points at a local folder (5.070625ms)
+✔ accepts clean output and ignores the deploy config and binary assets (1.716291ms)
+✔ flags Linux home, temp and Windows user paths (5.493ms)
+✔ the report counts decisions, drafts, trims and cost per arm, with denominators (2.110208ms)
+✔ percentiles use the nearest rank (0.480666ms)
+✔ the rating pack hides which arm made each plan and the key restores it (1.218958ms)
+✔ the validator reports problems, coverage and closeness to development texts (1.098166ms)
+✔ every case runs on every arm, with a scripted answer after a question (54.194542ms)
+✔ every service is checked before the first case, at no cost (1.093417ms)
+✔ a case starts only if the budget covers every arm’s worst case for it (0.718833ms)
+✔ a stopped run resumes where it stopped and never repeats a case (8.774417ms)
+✔ a run resumes only with the same commit, cases and arms (59.002167ms)
+✔ a harness failure is kept with its cost, stops the run, and is re-run on resume (18.781333ms)
+✔ a refusal before any provider call is the harness; provider failures are scored, and three in a row stop the run (4.496334ms)
+✔ an arm whose service serves another prompt is refused, and the refused run keeps its cost (1.658083ms)
+✔ only outcomes with the fields the page reads are accepted (0.756917ms)
+✔ a streamed run reports stages and every chunk, then returns its outcome (21.339167ms)
+✔ a failed stage and a refused request both surface what to show (0.972583ms)
+✔ a recorded draft keeps its first and last weeks when fitted to another length (1.390292ms)
+✔ every demo sample runs through the real pipeline on later dates too (60.229166ms)
+✔ the demo plans around busy times imported from a calendar (2.577292ms)
+✔ a goal request keeps only plain text and the settings the person touched (3.06575ms)
+✔ goal requests are refused field by field (1.236ms)
+✔ busy times from a calendar are clipped to the plan’s days and merged (0.570042ms)
+✔ the reading is checked again in code and mapped to camelCase (0.452167ms)
+✔ settings the person touched win, then the reading, then defaults, each with its source (0.614083ms)
+✔ a past or too distant deadline from the reading is replaced and says why (0.397667ms)
+✔ presets, setting names, categories and spend bounds match the Python service (0.988166ms)
+✔ a live goal run reserves its worst case, settles every call and frees its slot (59.282625ms)
+✔ a refusal by the scope guard settles at zero (12.659625ms)
+✔ a draft call that fails without usage is charged at its worst case (11.509167ms)
+✔ goal runs are live only on the server and answer JSON without the stream header (8.748959ms)
+✔ the largest plan streams whole through the browser reader, in small chunks (53.55ms)
+✔ a goal run the visitor leaves mid-draft still settles its spend and frees its slot (4.530167ms)
+✔ a quota refusal streams as a failed limits step with its retry time, before any spend (1.525375ms)
+✔ the kill switch stops goal runs before the model (15.91275ms)
+{"event":"cadencia_routine_failure","reference":"c7edfdf7-694c-4135-8e0c-8893b18ccf79","reason":"invalid_body","status":400}
+✔ the production service URL maps to each endpoint (0.983083ms)
+✔ a goal run calls read-goal and then draft with the server token and no redirects (40.026708ms)
+✔ busy times shape the room the draft is offered but never reach the service (6.190416ms)
+✔ a request with the most busy times fits the body limit, and a larger body is refused (27.572459ms)
+✔ service errors stay generic and expose at most an opaque request ID (5.824375ms)
+✔ a redirect is never followed with the service token (2.301292ms)
+✔ unavailable, malformed, truncated and oversized answers are safe errors at either call (17.862875ms)
+✔ failure logs use safe, specific categories (1.551833ms)
+✔ a stalled read-goal call is abandoned at its 35 s deadline (56.2155ms)
+✔ the scope decision comes from the service, whatever the reading says (1.8535ms)
+✔ origin, body, kind and mode checks stay enforced for goal runs (2.470083ms)
+✔ a live goal run reports every stage in order and returns a checked plan (17.354041ms)
+✔ a clarifying question ends the run after the reading, and later steps show as skipped (0.680791ms)
+✔ an answer that leaves the goal unclear ends the run instead of asking again (0.419ms)
+✔ an abstention from the scope guard is credited to code, not the model (0.292334ms)
+✔ a draft with broken structure gets one retry, shown as its own steps (1.8775ms)
+✔ a session length the person states caps every session the model may propose (4.176791ms)
+✔ a second broken draft fails closed at the check and nothing is scheduled (0.834542ms)
+✔ problems sent back to the model are clamped to short plain ASCII (0.070375ms)
+✔ a reading that breaks the format fails the reading stage (0.256209ms)
+✔ a service failure while drafting names the stage and its reason (0.667834ms)
+✔ with no free day before the deadline the run stops before any draft (0.267375ms)
+✔ a refused reservation stops the run before the model (0.069292ms)
+✔ the demo runs the same stages with samples and no reservation (1.841833ms)
+✔ each model stage starts before its call and completes after it (1.683584ms)
+✔ invalid input fails the first stage and nothing else starts (0.336292ms)
+✔ step views follow the events and reject malformed wire data (1.338459ms)
+✔ the calendar file has one event per session, escaped and folded (9.428916ms)
+✔ a session that runs past midnight ends on the next day (0.349916ms)
+✔ the Google Calendar link carries the session and a valid time zone (3.454209ms)
+✔ plan weeks follow the calendar from the start date to the deadline (9.926959ms)
+✔ free time is the window minus busy times, including ones that cross midnight (0.526625ms)
+✔ the skeleton reports the real room in each week (2.64425ms)
+✔ specs and busy times are validated before scheduling (0.370917ms)
+✔ busy times of any length are clipped to the plan’s dates and merged (0.30475ms)
+✔ a valid 10K draft passes and each broken rule is reported (0.854917ms)
+✔ fitness load may not jump more than 30% above the average of the last four weeks (0.059375ms)
+✔ trimming keeps key sessions first, then the most minutes (0.164042ms)
+✔ a recurring Tuesday meeting moves sessions and every rule still holds (7.495167ms)
+✔ with no free time the scheduler drops sessions instead of forcing them (0.993416ms)
+✔ property: any draft, spec and calendar yield a plan that passes every check (350.905167ms)
+✔ a planned lighter week does not block the return to earlier volume (0.242042ms)
+✔ a first week cut short by the start date does not hold back later weeks (0.206667ms)
+✔ a jump after a light stretch is trimmed, keeping the key sessions (0.17175ms)
+✔ weeks over their fixed limits are trimmed to their best subset, with a reason each (0.173292ms)
+✔ the independent check catches load rules a plan breaks (0.189916ms)
+✔ busy times are indexed by date once per list: split at midnight, sorted and merged (0.060125ms)
+✔ scheduling reads each busy time once, however many there are (4.815209ms)
+{"event":"cadencia_routine_failure","reference":"e3959a23-06a2-4558-a4c1-4f9fc2ce8536","reason":"global_quota_exceeded","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"5a60f698-8c7d-4549-9523-1f6b929745e1","reason":"global_quota_exceeded","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"76ed1d71-5037-4f41-aae8-ed6fc51716c9","reason":"global_quota_exceeded","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"b1d638d3-7a82-46b3-898a-2308e6e87944","reason":"global_quota_exceeded","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"4b686256-1606-4e37-bc8d-9e9c9833cbc6","reason":"global_quota_exceeded","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"74b1c62a-25f4-45c0-9deb-f60ac2752a28","reason":"global_quota_exceeded","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"cdbaabef-ac14-4e29-b85f-861661aa0552","reason":"global_quota_exceeded","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"9a6275e2-d2e6-434b-a40e-31782db57ee4","reason":"global_quota_exceeded","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"913e2441-dcd8-40d9-9de6-6d41e802e256","reason":"global_quota_exceeded","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"37e87bab-ff3a-4912-a5d1-1ecf33c1691d","reason":"global_quota_exceeded","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"e94f559e-cad6-44b7-85fc-907836dead99","reason":"global_quota_exceeded","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"ba00baac-27a1-4927-bb8f-e7a369e5417e","reason":"global_quota_exceeded","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"256dcf3d-a478-4c5f-aaf0-5e82d0999396","reason":"global_quota_exceeded","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"ab29f02e-b990-4eb4-93b7-31fc14e33d9d","reason":"global_quota_exceeded","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"70ce6851-1647-474d-984a-cc06eafaf0e5","reason":"global_quota_exceeded","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"32c3c84d-011f-4243-b998-84599a0decc2","reason":"global_quota_exceeded","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"3934703e-0457-42b2-8ef1-86d885674c8b","reason":"global_quota_exceeded","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"883ec042-ef1d-4335-bbf2-9fba557aef3d","reason":"global_quota_exceeded","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"036b1117-d983-4bc4-a23d-34d153a89bba","reason":"global_quota_exceeded","stage":"reserve","status":429}
+✔ atomic admission on checkRateLimit: simultaneous requests from same key cannot exceed limit (1.529542ms)
+{"event":"cadencia_routine_failure","reference":"4e21fc61-1842-46a4-a9a7-bc9986ac6031","reason":"global_concurrency_limit","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"6a0ea915-79fb-4163-9428-3fe9f53fc599","reason":"global_concurrency_limit","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"7e0b7c07-b16b-4060-8cc5-b5052a7d2185","reason":"global_concurrency_limit","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"6bf84960-d892-4025-af70-dc28695493b1","reason":"global_concurrency_limit","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"64044084-1356-4778-8d6c-a4005bc3e58e","reason":"global_concurrency_limit","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"8e6458d3-ab12-494c-b8f7-dabfe7e6299b","reason":"global_concurrency_limit","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"bf9c61fe-f784-447b-b671-033b77fe8d4f","reason":"global_concurrency_limit","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"b8220988-1a2d-4c91-a28e-0ea60f798405","reason":"global_concurrency_limit","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"c73631f7-81c6-446b-9d6f-1564bc03923e","reason":"global_concurrency_limit","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"9d2e42f0-1734-4982-8139-7ca08c3bb54a","reason":"global_concurrency_limit","stage":"reserve","status":429}
+✔ isolated daily quota race: 20 distinct IPs simultaneously at global daily 49 and concurrency 0 admits at most 1 and caps count at 50 (56.296875ms)
+{"event":"cadencia_routine_failure","reference":"3df59b15-732d-47ec-8bd5-9ea6c966b431","reason":"rate_limited","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"ddee0ac6-b52e-4926-90e6-22f15bc2298b","reason":"rate_limited","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"5e8eef5a-9bfb-4859-a0e0-8d3e43bc2eb2","reason":"rate_limited","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"b4566f3d-92d0-4d53-a018-bbdd6549ebff","reason":"visitor_concurrent_limit","stage":"reserve","status":429}
+✔ isolated global concurrency race: 11 distinct IPs simultaneously at global daily 0 and concurrency 9 admits at most 1 (27.284166ms)
+{"event":"cadencia_routine_failure","reference":"f789002b-278e-4c8a-85ef-92eda4d3907d","reason":"visitor_quota_exceeded","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"80764fa3-4873-426a-8be5-7b1274530837","reason":"missing_client_ip","stage":"reserve","status":400}
+{"event":"cadencia_routine_failure","reference":"400b4e6c-c2d3-40bf-b5ca-b300b6dad49f","reason":"visitor_quota_exceeded","stage":"reserve","status":429}
+{"event":"cadencia_routine_failure","reference":"95c91c53-b064-4a6e-bb31-04c89f9d28a4","reason":"live_not_configured","status":503}
+{"event":"cadencia_routine_failure","reference":"fe35c5c4-472b-449a-9a93-dae49da42e1b","reason":"upstream_invalid_response","stage":"read_goal","status":502}
+{"event":"cadencia_routine_failure","reference":"0033b044-78ea-4ac2-8bc2-e29571cdb89a","reason":"live_not_configured","status":503}
+✔ visitor concurrency: simultaneous requests from same visitor permit only 1 (40.553333ms)
+✔ daily 429 returns Retry-After until UTC midnight reset (3.039416ms)
+✔ missing cf-connecting-ip rejects with 400 and does not trust x-real-ip (1.437417ms)
+✔ keyed crypto HMAC identity is non-reversible and cookie reset fails (7.323375ms)
+✔ production defaults with no injected deps: fails closed when DB absent (0.38025ms)
+✔ backend bearer secrecy: CADENCIA_SERVICE_TOKEN is never exposed (1.277291ms)
+✔ missing HMAC secret throws and fails closed with 503 (0.929292ms)
+✔ D1 meta.changes contract is strictly checked during rate admission (0.551166ms)
+✔ without live configuration GET reports a coarse pause (17.471291ms)
+✔ GET reports readiness only for a valid authenticated service config (4.064125ms)
+✔ GET accepts the private Worker binding bridge when process.env is unavailable (0.626708ms)
+✔ every recorded pick replays on every demo plan and date, and never breaks the run (68.450708ms)
+✔ the simulation marks the first weeks and pretends today is the missed week’s Sunday (0.647666ms)
+{"event":"cadencia_routine_failure","reference":"7368a0c4-861f-4b28-b9c5-080b1be0c2e1","reason":"invalid_input","stage":"check_request","status":400}
+✔ a request built from the planner’s options passes, and each field is checked (2.299334ms)
+✔ a pick is checked again in code against the options offered (0.310125ms)
+✔ the demo runs the same stages with a recorded pick, and falls back when it is not offered (0.529583ms)
+✔ a live replan reserves its own worst case, sends only the checked request, settles and frees its slot (13.561833ms)
+✔ an invalid replan is refused before any spend or model call (1.573125ms)
+✔ replan bounds, options and categories match the Python service (0.664417ms)
+✔ after a missed week every option is offered, keeps the past as it was and passes the independent check (5.4105ms)
+✔ repeat redoes the missed week and cuts the end; extend moves the deadline instead; lighter trims every week (1.948541ms)
+✔ a missed week lowers what the next fitness week may hold (1.269208ms)
+✔ lighter is lighter than keep in every week ahead, even when the load rule trims keep (1.286333ms)
+✔ mid-week, sessions already behind count toward the rest of that week (1.254125ms)
+✔ mid-week, the rest of the week keeps under the cap once what was done counts (1.211292ms)
+✔ no hard session the day after one done today (2.971417ms)
+✔ busy times imported later never flag past sessions, and new sessions avoid them (0.84575ms)
+✔ misses an approved adjustment answered are not offered again (3.167375ms)
+✔ nothing to adjust: no recent miss, only old misses, or the plan is over (0.261625ms)
+✔ options that would place the same sessions are offered once (1.270916ms)
+✔ extend is not offered past the longest plan allowed (2.065584ms)
+✔ a goal run’s worst case follows the rate card and the service bounds (0.342208ms)
+✔ reservations stop at the daily cap and report the reset time (1.381833ms)
+✔ the monthly cap and the kill switch are enforced the same way (0.963084ms)
+✔ missing settings fail closed (0.7955ms)
+✔ each call costs its usage plus earlier attempts at their worst, or its worst when usage is missing (0.079375ms)
+✔ settling a run replaces its worst case with the cost of its calls (0.810166ms)
+✔ a cancelled reservation frees its room and concurrent reservations never overshoot (0.941167ms)
+✔ GET reports the kill switch and a reached cap without exposing amounts (12.15975ms)
+✔ formatted events parse back in one chunk (1.196958ms)
+✔ events split at every possible position parse the same (1.835375ms)
+✔ CRLF and CR line endings, comments and multi-line data are handled (0.160042ms)
+✔ an unterminated final event is not dispatched (0.078458ms)
+ℹ tests 143
+ℹ suites 0
+ℹ pass 143
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 672.566083

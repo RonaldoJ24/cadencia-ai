@@ -62,7 +62,7 @@ Rules that hold across both runtimes:
 
 | Where | Name | Stored in | Purpose |
 |---|---|---|---|
-| Worker | `CADENCIA_ENABLE_LIVE` | `wrangler.jsonc` | `"true"` enables live generation. Committed as `"true"`, so every deploy keeps live AI on (see §7). |
+| Worker | `CADENCIA_ENABLE_LIVE` | `wrangler.jsonc` | `"true"` enables live runs. Committed as `"true"`, so every deploy keeps live AI on (see §7). |
 | Worker | `CADENCIA_INTENT_SERVICE_URL` | `wrangler.jsonc` | Cloud Run base URL |
 | Worker | `CADENCIA_SERVICE_TOKEN` | Worker secret | Bearer token for Cloud Run; also keys the visitor hash (§8) |
 | D1 | `app_settings` | Table (migration `0005`) | Kill switch and dollar caps, read on every live request (§7, §8) |
@@ -77,10 +77,13 @@ Rules that hold across both runtimes:
 
 ## 3. Cloud Run intent service
 
-Production as read on 2026-09-23 with `gcloud run services describe`: 1 CPU,
-256 MiB, concurrency 8, min 0 and max 1 instances, 30 s timeout, public ingress
-(the app checks the bearer token), secrets from Secret Manager, and an image built
-on 2026-09-02 that serves prompt `cadencia-routine-v2`.
+Production as read on 2026-09-24 with `gcloud run services describe`: revision
+`cadencia-intents-00007-zzl`, image `cadencia-intents:175dab6`, 1 CPU, 256 MiB,
+concurrency 8, min 0 and max 1 instances, 60 s timeout, public ingress (the app
+checks the bearer token), `DEEPSEEK_MODEL=deepseek-v4-flash`, and the DeepSeek
+key and service token from Secret Manager. It serves prompts
+`read-goal-f2bbb9b5a76f`, `draft-6ea4a82036d6` and `replan-aff51c833ae2`; a
+service test pins all three, which the evaluation and the demo samples name.
 
 `/v1/draft` allows 40 s per provider attempt and 50 s in total, so the service
 needs a 60 s request timeout, which the deploy command below sets.
@@ -170,9 +173,10 @@ npx wrangler d1 migrations list cadencia_beta --remote
 npx wrangler d1 migrations apply cadencia_beta --remote
 ```
 
-Production has `0001` through `0004` applied (checked 2026-09-23). The tables from
-`0001` and `0004` served features removed on 2026-09-24 (§9); they stay in place,
-and dropping them would be its own migration.
+Production has every migration in `migrations/` applied, `0001` through
+`0005_spend_controls` (checked 2026-09-24). The tables from `0001` and `0004`
+served features removed on 2026-09-24 (§9); they stay in place, and dropping them
+would be its own migration.
 
 ### 4.2 Worker secret
 
@@ -255,13 +259,22 @@ gcloud run services update cadencia-intents --region us-central1 --max-instances
 
 ### Dollar caps
 
-Every live generation reserves its worst case before the model is called:
-2 attempts × (3,000 input tokens × $0.30/M + 4,000 output tokens × $1.20/M) =
-$0.0114. The reservation is written only if the day's and the month's committed
-spend plus that amount stay within the caps, in one statement, so concurrent
-requests cannot overshoot. After the call the row is settled at the cost of the
-tokens the service reports; an earlier failed attempt is charged at its worst
-case, and a call with unknown usage keeps its reservation.
+Every live run reserves its worst case before any model call, priced from the
+service's prompt byte ceilings (at most one token per byte, plus 64 template
+tokens) and output caps, with two provider attempts per call
+(`GOAL_BOUNDS` and `REPLAN_BOUNDS` in `lib/server/spend.ts`, which a test checks
+against the service's constants):
+
+| Run | Calls | Worst case |
+|---|---|---|
+| Goal plan | one reading and up to two drafts | 65,472 micro-USD ($0.0655) |
+| Replan after missed sessions | one pick | 5,674 micro-USD ($0.0057) |
+
+The reservation is written only if the day's and the month's committed spend plus
+that amount stay within the caps, in one statement, so concurrent requests cannot
+overshoot. When the run ends, however it ends, the row is settled once from the
+tokens every call reported; an earlier failed attempt is charged at its worst
+case, and a call with unknown usage is charged in full.
 
 | Setting (`app_settings`) | Default | Meaning |
 |---|---|---|
@@ -290,7 +303,7 @@ instance restarts; the D1 ledger remains the real budget.
 
 ### Request limits
 
-Live generation on `/api/routine` also reserves a visitor slot in one D1 batch:
+A live run on `/api/routine` also reserves a visitor slot in one D1 batch:
 
 | Control | Default | Source |
 |---|---|---|
@@ -302,7 +315,8 @@ Live generation on `/api/routine` also reserves a visitor slot in one D1 batch:
 | Lease for a goal run | 180 s | `GOAL_LEASE_SEC` in `lib/server/goal-run.ts` |
 | Request body | 128 KiB, room for 2,000 imported busy times | `MAX_BODY_BYTES` in `lib/server/http.ts` |
 
-Failed generations still count against quota. Quotas reset at 00:00 UTC.
+Goal runs and replans share the quota, and failed runs still count against it.
+Quotas reset at 00:00 UTC.
 
 Visitors are identified by `HMAC-SHA256(CADENCIA_SERVICE_TOKEN, day + IP)` from
 the `cf-connecting-ip` header; raw IPs are not stored. Rotating the service token
@@ -323,4 +337,8 @@ therefore also resets every visitor's quota for the day.
 - **2026-09-10 19:32 UTC**: last deploy, built from commit `e48a0a1`.
 - **2026-09-24**: the beta loop and Reviewer Replay were removed (with the
   unapplied `0005`); planning steps stream to the page; dollar caps and the D1
-  kill switch arrive with migration `0005_spend_controls`.
+  kill switch arrive with migration `0005_spend_controls`. The weekly-routine flow
+  and `/v1/intents` were retired for the goal planner (read-goal, draft); calendar
+  import and replanning after missed sessions (`/v1/replan`) followed. Cloud Run
+  moved through revisions 00003 to 00007, and the Worker was redeployed after each
+  phase from `main`.
