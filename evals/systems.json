@@ -1,6 +1,6 @@
 {
-  "frozen": false,
-  "about": "Part B of evals/PREREGISTRATION.md: the arms and what each arm's service must report. Development values until the tag eval-freeze-v1, when frozen becomes true. GPT-6 Luna's model id and prices are filled in then, from the owner or OpenAI's API reference.",
+  "frozen": true,
+  "about": "Part B of evals/PREREGISTRATION.md, frozen at the tag eval-freeze-v1 on 2026-09-24: the arms and what each arm's service must report.",
   "arms": [
     {
       "id": "A",
@@ -12,14 +12,27 @@
         "source": "https://api-docs.deepseek.com/quick_start/pricing (peak prices)",
         "read": "2026-09-24"
       },
-      "expect": { "readGoal": "read-goal-f2bbb9b5a76f", "draft": "draft-6ea4a82036d6", "model": "deepseek-flash" }
+      "expect": {
+        "readGoal": "read-goal-f2bbb9b5a76f",
+        "draft": "draft-6ea4a82036d6",
+        "model": "deepseek-flash"
+      }
     },
     {
       "id": "B",
       "label": "GPT-6 Luna",
       "serviceUrl": "http://127.0.0.1:8782",
-      "prices": null,
-      "expect": { "readGoal": "read-goal-f2bbb9b5a76f", "draft": "draft-6ea4a82036d6", "model": null }
+      "prices": {
+        "inputPerMillion": 0.1,
+        "outputPerMillion": 0.5,
+        "source": "https://developers.openai.com/api/docs/pricing (standard)",
+        "read": "2026-09-24"
+      },
+      "expect": {
+        "readGoal": "read-goal-f2bbb9b5a76f",
+        "draft": "draft-6ea4a82036d6",
+        "model": "gpt-6-luna"
+      }
     }
   ]
 }
