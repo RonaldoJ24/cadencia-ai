@@ -210,16 +210,26 @@ async function fetchJwksKeys(
 
 /**
  * Single-flight JWKS fetch per URL: concurrent requests share one network
- * call instead of stampeding the certs endpoint.
+ * call instead of stampeding the certs endpoint. The cache is filled before
+ * the in-flight slot is released, so a request arriving between the two
+ * never finds neither and trips the cooldown gate.
  */
 function singleFlightFetch(
   url: string,
   fetcher: NonNullable<IdentityDeps['fetchJwks']>,
+  nowMs: number,
 ): Promise<unknown[] | null> {
   if (inflight && inflight.url === url) return inflight.promise;
-  const promise = fetchJwksKeys(url, fetcher).finally(() => {
-    if (inflight && inflight.url === url) inflight = null;
-  });
+  const promise = fetchJwksKeys(url, fetcher)
+    .then((keys) => {
+      if (keys !== null) {
+        jwksCache = { url, expiresAtMs: nowMs + JWKS_CACHE_TTL_MS, keys };
+      }
+      return keys;
+    })
+    .finally(() => {
+      if (inflight && inflight.url === url) inflight = null;
+    });
   inflight = { url, promise };
   return promise;
 }
@@ -432,10 +442,7 @@ export async function resolveIdentity(
     return { ok: false, reason: 'needs_verification' };
   }
   refreshGate = { url: certsUrl, nextRefreshMs: nowMs + JWKS_REFRESH_COOLDOWN_MS };
-  const keys = await singleFlightFetch(certsUrl, fetcher);
-  if (keys !== null) {
-    jwksCache = { url: certsUrl, expiresAtMs: nowMs + JWKS_CACHE_TTL_MS, keys };
-  }
+  const keys = await singleFlightFetch(certsUrl, fetcher, nowMs);
   const jwk = keys ? jwkForKid(keys, kid) : null;
   if (!jwk) return { ok: false, reason: 'needs_verification' };
   return authed(jwk);
