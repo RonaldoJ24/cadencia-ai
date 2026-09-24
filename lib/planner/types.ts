@@ -104,11 +104,16 @@ export type ScheduleNote =
   }
   | { kind: 'dropped'; week: number; typeId: string; reason: DropReason };
 
+/** How the plan can go on after missed sessions; see lib/planner/replan.ts. */
+export type ReplanOptionId = 'keep' | 'repeat' | 'extend' | 'lighter';
+
 export type GoalPlan = {
   spec: GoalSpec;
   draft: Draft;
   weeks: PlanWeek[];
   notes: ScheduleNote[];
+  /** Adjustments the person approved after missed sessions, oldest first. */
+  adjustments?: Array<{ on: LocalDate; option: ReplanOptionId }>;
 };
 
 /** What code offers the model before it drafts: the room each week really has. */
