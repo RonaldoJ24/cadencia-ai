@@ -311,3 +311,32 @@ void test('the demo runs the same stages with samples and no reservation', async
     'check_request', 'read_goal', 'check_availability', 'draft', 'check_draft', 'fit',
   ]);
 });
+
+void test('each model stage starts before its call and completes after it', async () => {
+  const seenAtCall: string[] = [];
+  const { deps, events } = harness();
+  const withTrail: GoalPipelineDeps = {
+    ...deps,
+    readGoal: async (payload) => {
+      seenAtCall.push(trail(events).at(-1) ?? '');
+      return deps.readGoal(payload);
+    },
+    draft: async (payload, skeleton) => {
+      seenAtCall.push(trail(events).at(-1) ?? '');
+      return deps.draft(payload, skeleton);
+    },
+  };
+  await runGoalPipeline(input(), withTrail);
+  assert.deepEqual(seenAtCall, ['read_goal:started', 'draft:started']);
+  const order = trail(events);
+  assert.ok(order.indexOf('read_goal:completed') > order.indexOf('read_goal:started'));
+});
+
+void test('invalid input fails the first stage and nothing else starts', async () => {
+  const { deps, events, reads } = harness();
+  const error = await failure(runGoalPipeline({ text: '', language: 'en', today: TODAY }, deps));
+  assert.equal(error.stage, 'check_request');
+  assert.equal(error.options.status, 400);
+  assert.deepEqual(trail(events), ['check_request:started', 'check_request:failed']);
+  assert.equal(reads.length, 0);
+});
