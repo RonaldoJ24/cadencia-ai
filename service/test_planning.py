@@ -207,5 +207,8 @@ def test_the_image_and_the_build_context_ship_every_service_module() -> None:
     dockerfile = (service / "Dockerfile").read_text(encoding="utf-8").splitlines()
     copied = next(line for line in dockerfile if line.startswith("COPY app.py")).split()[1:-1]
     assert modules <= set(copied)
+    # The ignore file is an allow list, so a module missing there never reaches the build.
+    allowed = (service / ".dockerignore").read_text(encoding="utf-8").splitlines()
+    assert all(f"!{module}" in allowed for module in modules)
     deployment = (service.parent / "DEPLOYMENT.md").read_text(encoding="utf-8")
     assert all(f"service/{module}" in deployment for module in modules)
