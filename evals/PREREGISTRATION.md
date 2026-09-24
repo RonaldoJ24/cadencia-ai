@@ -226,9 +226,10 @@ GPT-6 Luna's model id, parameters and prices will come from the owner or from
 OpenAI's API reference at that time, not from memory.
 
 Development values, not frozen: prompts `read-goal-f2bbb9b5a76f` and
-`draft-6ea4a82036d6`; DeepSeek `deepseek-v4-flash`, the service's default and
-the production setting, at $0.30 per million input tokens and $1.20 per million
-output tokens (peak prices, pricing page read on 2026-09-24). That page names
-the model `deepseek-flash` and lists `deepseek-v4-flash` as a retired name the
-API still accepts; the demo's recorded samples used `deepseek-flash`. The freeze
-names one id and reads its prices again.
+`draft-6ea4a82036d6`; DeepSeek `deepseek-flash`, the service's default and, from
+2026-09-24, the production setting, at $0.30 per million input tokens and $1.20
+per million output tokens (peak prices, pricing page read on 2026-09-24). The
+owner chose that name over `deepseek-v4-flash`, which the pricing page lists as
+retired but still accepted, so the evaluation measures the model production
+runs. The demo's recorded samples also used `deepseek-flash`. The freeze reads
+the prices again.

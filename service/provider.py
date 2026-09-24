@@ -24,7 +24,7 @@ from pydantic import (
 )
 
 DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
-DEFAULT_MODEL = "deepseek-v4-flash"
+DEFAULT_MODEL = "deepseek-flash"
 REQUEST_TIMEOUT_SECONDS = 10.0
 TOTAL_TIMEOUT_SECONDS = 20.0
 # Provider attempts per call; the Worker's spend reservation counts on it.

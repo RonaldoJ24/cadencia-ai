@@ -70,7 +70,7 @@ Rules that hold across both runtimes:
 | Cloud Run | `CADENCIA_SERVICE_DAILY_ATTEMPT_CAP` | Env var (optional) | Provider attempts allowed per UTC day in the running instance; default 400 |
 | Cloud Run | `CADENCIA_SERVICE_TOKEN` | Secret Manager `cadencia-service-token` | Token checked on every request |
 | Cloud Run | `DEEPSEEK_API_KEY` | Secret Manager `deepseek-api-key` | Provider key |
-| Cloud Run | `DEEPSEEK_MODEL` | Env var | Model name; code default `deepseek-v4-flash` |
+| Cloud Run | `DEEPSEEK_MODEL` | Env var | Model name; code default `deepseek-flash` |
 | Cloud Run | `PORT` | Set by Cloud Run | Defaults to 8080 |
 
 ---
@@ -78,9 +78,9 @@ Rules that hold across both runtimes:
 ## 3. Cloud Run intent service
 
 Production as read on 2026-09-24 with `gcloud run services describe`: revision
-`cadencia-intents-00007-zzl`, image `cadencia-intents:175dab6`, 1 CPU, 256 MiB,
+`cadencia-intents-00008-jsx`, image `cadencia-intents:175dab6`, 1 CPU, 256 MiB,
 concurrency 8, min 0 and max 1 instances, 60 s timeout, public ingress (the app
-checks the bearer token), `DEEPSEEK_MODEL=deepseek-v4-flash`, and the DeepSeek
+checks the bearer token), `DEEPSEEK_MODEL=deepseek-flash`, and the DeepSeek
 key and service token from Secret Manager. It serves prompts
 `read-goal-f2bbb9b5a76f`, `draft-6ea4a82036d6` and `replan-aff51c833ae2`; a
 service test pins all three, which the evaluation and the demo samples name.
@@ -134,7 +134,7 @@ gcloud run deploy cadencia-intents --project "$CADENCIA_GCP_PROJECT" \
   --region us-central1 --port 8080 --cpu 1 --memory 256Mi \
   --concurrency 8 --min-instances 0 --max-instances 1 --timeout 60s \
   --ingress all --no-invoker-iam-check \
-  --set-env-vars "DEEPSEEK_MODEL=deepseek-v4-flash" \
+  --set-env-vars "DEEPSEEK_MODEL=deepseek-flash" \
   --set-secrets "DEEPSEEK_API_KEY=deepseek-api-key:latest,CADENCIA_SERVICE_TOKEN=cadencia-service-token:latest"
 ```
 
@@ -341,4 +341,6 @@ therefore also resets every visitor's quota for the day.
   and `/v1/intents` were retired for the goal planner (read-goal, draft); calendar
   import and replanning after missed sessions (`/v1/replan`) followed. Cloud Run
   moved through revisions 00003 to 00007, and the Worker was redeployed after each
-  phase from `main`.
+  phase from `main`. Revision 00008 changed only `DEEPSEEK_MODEL`, from the
+  retired name `deepseek-v4-flash` to `deepseek-flash`, the name the evaluation
+  uses; a live goal run afterwards logged `deepseek-flash`.
