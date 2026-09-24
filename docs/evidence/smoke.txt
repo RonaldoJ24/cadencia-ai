@@ -1,0 +1,11 @@
+command: uv run --project service --frozen python service/smoke.py
+code: 2b8edaf (RonaldoJ24/cadencia-ai)
+date: 2026-09-24
+machine: Apple M5, macOS 27.0
+runtime: Python 3.12.13, Node v26.3.1
+
+{"event":"read_goal_request","request_id":"0814d478-f16b-4dcd-b652-8efbf19d2207","timestamp":"2026-09-24T12:23:00.791284Z","prompt_version":"read-goal-f2bbb9b5a76f","model":"deepseek-v4-flash","latency_ms":0,"attempts":1,"status_category":"2xx","outcome":"success","schema_valid":true,"usage":{"prompt_tokens":500,"completion_tokens":300,"total_tokens":800}}
+{"event":"draft_request","request_id":"059c97a0-7058-4032-a78a-3629815f70bc","timestamp":"2026-09-24T12:23:00.803256Z","prompt_version":"draft-6ea4a82036d6","model":"deepseek-v4-flash","latency_ms":0,"attempts":1,"status_category":"2xx","outcome":"success","schema_valid":true,"usage":{"prompt_tokens":500,"completion_tokens":300,"total_tokens":800}}
+{"event":"read_goal_request","request_id":"f0d1f5b3-9856-442c-9070-176d0e3977d7","timestamp":"2026-09-24T12:23:00.808370Z","prompt_version":"read-goal-f2bbb9b5a76f","model":"deepseek-v4-flash","latency_ms":0,"attempts":1,"status_category":"2xx","outcome":"malformed_response","schema_valid":false}
+{"event":"replan_request","request_id":"227b9754-a1e6-4748-a0d1-3367baf0407b","timestamp":"2026-09-24T12:23:00.813773Z","prompt_version":"replan-aff51c833ae2","model":"deepseek-v4-flash","latency_ms":0,"attempts":1,"status_category":"2xx","outcome":"success","schema_valid":true,"usage":{"prompt_tokens":500,"completion_tokens":300,"total_tokens":800}}
+{"status": "ok", "provider_calls": 4, "service_transport": "loopback"}

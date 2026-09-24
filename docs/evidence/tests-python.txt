@@ -1,0 +1,19 @@
+command: uv run --project service --frozen pytest service -v
+code: 2b8edaf (RonaldoJ24/cadencia-ai)
+date: 2026-09-24
+machine: Apple M5, macOS 27.0
+runtime: Python 3.12.13
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-8.4.1, pluggy-1.6.0
+rootdir: <repo>/service
+configfile: pyproject.toml
+plugins: anyio-4.14.2
+collected 109 items
+
+service/test_planning.py ............................................... [ 43%]
+..                                                                       [ 44%]
+service/test_service.py ................................................ [ 88%]
+............                                                             [100%]
+
+============================= 109 passed in 0.13s ==============================

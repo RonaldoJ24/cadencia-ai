@@ -1,0 +1,40 @@
+command: wrangler tail cadencia-ai --format json, while a Cloud Build step posted one live goal run
+         (build config: a 116 KB request, 2,000 half-hour busy times, streamed with accept: text/event-stream)
+code: Worker version 52c448ff, deployed from 2b8edaf (RonaldoJ24/cadencia-ai)
+date: 2026-09-24
+where: Cloudflare Workers, production (https://cadencia-ai.ronaldo-jesus-alvarez.workers.dev)
+
+The run as the client saw it (stage, status, milliseconds, detail):
+=== body bytes 116186 busy 2000 last day 2027-03-26
+=== status 200
+check_request completed 0 76-character goal; code fills every setting you left open
+reserve completed 685 Live AI slot reserved; $0.0936 of today’s $0.50 cap committed, counting this request at its worst case
+read_goal completed 1484 “Learn guitar chords and two songs”; deadline Dec 1, worked out from your words
+check_availability completed 0 11 weeks, Sep 25 to Dec 1; Tue, Thu, 18:00–21:00; up to 150 min a week; around 748 busy times from your calendar
+draft completed 5323 3 phases, 6 session types, 19 sessions
+check_draft completed 0 Well-formed; every week is within its limits
+fit completed 0 Placed 19 sessions; moved 19; every rule checked
+outcome ready sessions 19 starts ['18:30'] notes {'moved:busy': 19}
+
+The Worker's own record of that request, reduced to timing and outcome fields
+(IP addresses, headers and Cloudflare metadata removed):
+{
+  "outcome": "ok",
+  "cpuTime": 53,
+  "wallTime": 7669,
+  "eventTimestamp": 1790252646689,
+  "scriptVersion": "52c448ff-96d3-4e38-8410-9e136e5fb00c",
+  "request": {
+    "method": "POST",
+    "path": "/api/routine"
+  },
+  "response": {
+    "status": 200
+  },
+  "exceptions": 0,
+  "logs": 0
+}
+
+cpuTime is CPU milliseconds spent in the Worker for the whole request, including
+parsing and checking the 116 KB body, the busy-time index, scheduling, the
+independent check and the stream. wallTime includes the two model calls.
