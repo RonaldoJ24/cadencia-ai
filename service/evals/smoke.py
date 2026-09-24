@@ -130,6 +130,48 @@ class LocalServer:
 
 def _node_script() -> str:
     return r'''
+const { DatabaseSync } = await import('node:sqlite');
+const { readFileSync } = await import('node:fs');
+// Live mode fails closed without its D1 quota tables, so the smoke gives the
+// route an in-memory SQLite database with the same migrations as production.
+function sqliteDb() {
+  const raw = new DatabaseSync(':memory:');
+  const wrap = (sql) => {
+    let params = [];
+    const api = {
+      bind(...values) { params = values; return api; },
+      async first() { return raw.prepare(sql).get(...params) ?? null; },
+      async all() { return { results: raw.prepare(sql).all(...params) }; },
+      async run() { return api.runSync(); },
+      runSync() {
+        const info = raw.prepare(sql).run(...params);
+        return { success: true, meta: { changes: Number(info.changes) } };
+      },
+    };
+    return api;
+  };
+  return {
+    raw,
+    prepare: (sql) => wrap(sql),
+    batch: async (statements) => {
+      raw.exec('BEGIN');
+      try {
+        const out = statements.map((statement) => statement.runSync());
+        raw.exec('COMMIT');
+        return out;
+      } catch (error) {
+        raw.exec('ROLLBACK');
+        throw error;
+      }
+    },
+  };
+}
+const db = sqliteDb();
+db.raw.exec('PRAGMA foreign_keys = ON');
+for (const file of ['0001_beta_loop.sql', '0002_rate_limits.sql', '0003_public_limits.sql']) {
+  db.raw.exec(readFileSync(`./migrations/${file}`, 'utf8'));
+}
+globalThis.__cadencia_db = db;
 const { GET, POST } = await import('./app/api/routine/route.ts');
 const input = {
   request: 'aprender TypeScript',
@@ -143,7 +185,7 @@ const input = {
 async function invoke(mode) {
   return POST(new Request('http://localhost/api/routine', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', 'cf-connecting-ip': '127.0.0.1' },
     body: JSON.stringify({ input, mode }),
   }));
 }
