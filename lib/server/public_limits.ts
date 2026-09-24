@@ -30,21 +30,27 @@ export const DEFAULT_PUBLIC_LIMITS: PublicLimitsConfig = {
   concurrencyLeaseSec: 40,
 };
 
-export function limitsFromEnv(env?: Record<string, unknown>): PublicLimitsConfig {
-  const parseNum = (val: unknown, fallback: number): number => {
-    if (typeof val === 'string') {
-      const n = parseInt(val, 10);
-      if (Number.isFinite(n) && n > 0) return n;
-    }
-    return fallback;
+/**
+ * The count limits live in D1 (public_limits_config, seeded by migration
+ * 0003) so they can change without a deploy. The atomic reservation below
+ * reads the same rows; missing rows fall back to the defaults.
+ */
+export async function loadPublicLimits(db: Db): Promise<PublicLimitsConfig> {
+  const rows = await db
+    .prepare('SELECT key, value FROM public_limits_config')
+    .all<{ key: string; value: number }>();
+  const values = new Map(rows.results.map((row) => [row.key, Number(row.value)]));
+  const read = (key: string, fallback: number): number => {
+    const value = values.get(key);
+    return value !== undefined && Number.isInteger(value) && value >= 0 ? value : fallback;
   };
   return {
-    minuteLimit: parseNum(env?.CADENCIA_PUBLIC_MINUTE_LIMIT, DEFAULT_PUBLIC_LIMITS.minuteLimit),
-    visitorDailyQuota: parseNum(env?.CADENCIA_PUBLIC_DAILY_QUOTA, DEFAULT_PUBLIC_LIMITS.visitorDailyQuota),
-    globalDailyCap: parseNum(env?.CADENCIA_PUBLIC_GLOBAL_DAILY_CAP, DEFAULT_PUBLIC_LIMITS.globalDailyCap),
-    visitorConcurrency: parseNum(env?.CADENCIA_PUBLIC_VISITOR_CONCURRENCY, DEFAULT_PUBLIC_LIMITS.visitorConcurrency),
-    globalConcurrency: parseNum(env?.CADENCIA_PUBLIC_GLOBAL_CONCURRENCY, DEFAULT_PUBLIC_LIMITS.globalConcurrency),
-    concurrencyLeaseSec: parseNum(env?.CADENCIA_PUBLIC_CONCURRENCY_LEASE_SEC, DEFAULT_PUBLIC_LIMITS.concurrencyLeaseSec),
+    minuteLimit: read('minute_limit', DEFAULT_PUBLIC_LIMITS.minuteLimit),
+    visitorDailyQuota: read('visitor_daily_quota', DEFAULT_PUBLIC_LIMITS.visitorDailyQuota),
+    globalDailyCap: read('global_daily_cap', DEFAULT_PUBLIC_LIMITS.globalDailyCap),
+    visitorConcurrency: read('visitor_concurrency', DEFAULT_PUBLIC_LIMITS.visitorConcurrency),
+    globalConcurrency: read('global_concurrency', DEFAULT_PUBLIC_LIMITS.globalConcurrency),
+    concurrencyLeaseSec: DEFAULT_PUBLIC_LIMITS.concurrencyLeaseSec,
   };
 }
 
@@ -102,17 +108,6 @@ export type SlotReservationResult =
       retryAfterSec?: number;
     };
 
-/** Synchronize dynamic limits configuration table before atomic trigger validation. */
-export async function syncPublicLimitsConfig(db: Db, limits: PublicLimitsConfig): Promise<void> {
-  await db.batch([
-    db.prepare('INSERT INTO public_limits_config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = ?').bind('minute_limit', limits.minuteLimit, limits.minuteLimit),
-    db.prepare('INSERT INTO public_limits_config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = ?').bind('visitor_daily_quota', limits.visitorDailyQuota, limits.visitorDailyQuota),
-    db.prepare('INSERT INTO public_limits_config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = ?').bind('global_daily_cap', limits.globalDailyCap, limits.globalDailyCap),
-    db.prepare('INSERT INTO public_limits_config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = ?').bind('visitor_concurrency', limits.visitorConcurrency, limits.visitorConcurrency),
-    db.prepare('INSERT INTO public_limits_config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = ?').bind('global_concurrency', limits.globalConcurrency, limits.globalConcurrency),
-  ]);
-}
-
 export async function checkAndReservePublicLiveSlot(
   db: Db,
   args: {
@@ -142,7 +137,9 @@ export async function checkAndReservePublicLiveSlot(
     };
   }
 
-  const limits: PublicLimitsConfig = { ...DEFAULT_PUBLIC_LIMITS, ...args.limits };
+  const limits: PublicLimitsConfig = args.limits
+    ? { ...DEFAULT_PUBLIC_LIMITS, ...args.limits }
+    : await loadPublicLimits(db);
   const day = args.nowIso.slice(0, 10);
   const ipHash = hmacIpHash(clientIp, args.secret ?? '', day);
 

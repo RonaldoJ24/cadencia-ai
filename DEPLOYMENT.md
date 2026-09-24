@@ -22,7 +22,7 @@ Cadencia runs in two places:
 [ Worker: cadencia-ai ]
     ├─ Serves the page and static assets
     ├─ /api/routine: demo plans, and live plans when CADENCIA_ENABLE_LIVE is "true"
-    ├─ D1 cadencia_beta: rate limits, daily quotas, in-flight leases
+    ├─ D1 cadencia_beta: kill switch, dollar caps, spend ledger, request limits
     │
     ▼  HTTPS, Authorization: Bearer <CADENCIA_SERVICE_TOKEN>
 [ Cloud Run: cadencia-intents ]  (us-central1)
@@ -53,7 +53,9 @@ Rules that hold across both runtimes:
 | Worker | `CADENCIA_ENABLE_LIVE` | `wrangler.jsonc` | `"true"` enables live generation. Committed as `"true"`, so every deploy keeps live AI on (see §7). |
 | Worker | `CADENCIA_INTENT_SERVICE_URL` | `wrangler.jsonc` | Cloud Run base URL |
 | Worker | `CADENCIA_SERVICE_TOKEN` | Worker secret | Bearer token for Cloud Run; also keys the visitor hash (§8) |
-| Worker | `CADENCIA_PUBLIC_*` | `wrangler.jsonc` | Only the per-minute limit and error wording read these today; daily quotas and concurrency come from the D1 table `public_limits_config` (§8) |
+| D1 | `app_settings` | Table (migration `0005`) | Kill switch and dollar caps, read on every live request (§7, §8) |
+| D1 | `public_limits_config` | Table (migration `0003`) | Request limits per visitor and overall (§8) |
+| Cloud Run | `CADENCIA_SERVICE_DAILY_ATTEMPT_CAP` | Env var (optional) | Provider attempts allowed per UTC day in the running instance; default 400 |
 | Cloud Run | `CADENCIA_SERVICE_TOKEN` | Secret Manager `cadencia-service-token` | Token checked on every request |
 | Cloud Run | `DEEPSEEK_API_KEY` | Secret Manager `deepseek-api-key` | Provider key |
 | Cloud Run | `DEEPSEEK_MODEL` | Env var | Model name; code default `deepseek-v4-flash` |
@@ -178,18 +180,28 @@ curl -i -X POST "https://cadencia-ai.ronaldo-jesus-alvarez.workers.dev/api/routi
   -d '{"mode":"demo","input":{"request":"learn piano","days":[0,2],"sessionMinutes":30,"weeklyMinutes":60,"startDate":"2026-09-21","time":"18:00","language":"en"}}'
 ```
 
-A live check costs a real model call; run one only when the spend is approved.
+A live check costs a real model call (about $0.001 at current prices).
 
 ---
 
 ## 7. Turning live AI off
 
-Today the switch is configuration, so it takes a deploy. Set
-`"CADENCIA_ENABLE_LIVE": "false"` in `wrangler.jsonc`, commit, and run
-`npm run deploy`. A one-off `wrangler deploy --var` override does not last: the
-next normal deploy restores the committed value. Live requests then return 503
-and the demo keeps working. A switch that works without a deploy is planned
-alongside dollar caps.
+The kill switch is a row in D1, so it takes effect on the next request with no
+deploy:
+
+```bash
+# Pause live AI (the demo keeps working; visitors see that live AI is paused)
+npx wrangler d1 execute cadencia_beta --remote --command \
+  "UPDATE app_settings SET value = '0', updated_at = datetime('now') WHERE key = 'live_enabled'"
+
+# Resume
+npx wrangler d1 execute cadencia_beta --remote --command \
+  "UPDATE app_settings SET value = '1', updated_at = datetime('now') WHERE key = 'live_enabled'"
+```
+
+Setting `CADENCIA_ENABLE_LIVE` to anything but `"true"` in `wrangler.jsonc` and
+deploying also turns live AI off; a one-off `wrangler deploy --var` override does
+not last past the next normal deploy.
 
 To stop the backend itself:
 
@@ -199,23 +211,57 @@ gcloud run services update cadencia-intents --region us-central1 --max-instances
 
 ---
 
-## 8. Public limits
+## 8. Spend caps and request limits
 
-Live generation on `/api/routine` reserves a slot in one D1 batch before any
-provider call:
+### Dollar caps
 
-| Control | Value | Source |
+Every live generation reserves its worst case before the model is called:
+2 attempts × (3,000 input tokens × $0.30/M + 4,000 output tokens × $1.20/M) =
+$0.0114. The reservation is written only if the day's and the month's committed
+spend plus that amount stay within the caps, in one statement, so concurrent
+requests cannot overshoot. After the call the row is settled at the cost of the
+tokens the service reports; an earlier failed attempt is charged at its worst
+case, and a call with unknown usage keeps its reservation.
+
+| Setting (`app_settings`) | Default | Meaning |
 |---|---|---|
-| Per-visitor rate | 2 per minute | `CADENCIA_PUBLIC_MINUTE_LIMIT` |
-| Per-visitor daily quota | 5 | `public_limits_config` (seeded by `0003`) |
+| `live_enabled` | `1` | Kill switch (§7) |
+| `daily_cap_microusd` | `500000` | $0.50 per UTC day |
+| `monthly_cap_microusd` | `5000000` | $5.00 per UTC month |
+
+Prices come from DeepSeek's pricing page (read 2026-09-24) at the peak-hour
+rates, so settled costs are an upper bound. When a cap is reached, live requests
+stop before the model is called and the page says why; the demo keeps working.
+
+```bash
+# Spend so far this month
+npx wrangler d1 execute cadencia_beta --remote --command \
+  "SELECT day, COUNT(*) AS plans, SUM(CASE status WHEN 'settled' THEN actual_microusd ELSE reserved_microusd END) AS microusd FROM spend_ledger WHERE month = strftime('%Y-%m','now') GROUP BY day"
+
+# Change the daily cap to $1.00
+npx wrangler d1 execute cadencia_beta --remote --command \
+  "UPDATE app_settings SET value = '1000000', updated_at = datetime('now') WHERE key = 'daily_cap_microusd'"
+```
+
+The Cloud Run service keeps a second, per-instance fence:
+`CADENCIA_SERVICE_DAILY_ATTEMPT_CAP` provider attempts per UTC day (default 400),
+so a leaked service token cannot spend without limit. It resets when the
+instance restarts; the D1 ledger remains the real budget.
+
+### Request limits
+
+Live generation on `/api/routine` also reserves a visitor slot in one D1 batch:
+
+| Control | Default | Source |
+|---|---|---|
+| Per-visitor rate | 2 per minute | `public_limits_config` |
+| Per-visitor daily quota | 5 | `public_limits_config` |
 | Global daily cap | 50 | `public_limits_config` |
 | Global in flight | 10 | `public_limits_config` |
 | Per-visitor in flight | 1 | unique index on `public_concurrency` |
 | Lease | 40 s | code default |
-| Provider attempts | up to 2 per generation | `service/provider.py` |
 
-Failed generations still count against quota. The limits count requests, not
-money; dollar caps are planned. Quotas reset at 00:00 UTC.
+Failed generations still count against quota. Quotas reset at 00:00 UTC.
 
 Visitors are identified by `HMAC-SHA256(CADENCIA_SERVICE_TOKEN, day + IP)` from
 the `cf-connecting-ip` header; raw IPs are not stored. Rotating the service token
@@ -234,5 +280,6 @@ therefore also resets every visitor's quota for the day.
   received migration `0005`, which the replay checks for first, and the deployed
   Access settings were blank, so both were likely broken.
 - **2026-09-10 19:32 UTC**: last deploy, built from commit `e48a0a1`.
-- **2026-09-24**: the beta loop and Reviewer Replay were removed from the code
-  (with the unapplied `0005`); production serves them until the next deploy.
+- **2026-09-24**: the beta loop and Reviewer Replay were removed (with the
+  unapplied `0005`); planning steps stream to the page; dollar caps and the D1
+  kill switch arrive with migration `0005_spend_controls`.

@@ -66,7 +66,7 @@
  async function migrated(): Promise<Db & { raw: DatabaseSync }> {
    const db = sqliteDb();
    db.raw.exec('PRAGMA foreign_keys = ON');
-   for (const file of ['0001_beta_loop.sql', '0002_rate_limits.sql', '0003_public_limits.sql']) {
+   for (const file of ['0001_beta_loop.sql', '0002_rate_limits.sql', '0003_public_limits.sql', '0005_spend_controls.sql']) {
      db.raw.exec(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'));
    }
    return db;

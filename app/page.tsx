@@ -881,6 +881,7 @@ export default function Home() {
   // an Access-protected browser is not locked into demo mode when its optional
   // readiness fetch is redirected before the application cookie is available.
   const [liveAvailable, setLiveAvailable] = useState(true);
+  const [liveStatus, setLiveStatus] = useState<'available' | 'paused' | 'daily_cap' | 'monthly_cap' | null>(null);
   const [shareStatus, setShareStatus] = useState<string | null>(null);
   const [steps, setSteps] = useState<StepView[] | null>(null);
   const [stepsMode, setStepsMode] = useState<'demo' | 'deepseek'>('demo');
@@ -954,19 +955,25 @@ export default function Home() {
   useEffect(() => {
     let active = true;
     // Cloudflare Access may cache a prior readiness redirect in Safari. This
-    // request is safe to make fresh: it returns only a boolean and carries no
-    // user routine content.
+    // request is safe to make fresh: it returns a boolean and a coarse reason
+    // and carries no user routine content.
     fetch(`/api/routine?readiness=${Date.now().toString(36)}`, {
       cache: 'no-store',
       credentials: 'same-origin',
     })
       .then(async (response) => {
         if (!response.ok) return { liveAvailable: false };
-        return (await response.json()) as { liveAvailable?: boolean };
+        return (await response.json()) as { liveAvailable?: boolean; liveStatus?: unknown };
       })
       .then((payload) => {
         if (!active) return;
         setLiveAvailable(payload.liveAvailable === true);
+        const status = 'liveStatus' in payload ? payload.liveStatus : null;
+        setLiveStatus(
+          status === 'available' || status === 'paused' || status === 'daily_cap' || status === 'monthly_cap'
+            ? status
+            : null,
+        );
       })
       .catch(() => {
         if (!active) return;
@@ -1441,7 +1448,13 @@ export default function Home() {
               </fieldset>
               {!liveAvailable ? (
                 <p className="mode-help">
-                  {copy.ui.liveDisabledHelp}
+                  {liveStatus === 'daily_cap'
+                    ? stepsCopyFor(language).spend.dailyCap
+                    : liveStatus === 'monthly_cap'
+                      ? stepsCopyFor(language).spend.monthlyCap
+                      : liveStatus === 'paused'
+                        ? stepsCopyFor(language).spend.disabled
+                        : copy.ui.liveDisabledHelp}
                 </p>
               ) : null}
               {mode === 'live' && liveAvailable ? (

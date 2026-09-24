@@ -22,12 +22,7 @@
   ],
   "vars": {
     "CADENCIA_ENABLE_LIVE": "true",
-    "CADENCIA_INTENT_SERVICE_URL": "https://cadencia-intents-675488596560.us-central1.run.app",
-    "CADENCIA_PUBLIC_DAILY_QUOTA": "5",
-    "CADENCIA_PUBLIC_GLOBAL_DAILY_CAP": "50",
-    "CADENCIA_PUBLIC_VISITOR_CONCURRENCY": "1",
-    "CADENCIA_PUBLIC_GLOBAL_CONCURRENCY": "10",
-    "CADENCIA_PUBLIC_MINUTE_LIMIT": "2"
+    "CADENCIA_INTENT_SERVICE_URL": "https://cadencia-intents-675488596560.us-central1.run.app"
   },
   "secrets": {
     "required": [

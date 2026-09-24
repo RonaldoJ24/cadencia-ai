@@ -150,11 +150,41 @@ export type ServiceFailureReason =
   | 'upstream_invalid_response'
   | 'backend_rejected';
 
+/** Token usage the intent service reports, used to settle spend. */
+export type ServiceUsage = {
+  promptTokens: number;
+  completionTokens: number;
+  attempts: number;
+  model?: string;
+};
+
+function tokenCount(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 10_000_000 ? value : null;
+}
+
+/** Reads `{usage: {prompt_tokens, completion_tokens}, attempts, model}` when present and well formed. */
+export function serviceUsage(source: unknown): ServiceUsage | undefined {
+  const root = dict(source);
+  const usage = dict(root?.usage);
+  const attempts = tokenCount(root?.attempts);
+  if (!root || attempts === null) return undefined;
+  if (!usage) return attempts === 0 ? { promptTokens: 0, completionTokens: 0, attempts } : undefined;
+  const promptTokens = tokenCount(usage.prompt_tokens);
+  const completionTokens = tokenCount(usage.completion_tokens);
+  if (promptTokens === null || completionTokens === null) return undefined;
+  const model = typeof root.model === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/u.test(root.model)
+    ? root.model
+    : undefined;
+  return { promptTokens, completionTokens, attempts, model };
+}
+
 export class ServiceFailure extends Error {
   readonly requestId?: string;
   readonly backendRejected: boolean;
   readonly reason: ServiceFailureReason;
   readonly diagnostic?: Dict;
+  /** Usage the service reported for a failed call, when it made provider attempts. */
+  usage?: ServiceUsage;
 
   constructor(
     requestId?: string,
@@ -283,7 +313,7 @@ export async function requestIntent(
   input: RoutineInput,
   config: LiveConfig,
   fetcher: typeof fetch = globalThis.fetch,
-): Promise<{ intent: unknown; scopeRefused: boolean; requestId?: string }> {
+): Promise<{ intent: unknown; scopeRefused: boolean; requestId?: string; usage?: ServiceUsage }> {
   let headers: Headers;
   try {
     headers = new Headers({
@@ -340,7 +370,15 @@ export async function requestIntent(
       responseRequestId ??
       safeRequestId(bodyRequestId, config.token);
     responseRequestId = serviceRequestId;
-    if (!response.ok) throw new ServiceFailure(serviceRequestId, true, 'backend_rejected');
+    if (!response.ok) {
+      const rejected = new ServiceFailure(serviceRequestId, true, 'backend_rejected');
+      try {
+        rejected.usage = serviceUsage(JSON.parse(raw));
+      } catch {
+        rejected.usage = undefined;
+      }
+      throw rejected;
+    }
     const root = dict(JSON.parse(raw));
     if (!root || !('intent' in root) || typeof root.scope_refused !== 'boolean') {
       throw new Error('service-response-json');
@@ -349,6 +387,7 @@ export async function requestIntent(
       intent: root.intent,
       scopeRefused: root.scope_refused,
       requestId: serviceRequestId,
+      usage: serviceUsage(root.meta),
     };
   } catch (error) {
     const timedOut = controller.signal.aborted;

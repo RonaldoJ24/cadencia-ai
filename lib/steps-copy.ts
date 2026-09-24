@@ -23,6 +23,7 @@ export type StepsCopy = {
     request: (days: number, minutes: number, weeklyMinutes: number) => string;
     availability: (count: number, selectedDays: number, dayNames: string[], weeklyMinutes: number) => string;
     reserve: string;
+    reserveBudget: (used: string, cap: string) => string;
     draftModel: (count: number) => string;
     draftSample: (count: number) => string;
     draftDeclined: string;
@@ -31,6 +32,11 @@ export type StepsCopy = {
     checkDeclined: string;
     fit: (placed: string[], time: string) => string;
     fitNone: string;
+  };
+  spend: {
+    disabled: string;
+    dailyCap: string;
+    monthlyCap: string;
   };
   failure: {
     checkDraft: string;
@@ -73,6 +79,7 @@ const EN: StepsCopy = {
         ? `Your ${weeklyMinutes}-minute cap fits ${count} of ${selectedDays} days: ${list(dayNames, 'and')}`
         : `Room for ${count} ${count === 1 ? 'session' : 'sessions'}: ${list(dayNames, 'and')}`,
     reserve: 'Live AI slot reserved',
+    reserveBudget: (used, cap) => `Live AI slot reserved; ${used} of today’s ${cap} cap committed, counting this plan at its worst case`,
     draftModel: (count) => `Draft has ${count} ${count === 1 ? 'session' : 'sessions'}`,
     draftSample: (count) => `Sample draft with ${count} ${count === 1 ? 'session' : 'sessions'} (no model)`,
     draftDeclined: 'Declined: the request asks for specialized advice Cadencia does not give',
@@ -82,6 +89,11 @@ const EN: StepsCopy = {
     checkDeclined: 'The decline notice passed the checks',
     fit: (placed, time) => `Placed ${placed.length} ${placed.length === 1 ? 'session' : 'sessions'}: ${list(placed, 'and')} at ${time}`,
     fitNone: 'Nothing scheduled',
+  },
+  spend: {
+    disabled: 'Live AI is paused right now. The demo still works.',
+    dailyCap: 'Live AI reached today’s spending cap. It resets at 00:00 UTC; the demo still works.',
+    monthlyCap: 'Live AI reached this month’s spending cap. The demo still works.',
   },
   failure: {
     checkDraft: 'The draft broke a planning rule, so nothing was scheduled.',
@@ -115,6 +127,7 @@ const ES: StepsCopy = {
         ? `Tu tope de ${weeklyMinutes} min alcanza para ${count} de ${selectedDays} días: ${list(dayNames, 'y')}`
         : `Hay lugar para ${count} ${count === 1 ? 'sesión' : 'sesiones'}: ${list(dayNames, 'y')}`,
     reserve: 'Turno de IA reservado',
+    reserveBudget: (used, cap) => `Turno de IA reservado; ${used} del tope diario de ${cap} comprometidos, contando este plan a su costo máximo`,
     draftModel: (count) => `El borrador tiene ${count} ${count === 1 ? 'sesión' : 'sesiones'}`,
     draftSample: (count) => `Borrador de muestra con ${count} ${count === 1 ? 'sesión' : 'sesiones'} (sin modelo)`,
     draftDeclined: 'Rechazada: la solicitud pide asesoría especializada que Cadencia no da',
@@ -124,6 +137,11 @@ const ES: StepsCopy = {
     checkDeclined: 'El aviso de rechazo pasó las revisiones',
     fit: (placed, time) => `${placed.length === 1 ? 'Se acomodó 1 sesión' : `Se acomodaron ${placed.length} sesiones`}: ${list(placed, 'y')} a las ${time}`,
     fitNone: 'No se programó nada',
+  },
+  spend: {
+    disabled: 'La IA en vivo está en pausa. La demo sigue funcionando.',
+    dailyCap: 'La IA en vivo alcanzó el tope de gasto de hoy. Se reinicia a las 00:00 UTC; la demo sigue funcionando.',
+    monthlyCap: 'La IA en vivo alcanzó el tope de gasto del mes. La demo sigue funcionando.',
   },
   failure: {
     checkDraft: 'El borrador rompió una regla de planeación, así que no se programó nada.',
