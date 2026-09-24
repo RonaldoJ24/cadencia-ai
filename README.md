@@ -2,78 +2,196 @@
 
 ![Cadencia — De intención a rutina](public/og.png)
 
-A goal needs room in a real week. Cadencia turns an intention into short sessions,
-respects the time available, and helps find the next opening when a day is missed.
-The interface is in Spanish. Product and experience design by Ronaldo.
+Cadencia is a small bilingual routine compiler. English is the cold-start language; the visible EN/ES control switches the experience to Spanish and remembers only that language preference in the browser. You describe what you want to keep doing, choose the days and time that are actually available, and receive a weekly plan that can be inspected, adjusted, and downloaded.
 
-## Try a week
+The product separates two jobs. The optional provider can propose the intent and session content; the deterministic engine checks the selected Monday week, allowed days, session duration, local time, and weekly cap. Values from the controls always win over details in the free text request. The local demo uses no model and carries a localized label; it must not be read as a successful AI response.
 
-The homepage opens with an interactive example: Monday is done and the weekly
-limit is 90 minutes. Mark Tuesday as missed and try both situations:
+The product sample starts in English:
 
-- **One day free:** Tuesday moves to Thursday. Monday stays completed and active
-  time remains 90 minutes.
-- **No free days:** the plan explains that no later allowed slot exists. It keeps
-  the completed and remaining sessions, with 60 active minutes.
+> Practice English for job interviews, focusing on answering with more confidence.
 
-This example runs the same `buildPlan`, `markDone`, and `replan` functions as the
-full planner. Its practice content is authored sample data, not model output.
-The fixed week is labelled in the example's details; reload resets the interaction.
+Selecting ES changes the sample, deterministic plan copy, insights, dates, and export labels to Spanish. The selected `language` is validated at the shared routine boundary and sent as a separate field to the Python service; it is never inferred from the request text.
 
-Continue to **Planificar** to use your own goal, days, session duration, and weekly
-limit. Complete or replan a session, inspect the checks, download Markdown or ICS,
-or prepare a single event for Google Calendar. The planner starts on the current
-local Monday after the page loads.
+You can also load examples for learning TypeScript or writing every week. After generating a plan, Cadencia explains the available capacity, projects four weeks of practice time without promising results, asks for missing context, and defines observable progress signals. You can mark a session complete, replan a missed session, add the selected session to Google Calendar, export the whole routine for Apple or Outlook, or share a plain-text copy with someone you trust.
 
-## Run locally
+## Architecture
 
-Use Node 22.13+ and the committed npm lockfile:
+```text
+Browser → Next.js /api/routine → authenticated Python /v1/intents → DeepSeek
+                              ← validated Intent ←
+        ← TypeScript buildPlan() → deterministic weekly schedule
+```
+
+Python owns the uncertain model boundary: prompt, provider calls, scope guard,
+the strict internal `scope_refused` decision, strict Pydantic schemas, bounded
+retries, and privacy-safe metadata. TypeScript validates that decision and owns
+dates, selected days, duration, weekly limits, replanning, Markdown and ICS.
+There is one scheduling engine and one live provider implementation. The existing
+Vinext/Cloudflare frontend remains in this repository; Python is a separate
+container and deployment unit. There are no model tools or autonomous actions.
+
+## Local deterministic mode
+
+Node 22.13+ and the existing npm lockfile are required. From the repository root:
 
 ```bash
 npm ci
 CADENCIA_ENABLE_LIVE=false npm run dev
 ```
 
-The local demo needs no account, API key, Python service, or model call.
-`GET /api/routine` checks configuration availability; it is not a provider health check.
+The browser demo calls `buildPlan` locally without Python, credentials, or a model
+request. Its label is localized (`Local demo · no model` in English or `Demo local · sin modelo` in Spanish). The API demo path is also local. The optional availability check is not a provider health check.
 
-## How it works
+## Live service mode
 
-| Responsibility                                        | Implementation                                                        | What to inspect                                                                     |
-| ----------------------------------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Dates, allowed days, duration, weekly cap, replanning | [TypeScript planner](lib/routine.ts)                                  | Explicit controls remain authoritative; completed work is preserved.                |
-| Interactive week example                              | [Scenario](lib/week-example.ts) and [UI](components/week-example.tsx) | The two outcomes use the real planner, with isolated in-memory state.               |
-| Optional model intent                                 | [Python service](service/app.py) and [provider](service/provider.py)  | Strict schemas, bounded retries and timeouts, authenticated server-to-server calls. |
-| Validated intent to schedule                          | [Frontend API](app/api/routine/route.ts)                              | Python's scope decision and intent are checked before scheduling.                   |
-| Calendar copies                                       | [Exports](lib/calendar.ts)                                            | One-time calendar links, ICS and shareable text; no calendar synchronization.       |
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and Python 3.12+.
+Keep secrets in server-side process environments or a secret manager. The Python
+service does not read dotenv files. Do not put any key in `NEXT_PUBLIC_*` or `VITE_*`.
+`.env.example` documents names and safe defaults; dotenv files remain ignored.
 
-The model can propose content. TypeScript owns the schedule. The browser demo
-uses the planner directly; connected generation takes the optional authenticated
-Python route. Details live in the [AI contract](docs/AI-CONTRACT.md).
+For local owner-only use, put `DEEPSEEK_API_KEY` in `service/.env.local` and
+start both servers with one command:
 
-## Verify
+```bash
+npm run dev:live
+```
+
+The launcher creates an ephemeral internal service token, sends the DeepSeek key
+only to Python, and enables the frontend's live route on loopback. This command
+uses Vinext's local Node runtime; Cloudflare remains in the build/deploy path.
+Choose `Connected AI` explicitly in the app. Stop both servers with `Ctrl+C`.
+
+| Environment variable | Where | Purpose |
+| --- | --- | --- |
+| `CADENCIA_ENABLE_LIVE` | Frontend server | Explicit `true` opt-in; otherwise live mode is disabled |
+| `CADENCIA_INTENT_SERVICE_URL` | Frontend server | Python base URL; HTTPS outside loopback development |
+| `CADENCIA_SERVICE_TOKEN` | Both servers | Shared internal bearer credential; never browser-facing |
+| `DEEPSEEK_API_KEY` | Python only | Provider credential |
+| `DEEPSEEK_MODEL` | Python only | Optional model override; default `deepseek-v4-flash` |
+| `PORT` | Python container | Listening port; defaults to 8080 |
+
+For separate terminals or non-local environments, securely inject the Python key
+and shared token, then start Python:
+
+```bash
+uv sync --project service --frozen --python 3.12
+uv run --project service --frozen uvicorn app:app --app-dir service --host 127.0.0.1 --port 8080 --no-access-log --log-level critical
+```
+
+In another terminal with the same shared token injected into its environment:
+
+```bash
+CADENCIA_ENABLE_LIVE=true \
+CADENCIA_INTENT_SERVICE_URL=http://127.0.0.1:8080 \
+CLOUDFLARE_INCLUDE_PROCESS_ENV=true npm run dev
+```
+
+Choose `Connected AI` explicitly. The request text and validated language cross
+into Python and DeepSeek; scheduling controls stay in TypeScript. Avoid sensitive
+information.
+Read the provider's current pricing and data terms before enabling paid calls.
+The internal token authenticates the frontend server, not end users. Keep the
+frontend local or owner-only until authentication, quotas, and abuse controls
+protect paid generation.
+
+## Verification and evaluation
+
+The checks below are a local validation snapshot. They establish selected
+software behavior only; semantic quality, deployment, CI/container validation,
+users, and production readiness remain unestablished.
+
+Normal verification never calls a real provider:
 
 ```bash
 npm test
 npm run typecheck
+npm run lint
 npm run build
+uv run --project service --frozen pytest service
+uv run --project service --frozen ruff check service
+uv run --project service --frozen python service/evals/run.py \
+  --run-id '<new-run-id>' --repeat-id 1 \
+  --output 'outputs/evals/<new-run-id>/report.json'
+uv run --project service --frozen python service/evals/smoke.py
+docker build -t cadencia-intents:local service
 ```
 
-The tests cover schedule constraints, missed sessions, calendar exports, the API
-boundary, and both interactive-example outcomes. Normal verification makes no
-real provider calls. These checks establish software behavior, not model quality.
-See [development and evaluation](docs/DEVELOPMENT.md) for the Python checks,
-optional provider setup, and evaluation procedure.
+The public synthetic Spanish corpus separates deterministic fake-provider replay
+from opt-in real-provider evaluation. Technical validity, domain agreement, lexical
+guard behavior, adversarial behavior, and human answer quality have different
+denominators. Bounded outputs leave normal reports only with `--export-review` for a
+catalogued public corpus. The bound packets support control and rubric tooling;
+synthetic outputs do not receive meaningful value review. That review is reserved
+for blind human review with identified reviewer metadata; the small owner-only live
+baseline is recorded separately and does not establish representative quality.
+Reports identify `requested_model` separately from bounded provider observations
+(`observed_model_counts` and `system_fingerprint_counts`); deterministic replay
+leaves those observations empty. Live evaluation requires a positive shared
+`--max-provider-attempts` budget that includes retries.
+Generated artifacts live under ignored `outputs/`; CI preserves reports. The
+[evaluation and failure-to-regression workflow](service/evals/README.md) defines
+the frozen held-out set, rubric, provenance, live commands and limits. The manual
+live workflow requires explicit spend acknowledgement and repository secrets. The
+synthetic packets and rubric calibrate controls only; meaningful value review is
+pending blind human review. No representative quality result exists.
 
-## Current scope
+The bounded owner-only DeepSeek baseline and one local route proof are recorded in
+[LIVE-AI-VALIDATION.md](docs/LIVE-AI-VALIDATION.md). They establish limited local
+pipeline evidence only; no human review, production, deployment, or representative
+quality claim follows from them.
 
-- One Monday-to-Sunday week, one session per selected day, local calendar times.
-- Plans live in browser memory and reset on reload. Export a copy before leaving.
-- No accounts, persistent history, automatic reminders, or connected calendars.
-- Connected generation is opt-in. The internal service token does not authenticate
-  visitors; keep paid generation owner-only until visitor authorization and quotas
-  are implemented and verified.
-- No production-scale or representative model-quality result is claimed.
+## Deployment and evidence boundary
 
-The [documentation index](docs/README.md) separates current contracts, dated
-validation reports, and future design proposals.
+[Python architecture and Cloud Run preparation](docs/PYTHON-SERVICE.md) contains
+container, secret, authentication, and deployment commands. Those commands are
+instructions, not evidence of execution. No deployment or push is part of this
+change. [Current Phase 1 validation](docs/PHASE1-VALIDATION.md) records actual local
+checks and remaining gates; the [initial implementation report](docs/PYTHON-VALIDATION.md)
+is retained as historical evidence.
+
+Structured JSON application logs contain only opaque request IDs and allowlisted
+operational metadata. They do not retain prompts, provider bodies, authorization
+headers, or secrets. Provider errors are generic; request IDs allow safe tracing.
+Cloud platform access logs are separate and need their own retention/access policy.
+
+## Current limits
+
+- Python owns scope decisions for provider-bound requests and returns the internal
+  boolean `scope_refused`; TypeScript validates it and does not infer scope from
+  `Intent` text. The local demo guard in `lib/routine.ts` mirrors the bounded direct
+  cues and the documented literary and fiction cases. A direct request signal plus
+  an unambiguous medical or legal action anywhere in one request outranks a
+  literary or fiction wrapper. This is not comprehensive moderation.
+- The Python bearer token authenticates the frontend server, not visitors. Private
+  beta routes authenticate end users with Cloudflare Access JWT verification
+  (`Cf-Access-Jwt-Assertion` signature, issuer, application audience, expiration;
+  identity only from verified claims) plus per-user ownership checks, and fail
+  closed. The only anonymous surface is the exact path `/api/routine` (local demo
+  plus quota-bound live generation: 5/day per visitor, 50/day global, 2/min,
+  1 in-flight per visitor; plus Reviewer Replay sandboxes on the same path:
+  capability-scoped, fixed seeded fixture only, short expiry, 10 sandboxes/day
+  per visitor, 200/day global, 1 active Workflow per sandbox, UI at `/replay`);
+  every other `/api/*` route is owner-only.
+- One Monday-to-Sunday window, one session per selected day, and local floating
+  calendar times. Calendar links, ICS, and shared text are one-time copies.
+- Owner-only beta accounts with D1 persistence (routines, immutable versions,
+  sessions, quotas, idempotency), feedback, and cascade account deletion exist;
+  there are no reminders, connected calendars, payments, or background jobs.
+- No claim of production scale, representative model accuracy, real users, or cost reduction.
+- Fixture evaluation does not represent production quality. Synthetic transport
+  responses validate code behavior; they cannot measure language understanding.
+- Deployment, external beta usage, and a documented real failure-to-regression
+  cycle remain necessary before broader résumé claims.
+
+## Project notes
+
+- [Concept and original direction](docs/CONCEPT.md)
+- [Implementation roadmap](docs/ROADMAP.md)
+- [AI contract and safety boundaries](docs/AI-CONTRACT.md)
+- [Research from official product sources](docs/RESEARCH.md)
+- [Launch narrative](docs/LAUNCH.md)
+- [Delivery and verification](docs/DELIVERY.md)
+- [Advanced insight contract](docs/INSIGHTS.md)
+- [Calendar and sharing boundary](docs/CALENDAR.md)
+- [V2 architecture](docs/ARCHITECTURE_V2.md)
+- [V2 market direction](docs/MARKET_V2.md)

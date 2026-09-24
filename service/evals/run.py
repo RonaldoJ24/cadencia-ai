@@ -87,6 +87,7 @@ def load_cases(path: Path = DEFAULT_CASES) -> list[dict[str, Any]]:
     allowed = {
         "id",
         "request",
+        "language",
         "expected_domain",
         "expected_outcome",
         "safety_critical",
@@ -113,6 +114,9 @@ def load_cases(path: Path = DEFAULT_CASES) -> list[dict[str, Any]]:
         request = value.get("request")
         if not isinstance(request, str):
             raise ValueError(f"{path}:{line_number}: request debe ser texto")
+        language = value.get("language", "en")
+        if language not in {"en", "es"}:
+            raise ValueError(f"{path}:{line_number}: language inválido")
         outcome = value.get("expected_outcome")
         if outcome not in OUTCOMES:
             raise ValueError(f"{path}:{line_number}: expected_outcome inválido")
@@ -159,13 +163,13 @@ def _valid_intent(value: Any) -> bool:
     return True
 
 
-def _exact_scope_intent(value: Any) -> bool:
+def _exact_scope_intent(value: Any, language: str = "en") -> bool:
     if not isinstance(value, Mapping):
         return False
     try:
         provider = importlib.import_module("provider")
         candidate = provider.Intent.model_validate(value, strict=True)
-        return candidate.model_dump(mode="json") == provider.scope_intent().model_dump(mode="json")
+        return candidate.model_dump(mode="json") == provider.scope_intent(language).model_dump(mode="json")
     except Exception:
         return False
 
@@ -310,7 +314,7 @@ def _body_for_case(case: Mapping[str, Any]) -> bytes:
     elif fixture == "oversized":
         request = f"{request} " + ("contexto adicional " * 180)
         request = request[: MAX_REQUEST_CHARS + 1]
-    value: dict[str, Any] = {"request": request}
+    value: dict[str, Any] = {"request": request, "language": case.get("language", "en")}
     if fixture == "unknown_field":
         value["extra"] = "no permitido"
     return json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
@@ -433,6 +437,7 @@ def _classify(
     payload: Any,
     *,
     captured: Mapping[str, Any] | None = None,
+    language: str = "en",
 ) -> tuple[
     str,
     Mapping[str, Any] | None,
@@ -470,7 +475,10 @@ def _classify(
         return "provider_error", body, None, captured_schema_valid, True, captured_provider_completed, "contract_response"
     intent = _mapping(body.get("intent"))
     schema_valid = _valid_intent(intent)
-    exact_scope = _exact_scope_intent(intent)
+    exact_scope = _exact_scope_intent(
+        intent,
+        language if language in {"en", "es"} else "en",
+    )
     if exact_scope and (captured_outcome == "refused" or captured_attempts == 0):
         return "refused", body, intent, schema_valid, exact_scope, False, None
     if not schema_valid:
@@ -502,12 +510,18 @@ async def _run_async(
         request: str,
         *,
         request_id: str,
+        language: str = "en",
+        session_count: int | None = None,
+        session_minutes: int | None = None,
         client: httpx.AsyncClient | None = None,
     ) -> Any:
         try:
             result = await previous_generate_intent(
                 request,
                 request_id=request_id,
+                language=language,
+                session_count=session_count,
+                session_minutes=session_minutes,
                 client=client,
                 before_attempt=attempt_budget.reserve if attempt_budget is not None else None,
             )
@@ -585,7 +599,14 @@ async def _run_async(
                     output_policy_ok,
                     provider_completed,
                     reason,
-                ) = _classify(status_code, payload, captured=captured)
+                ) = _classify(
+                    status_code,
+                    payload,
+                    captured=captured,
+                    language=case.get("language", "en")
+                    if isinstance(case.get("language", "en"), str)
+                    else "en",
+                )
                 meta = _mapping(body.get("meta")) if body else None
                 actual_domain = str(intent.get("domain")) if intent and isinstance(intent.get("domain"), str) else None
                 usage = _usage(getattr(captured_value, "usage", None))

@@ -16,13 +16,24 @@ const input: RoutineInput = {
   weeklyMinutes: 90,
   startDate: '2026-08-31',
   time: '18:00',
+  language: 'es',
 };
 
 const intent: Intent = {
   title: 'Acuarela 🎨 & luz',
   goal: 'Crear una muestra breve.',
   domain: 'creative',
-  steps: [{ title: 'Boceto', instructions: 'Línea 1, café 🎨\nLínea 2.' }],
+  steps: Array.from({ length: 2 }, (_, index) => ({
+    title: index === 0 ? 'Boceto' : 'Segunda versión',
+    instructions: 'Línea 1, café 🎨\nLínea 2.',
+    blocks: [
+      { minutes: 10, activity: 'Prepara materiales y define la intención.' },
+      { minutes: 25, activity: 'Produce una versión completa.' },
+      { minutes: 10, activity: 'Compara, corrige y guarda la evidencia.' },
+    ],
+    deliverable: `Muestra fechada ${index + 1}.`,
+    doneWhen: 'La muestra existe y tiene una mejora registrada.',
+  })),
 };
 
 void test('calendar URL encodes one local event, details, and the IANA timezone', () => {
@@ -40,9 +51,47 @@ void test('calendar URL encodes one local event, details, and the IANA timezone'
     parsed.searchParams.get('dates'),
     '20260831T180000/20260831T184500',
   );
-  assert.equal(parsed.searchParams.get('details'), session.instructions);
+  assert.match(parsed.searchParams.get('details') ?? '', /Agenda:/u);
+  assert.match(parsed.searchParams.get('details') ?? '', /Entregable:/u);
+  assert.match(parsed.searchParams.get('details') ?? '', /Termina cuando:/u);
   assert.equal(parsed.searchParams.get('ctz'), 'America/Mexico_City');
   assert.match(parsed.href, /%F0%9F%8E%A8/u);
+});
+
+void test('calendar and share preserve every section at maximum valid text lengths', () => {
+  const verbose = buildPlan({
+    ...input,
+    days: [0, 1, 2, 3, 4, 5, 6],
+    weeklyMinutes: 315,
+  });
+  const verbosePlan: RoutinePlan = {
+    ...verbose,
+    sessions: verbose.sessions.map((session) => ({
+      ...session,
+      instructions: 'o'.repeat(2_000),
+      blocks: session.blocks.map((block) => ({
+        ...block,
+        activity: 'a'.repeat(500),
+      })),
+      deliverable: 'e'.repeat(600),
+      doneWhen: 'c'.repeat(600),
+    })),
+  };
+  const calendarDetails = new URL(
+    googleCalendarUrl(verbosePlan, verbosePlan.sessions[0], 'UTC'),
+  ).searchParams.get('details') ?? '';
+  assert.ok(Array.from(calendarDetails).length <= 2_000);
+  assert.match(calendarDetails, /Agenda:/u);
+  assert.match(calendarDetails, /Entregable:/u);
+  assert.match(calendarDetails, /Termina cuando:/u);
+  assert.equal((calendarDetails.match(/ min — /gu) ?? []).length, 5);
+
+  const share = routineShareText(verbosePlan);
+  assert.ok(Array.from(share).length <= 8_000);
+  assert.equal((share.match(/Agenda:/gu) ?? []).length, 7);
+  assert.equal((share.match(/Entregable:/gu) ?? []).length, 7);
+  assert.equal((share.match(/Termina cuando:/gu) ?? []).length, 7);
+  for (const session of verbosePlan.sessions) assert.match(share, new RegExp(session.date, 'u'));
 });
 
 void test('calendar URL rejects invalid IANA zones and missed sessions', () => {
@@ -92,7 +141,10 @@ void test('share text contains title, cadence, active session summaries, and no 
 });
 
 void test('share text omits missed sessions', () => {
-  const plan = buildPlan({ ...input, days: [0] }, intent);
+  const plan = buildPlan(
+    { ...input, days: [0] },
+    { ...intent, steps: intent.steps.slice(0, 1) },
+  );
   const missedPlan: RoutinePlan = {
     ...plan,
     sessions: plan.sessions.map((session) => ({
@@ -103,4 +155,22 @@ void test('share text omits missed sessions', () => {
   const share = routineShareText(missedPlan);
   assert.match(share, /No hay sesiones programadas/u);
   assert.doesNotMatch(share, /2026-08-31/u);
+});
+
+void test('English calendar and share labels follow the plan locale', () => {
+  const plan = buildPlan({ ...input, language: 'en' }, intent);
+  const details = new URL(
+    googleCalendarUrl(plan, plan.sessions[0], 'UTC'),
+  ).searchParams.get('details') ?? '';
+  const share = routineShareText(plan);
+
+  assert.match(details, /Agenda:/u);
+  assert.match(details, /Deliverable:/u);
+  assert.match(details, /Done when:/u);
+  assert.match(
+    share,
+    /Cadence: Monday, Wednesday · 18:00 · 45 min per session · 90 min per week/u,
+  );
+  assert.match(share, /\(planned\)/u);
+  assert.doesNotMatch(share, /Cadencia|lunes|Sesiones programadas|pendiente/u);
 });

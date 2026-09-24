@@ -28,12 +28,21 @@ TOKEN = "cadencia-smoke-token"
 
 def _provider_body() -> bytes:
     intent = {
-        "title": "Ruta de TypeScript",
-        "goal": "Practicar un concepto con una evidencia pequeña.",
+        "title": "TypeScript practice",
+        "goal": "Practice one concept with a small piece of evidence.",
         "domain": "learning",
         "steps": [
-            {"title": "Define la evidencia", "instructions": "Escribe qué podrás explicar."},
-            {"title": "Practica", "instructions": "Resuelve un ejercicio breve."},
+            {
+                "title": "Practice and verify",
+                "instructions": "Complete one exercise with visible evidence.",
+                "blocks": [
+                    {"minutes": 5, "activity": "Define what you will demonstrate."},
+                    {"minutes": 20, "activity": "Solve one short exercise."},
+                    {"minutes": 5, "activity": "Review the result and note the next step."},
+                ],
+                "deliverable": "One solved, dated exercise.",
+                "done_when": "The exercise works and the next step is written down.",
+            },
         ],
     }
     content = json.dumps(intent, ensure_ascii=False, separators=(",", ":"))
@@ -121,9 +130,52 @@ class LocalServer:
 
 def _node_script() -> str:
     return r'''
+const { DatabaseSync } = await import('node:sqlite');
+const { readFileSync } = await import('node:fs');
+// Live mode fails closed without its D1 quota tables, so the smoke gives the
+// route an in-memory SQLite database with the same migrations as production.
+function sqliteDb() {
+  const raw = new DatabaseSync(':memory:');
+  const wrap = (sql) => {
+    let params = [];
+    const api = {
+      bind(...values) { params = values; return api; },
+      async first() { return raw.prepare(sql).get(...params) ?? null; },
+      async all() { return { results: raw.prepare(sql).all(...params) }; },
+      async run() { return api.runSync(); },
+      runSync() {
+        const info = raw.prepare(sql).run(...params);
+        return { success: true, meta: { changes: Number(info.changes) } };
+      },
+    };
+    return api;
+  };
+  return {
+    raw,
+    prepare: (sql) => wrap(sql),
+    batch: async (statements) => {
+      raw.exec('BEGIN');
+      try {
+        const out = statements.map((statement) => statement.runSync());
+        raw.exec('COMMIT');
+        return out;
+      } catch (error) {
+        raw.exec('ROLLBACK');
+        throw error;
+      }
+    },
+  };
+}
+const db = sqliteDb();
+db.raw.exec('PRAGMA foreign_keys = ON');
+for (const file of ['0001_beta_loop.sql', '0002_rate_limits.sql', '0003_public_limits.sql']) {
+  db.raw.exec(readFileSync(`./migrations/${file}`, 'utf8'));
+}
+globalThis.__cadencia_db = db;
 const { GET, POST } = await import('./app/api/routine/route.ts');
 const input = {
   request: 'aprender TypeScript',
+  language: 'en',
   days: [0],
   sessionMinutes: 30,
   weeklyMinutes: 30,
@@ -133,7 +185,7 @@ const input = {
 async function invoke(mode) {
   return POST(new Request('http://localhost/api/routine', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', 'cf-connecting-ip': '127.0.0.1' },
     body: JSON.stringify({ input, mode }),
   }));
 }
@@ -153,6 +205,7 @@ console.log(JSON.stringify({
     status: live.status,
     mode: livePlan?.mode,
     intentTitle: livePlan?.intent?.title,
+    intentGoal: livePlan?.intent?.goal,
     stepCount: livePlan?.intent?.steps?.length,
     session: livePlan?.sessions?.[0] ?? null,
     input: livePlan?.input ?? null,
@@ -238,26 +291,33 @@ def main() -> int:
                 and isinstance(live, dict)
                 and live.get("status") == 200
                 and live.get("mode") == "deepseek"
-                and live.get("intentTitle") == "Ruta de TypeScript"
-                and live.get("stepCount") == 2
+                and live.get("intentTitle") == "TypeScript practice"
+                and live.get("intentGoal") == "Practice one concept with a small piece of evidence."
+                and live.get("stepCount") == 1
                 and isinstance(live.get("input"), dict)
                 and live["input"].get("sessionMinutes") == 30
                 and live["input"].get("startDate") == "2026-08-31"
+                and live["input"].get("language") == "en"
                 and isinstance(live.get("session"), dict)
                 and live["session"].get("date") == "2026-08-31"
                 and live["session"].get("minutes") == 30
+                and live["session"].get("instructions") == "Complete one exercise with visible evidence."
+                and live["session"].get("deliverable") == "One solved, dated exercise."
+                and live["session"].get("doneWhen") == "The exercise works and the next step is written down."
                 and live.get("checksPassed") is True
                 and isinstance(failed, dict)
                 and failed.get("status") == 502
-                and failed.get("error") == "El proveedor de IA no está disponible."
+                and failed.get("error") == "The AI provider is not available."
                 and isinstance(demo, dict)
                 and demo.get("status") == 200
                 and demo.get("mode") == "demo"
                 and isinstance(demo.get("input"), dict)
                 and demo["input"].get("sessionMinutes") == 30
+                and demo["input"].get("language") == "en"
                 and isinstance(demo.get("session"), dict)
                 and demo["session"].get("date") == "2026-08-31"
                 and demo["session"].get("minutes") == 30
+                and demo["session"].get("instructions", "").startswith("Complete session")
                 and demo.get("checksPassed") is True
                 and returned_bodies_safe is True
                 and provider.calls == 2
