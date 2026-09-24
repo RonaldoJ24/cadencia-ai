@@ -24,11 +24,23 @@ import {
   useSyncExternalStore,
 } from 'react';
 
+import { PlanSteps } from '@/components/plan-steps';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { googleCalendarUrl, routineShareText } from '@/lib/calendar';
 import { buildInsights } from '@/lib/insights';
+import {
+  applyStageEvent,
+  parseStageEvent,
+  plannedSteps,
+  runPlanPipeline,
+  StageFailure,
+  type StageEvent,
+  type StepView,
+} from '@/lib/plan-stream';
+import { readSse } from '@/lib/sse';
+import { stepsCopyFor } from '@/lib/steps-copy';
 import {
   DEFAULT_LANGUAGE,
   LANGUAGE_STORAGE_KEY,
@@ -38,7 +50,6 @@ import {
   type Language,
 } from '@/lib/i18n';
 import {
-  buildPlan,
   markDone,
   replan,
   toICS,
@@ -256,6 +267,88 @@ function formatSessionDate(date: string, language: Language) {
     .format(new Date(`${date}T12:00:00Z`))
     .replace('.', '');
 }
+
+type RequestFailure = Error & {
+  reference?: string;
+  serverMessage?: string;
+  retryAfter?: string | null;
+  status?: number;
+};
+
+function requestFailure(details: {
+  message?: unknown;
+  reference?: unknown;
+  retryAfter?: string | null;
+  status?: number;
+}): RequestFailure {
+  const serverMessage = typeof details.message === 'string' ? details.message : undefined;
+  const failure = new Error(serverMessage || 'routine-request-failed') as RequestFailure;
+  failure.reference = typeof details.reference === 'string' && UUID_PATTERN.test(details.reference.trim())
+    ? details.reference.trim()
+    : undefined;
+  failure.serverMessage = serverMessage;
+  failure.retryAfter = details.retryAfter ?? null;
+  failure.status = details.status;
+  return failure;
+}
+
+/**
+ * Asks the route for a live plan as a stream of stage events. Checks that
+ * fail before planning starts (origin, limits configuration) still answer
+ * with a plain JSON error.
+ */
+async function streamLivePlan(
+  input: RoutineInput,
+  signal: AbortSignal,
+  onStage: (event: StageEvent) => void,
+  language: Language,
+): Promise<RoutinePlan> {
+  const response = await fetch('/api/routine', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'text/event-stream' },
+    body: JSON.stringify({ input, mode: 'deepseek' }),
+    signal,
+  });
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!contentType.includes('text/event-stream') || !response.body) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: unknown; reference?: unknown };
+    throw requestFailure({
+      message: payload.error,
+      reference: payload.reference,
+      retryAfter: response.headers.get('retry-after'),
+      status: response.status,
+    });
+  }
+  let plan: RoutinePlan | null = null;
+  let failure: RequestFailure | null = null;
+  await readSse(response.body, (message) => {
+    let data: unknown;
+    try {
+      data = JSON.parse(message.data);
+    } catch {
+      return;
+    }
+    if (message.event === 'stage') {
+      const event = parseStageEvent(data);
+      if (event) onStage(event);
+    } else if (message.event === 'result') {
+      const candidate = (data as { plan?: unknown }).plan;
+      if (candidate && typeof candidate === 'object') plan = candidate as RoutinePlan;
+    } else if (message.event === 'error') {
+      const payload = data as { message?: unknown; reference?: unknown; retryAfterSec?: unknown };
+      failure = requestFailure({
+        message: payload.message,
+        reference: payload.reference,
+        retryAfter: typeof payload.retryAfterSec === 'number' ? String(payload.retryAfterSec) : null,
+      });
+    }
+  });
+  if (failure) throw failure;
+  if (!plan) throw requestFailure({ message: stepsCopyFor(language).failure.streamEnded });
+  return plan;
+}
+
+const LIVE_TIMEOUT_MS = 60_000;
 
 function downloadText(filename: string, text: string, type: string) {
   const blob = new Blob([text], { type });
@@ -789,6 +882,8 @@ export default function Home() {
   // readiness fetch is redirected before the application cookie is available.
   const [liveAvailable, setLiveAvailable] = useState(true);
   const [shareStatus, setShareStatus] = useState<string | null>(null);
+  const [steps, setSteps] = useState<StepView[] | null>(null);
+  const [stepsMode, setStepsMode] = useState<'demo' | 'deepseek'>('demo');
   const requestGenerationRef = useRef(0);
   const activeRequestRef = useRef<ActiveRequest | null>(null);
   const latestLanguageRef = useRef(language);
@@ -899,6 +994,7 @@ export default function Home() {
     setUsingDefaultSample(example.input.request === EXAMPLES[language][0].input.request);
     setDraftInput({ ...example.input, days: [...example.input.days], startDate: weekStart });
     setPlan(null);
+    setSteps(null);
     setSelectedSessionId(null);
     setError(null);
     setErrorReference(null);
@@ -914,38 +1010,38 @@ export default function Home() {
     setErrorReference(null);
     setRequestState('loading');
     setShareStatus(null);
+    const pipelineMode = mode === 'live' ? 'deepseek' : 'demo';
+    setStepsMode(pipelineMode);
+    setSteps(plannedSteps(pipelineMode));
+    const onStage = (event: StageEvent) => {
+      if (!isCurrentRequest(request)) return;
+      setSteps((current) => (current ? applyStageEvent(current, event) : current));
+    };
+    let timedOut = false;
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      request.controller.abort();
+    }, LIVE_TIMEOUT_MS);
     try {
       let nextPlan: RoutinePlan;
       if (mode === 'live') {
-        const response = await fetch('/api/routine', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ input, mode: 'deepseek' }),
-          signal: request.controller.signal,
-        });
-        const payload = (await response.json().catch(() => ({}))) as {
-          plan?: RoutinePlan;
-          reference?: string;
-          error?: string;
-        };
-        if (!response.ok || !payload.plan) {
-          const ref =
-            typeof payload.reference === 'string' &&
-            UUID_PATTERN.test(payload.reference.trim())
-              ? payload.reference.trim()
-              : undefined;
-          const retryAfter = response.headers.get('retry-after');
-          const failure = new Error(payload.error || 'routine-request-failed');
-          (failure as unknown as { reference?: string }).reference = ref;
-          (failure as unknown as { serverMessage?: string }).serverMessage =
-            typeof payload.error === 'string' ? payload.error : undefined;
-          (failure as unknown as { retryAfter?: string | null }).retryAfter = retryAfter;
-          (failure as unknown as { status?: number }).status = response.status;
-          throw failure;
+        try {
+          nextPlan = await streamLivePlan(input, request.controller.signal, onStage, request.language);
+        } catch (cause) {
+          if (timedOut) throw requestFailure({ message: stepsCopyFor(request.language).failure.timeout });
+          throw cause;
         }
-        nextPlan = payload.plan;
       } else {
-        nextPlan = buildPlan(input, undefined, 'demo');
+        try {
+          nextPlan = (await runPlanPipeline(input, {
+            mode: 'demo',
+            now: () => performance.now(),
+            emit: onStage,
+          })).plan;
+        } catch (cause) {
+          if (cause instanceof StageFailure) throw requestFailure({ message: cause.publicMessage });
+          throw cause;
+        }
       }
       if (!isCurrentRequest(request)) return;
       setPlan(nextPlan);
@@ -975,6 +1071,7 @@ export default function Home() {
       const ref = (cause as { reference?: string })?.reference;
       setErrorReference(ref ?? null);
     } finally {
+      window.clearTimeout(timeout);
       if (activeRequestRef.current === request) {
         activeRequestRef.current = null;
       }
@@ -1405,6 +1502,7 @@ export default function Home() {
               {plan ? copy.ui.planIndex : copy.ui.sampleIndex}
             </span>
           </div>
+          {steps ? <PlanSteps steps={steps} mode={stepsMode} language={language} /> : null}
           {plan ? (
             <RoutinePreview
               onDownloadICS={handleDownloadICS}
