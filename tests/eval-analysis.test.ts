@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { analyzeArm, percentile, renderReport } from '../evals/lib/analyze.ts';
 import { makePack, unblind, type Ratings } from '../evals/lib/blind.ts';
-import { contamination, coverage, parseCases, parseProvenance, provenanceCounts } from '../evals/lib/cases.ts';
+import { contamination, coverage, parseCases, parseProvenance, parseReviewSummary, provenanceCounts } from '../evals/lib/cases.ts';
 import type { ResultLine } from '../evals/lib/runner.ts';
 import { schedulePlan } from '../lib/planner/schedule.ts';
 import { validateGoalSpec } from '../lib/planner/spec.ts';
@@ -77,10 +77,11 @@ void test('the report counts decisions, drafts, trims and cost per arm, with den
   const withSources = renderReport([a, b], {
     runId: 'test',
     cases: CASES.length,
-    sources: { counts: [{ name: 'origin post', count: 2 }], review: { drafted: 5, dropped: 2 }, closeToDevelopment: [{ id: 'c3', similarity: 0.6 }] },
+    sources: { counts: [{ name: 'origin post', count: 2 }], review: { drafted: 5, dropped: 2, spotCheck: { agreed: 19, of: 20 } }, closeToDevelopment: [{ id: 'c3', similarity: 0.6 }] },
   });
   assert.match(withSources, /\| origin post \| 2 \|/u);
-  assert.match(withSources, /Drafts written: 5\. Dropped by the owner: 2\./u);
+  assert.match(withSources, /Drafts written: 5\. Dropped in the audit and review: 2\./u);
+  assert.match(withSources, /random check: agreed with 19 of 20 labels/u);
   assert.match(withSources, /close to development texts, kept: c3 \(0\.6\)/u);
   assert.match(renderReport([a], { runId: 'test', cases: 3, sources: { closeToDevelopment: [] } }), /No provenance file[\s\S]*kept: none\./u);
 });
@@ -162,4 +163,25 @@ void test('provenance needs one reviewed line per case and never holds links or 
   assert.match(messages([post, { ...constructed, platform: 'reddit' }, composite])[0], /no source fields/u);
   assert.match(messages([post, constructed, { ...composite, id: 'c9' }])[0], /id of a case/u);
   assert.match(messages([{ ...post, url: 'x' }, constructed, composite])[0], /unknown fields/u);
+});
+
+void test('review.json must account for every draft and hold the owner\'s random check of 20 cases', () => {
+  const many = parseCases(Array.from({ length: 22 }, (_, index) => JSON.stringify({
+    id: `c${String(index + 1).padStart(3, '0')}`, text: `Learn topic ${index}`, language: 'en', today: '2026-10-05', expect: { decision: 'plan', domain: 'learning' },
+  })).join('\n')).cases;
+  const ids = many.slice(0, 20).map((item) => item.id);
+  const good = { drafted: 24, dropped: 2, seed: 7, reviewed: '2026-09-24', spotCheck: { seed: 9, method: 'sample', ids, agreed: 19 } };
+  const ok = parseReviewSummary(good, many);
+  assert.deepEqual(ok.problems, []);
+  assert.equal(ok.summary?.spotCheck.agreed, 19);
+
+  const problems = (value: unknown) => parseReviewSummary(value, many).problems.join(' | ');
+  assert.match(problems({ ...good, dropped: 3 }), /drafted minus dropped is 21, but there are 22 cases/u);
+  assert.match(problems({ ...good, spotCheck: undefined }), /spotCheck is missing/u);
+  assert.match(problems({ ...good, spotCheck: { ...good.spotCheck, ids: ids.slice(0, 19) } }), /20 distinct case ids/u);
+  assert.match(problems({ ...good, spotCheck: { ...good.spotCheck, ids: [...ids.slice(0, 19), 'c999'] } }), /20 distinct case ids/u);
+  assert.match(problems({ ...good, spotCheck: { ...good.spotCheck, agreed: 21 } }), /agreed must be 0 to 20/u);
+  assert.match(problems({ ...good, reviewed: 'yesterday' }), /reviewed must be/u);
+  assert.match(problems({ ...good, extra: 1 }), /unknown fields: extra/u);
+  assert.match(problems([]), /must be a JSON object/u);
 });

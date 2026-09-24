@@ -10,10 +10,11 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { coverage, parseCases, parseProvenance } from './lib/cases.ts';
+import { coverage, parseCases, parseProvenance, parseReviewSummary } from './lib/cases.ts';
 import { RunRefused, runEvaluation, type Arm, type RunSummary } from './lib/runner.ts';
 
 const PROVENANCE = 'evals/cases/provenance.jsonl';
+const REVIEW = 'evals/cases/review.json';
 
 const { values } = parseArgs({
   options: {
@@ -51,10 +52,13 @@ if (!dryRun) {
   if (!systems.frozen) fail('Part B is not frozen; a scored run needs systems.json frozen at tag eval-freeze-v1');
   const short = coverage(cases).filter((quota) => quota.count < quota.minimum);
   if (short.length > 0) fail(`coverage quotas not met: ${short.map((quota) => quota.name).join(', ')}`);
-  // Every case needs one provenance line with the owner's review (pre-registration, section 4).
+  // Every case needs a provenance line with its review outcome, and review.json the owner's random check (pre-registration, section 4).
   const provenance = existsSync(PROVENANCE) ? parseProvenance(readFileSync(PROVENANCE, 'utf8'), cases).problems : null;
   if (provenance === null) fail(`a scored run needs ${PROVENANCE}`);
   if (provenance.length > 0) fail(`${PROVENANCE} has ${provenance.length} problems; run evals/validate.ts with it first`);
+  const review = existsSync(REVIEW) ? parseReviewSummary(JSON.parse(readFileSync(REVIEW, 'utf8')), cases).problems : null;
+  if (review === null) fail(`a scored run needs ${REVIEW}, with the owner's random check`);
+  if (review.length > 0) fail(`${REVIEW}: ${review.join('; ')}`);
   // The manifest records the commit, so the commit must be all there is.
   const changed = execFileSync('git', ['status', '--porcelain', '--', '.', ':(exclude)evals/runs'], { encoding: 'utf8' }).trim();
   if (changed) fail('commit every change before a scored run (only evals/runs/ may differ)');

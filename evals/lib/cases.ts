@@ -1,6 +1,6 @@
 // Evaluation cases: parsing, checks, provenance, coverage quotas and
-// development contamination. Cases are drafted under evals/cases/SOURCING.md
-// and reviewed by the owner; this code only checks them.
+// development contamination. Cases are drafted under evals/cases/SOURCING.md,
+// audited, and decided and spot-checked by the owner; this code only checks them.
 
 import { ABSTAIN_CATEGORIES, validateGoalRequest, type AbstainCategory, type GoalControls } from '../../lib/planner/goal-input.ts';
 import { SpecError } from '../../lib/planner/spec.ts';
@@ -178,7 +178,7 @@ export function parseProvenance(source: string, cases: readonly EvalCase[]): { l
     if (!SEGMENTS.includes(value.segment as Segment)) return fail(`segment must be one of ${SEGMENTS.join(', ')}`);
     if (!isLocalDate(value.collected)) return fail('collected must be YYYY-MM-DD');
     if (!REVIEWS.includes(value.review as Review)) {
-      return fail(`review must be one of ${REVIEWS.join(', ')}: the owner reviews every case`);
+      return fail(`review must be one of ${REVIEWS.join(', ')}: every case has a review outcome`);
     }
     lines.push(value as Provenance);
   });
@@ -187,7 +187,7 @@ export function parseProvenance(source: string, cases: readonly EvalCase[]): { l
   return { lines, problems };
 }
 
-/** How many cases came from where, and what the owner's review did (reported with the results). */
+/** How many cases came from where, and what the review did (reported with the results). */
 export function provenanceCounts(lines: readonly Provenance[]): Array<{ name: string; count: number }> {
   const count = (test: (item: Provenance) => boolean) => lines.filter(test).length;
   return [
@@ -196,6 +196,64 @@ export function provenanceCounts(lines: readonly Provenance[]): Array<{ name: st
     { name: 'posts read from a search result', count: count((item) => item.origin === 'post' && item.read === 'snippet') },
     ...REVIEWS.map((review) => ({ name: `review ${review}`, count: count((item) => item.review === review) })),
   ];
+}
+
+export const SPOT_CHECK_SIZE = 20;
+
+/** review.json beside the cases (SOURCING.md): drafts written and dropped, the shuffle seed, and the owner's random check. */
+export type ReviewSummary = {
+  drafted: number;
+  dropped: number;
+  seed: number;
+  reviewed: string;
+  spotCheck: { seed: number; ids: string[]; agreed: number };
+};
+
+const REVIEW_FIELDS = new Set(['drafted', 'dropped', 'seed', 'reviewed', 'spotCheck']);
+const SPOT_CHECK_FIELDS = new Set(['seed', 'method', 'ids', 'agreed']);
+const wholeAtLeast = (value: unknown, min: number) => typeof value === 'number' && Number.isInteger(value) && value >= min;
+
+/** Checks review.json against the cases; every problem is listed. */
+export function parseReviewSummary(raw: unknown, cases: readonly EvalCase[]): { summary?: ReviewSummary; problems: string[] } {
+  const value = record(raw);
+  if (!value) return { problems: ['review.json must be a JSON object'] };
+  const problems: string[] = [];
+  const unknown = Object.keys(value).filter((key) => !REVIEW_FIELDS.has(key));
+  if (unknown.length > 0) problems.push(`unknown fields: ${unknown.join(', ')}`);
+  if (!wholeAtLeast(value.drafted, 1) || !wholeAtLeast(value.dropped, 0)) problems.push('drafted and dropped must be whole numbers');
+  else if ((value.drafted as number) - (value.dropped as number) !== cases.length) {
+    problems.push(`drafted minus dropped is ${(value.drafted as number) - (value.dropped as number)}, but there are ${cases.length} cases`);
+  }
+  if (!wholeAtLeast(value.seed, 1)) problems.push('seed must be a positive whole number');
+  if (!isLocalDate(value.reviewed)) problems.push('reviewed must be YYYY-MM-DD');
+  const check = record(value.spotCheck);
+  if (!check) {
+    problems.push(`spotCheck is missing: the owner checks a random ${SPOT_CHECK_SIZE} cases`);
+  } else {
+    const extra = Object.keys(check).filter((key) => !SPOT_CHECK_FIELDS.has(key));
+    if (extra.length > 0) problems.push(`unknown spotCheck fields: ${extra.join(', ')}`);
+    const caseIds = new Set(cases.map((item) => item.id));
+    const ids = Array.isArray(check.ids) ? check.ids : [];
+    if (!wholeAtLeast(check.seed, 1)) problems.push('spotCheck.seed must be a positive whole number');
+    if (ids.length !== SPOT_CHECK_SIZE || new Set(ids).size !== ids.length || ids.some((id) => typeof id !== 'string' || !caseIds.has(id))) {
+      problems.push(`spotCheck.ids must be ${SPOT_CHECK_SIZE} distinct case ids`);
+    }
+    if (!wholeAtLeast(check.agreed, 0) || (check.agreed as number) > SPOT_CHECK_SIZE) {
+      problems.push(`spotCheck.agreed must be 0 to ${SPOT_CHECK_SIZE}: the labels the owner agreed with`);
+    }
+  }
+  if (problems.length > 0) return { problems };
+  const spot = check as { seed: number; ids: string[]; agreed: number };
+  return {
+    summary: {
+      drafted: value.drafted as number,
+      dropped: value.dropped as number,
+      seed: value.seed as number,
+      reviewed: value.reviewed as string,
+      spotCheck: { seed: spot.seed, ids: spot.ids, agreed: spot.agreed },
+    },
+    problems,
+  };
 }
 
 export type Quota = { name: string; minimum: number; count: number };
