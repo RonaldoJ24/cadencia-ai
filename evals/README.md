@@ -24,16 +24,21 @@ runs go in `runs/<run-id>/` and are committed with everything they produced.
 3. **Start one service per arm** on the port listed in `systems.json`. Every
    service runs the same code with the same `CADENCIA_SERVICE_TOKEN`. Raise
    `CADENCIA_SERVICE_DAILY_ATTEMPT_CAP` (400 provider attempts a day by default)
-   above what the run can use; the runner's budget guard is the real ceiling:
+   above what the run can use; the runner's budget guard is the real ceiling. The
+   API keys come from git-ignored env files, so they never appear on a command
+   line:
 
    ```bash
-   # Arm A: DeepSeek, the default provider
-   DEEPSEEK_API_KEY=... DEEPSEEK_MODEL=... CADENCIA_SERVICE_TOKEN=... CADENCIA_SERVICE_DAILY_ATTEMPT_CAP=2000 \
-     uv run --project service --frozen uvicorn app:app --app-dir service --port 8781
-   # Arm B: an OpenAI model, with every value taken from the owner or OpenAI's API reference
-   CADENCIA_PROVIDER=openai OPENAI_API_KEY=... OPENAI_URL=... OPENAI_MODEL=... \
-     OPENAI_TOKEN_PARAM=... OPENAI_TEMPERATURE=... CADENCIA_SERVICE_TOKEN=... CADENCIA_SERVICE_DAILY_ATTEMPT_CAP=2000 \
-     uv run --project service --frozen uvicorn app:app --app-dir service --port 8782
+   # Arm A: DeepSeek, the default provider (DEEPSEEK_API_KEY in service/.env.local)
+   DEEPSEEK_MODEL=... CADENCIA_SERVICE_TOKEN=... CADENCIA_SERVICE_DAILY_ATTEMPT_CAP=2000 \
+     uv run --env-file service/.env.local --project service --frozen uvicorn app:app --app-dir service --port 8781
+   # Arm B: an OpenAI model (OPENAI_API_KEY in service/.env.eval-openai.local), with every
+   # other value taken from the owner or OpenAI's API reference. OPENAI_REASONING_EFFORT
+   # is the Chat Completions reasoning control, or "omit" for a model without one.
+   CADENCIA_PROVIDER=openai OPENAI_URL=... OPENAI_MODEL=... OPENAI_TOKEN_PARAM=... \
+     OPENAI_TEMPERATURE=... OPENAI_REASONING_EFFORT=... \
+     CADENCIA_SERVICE_TOKEN=... CADENCIA_SERVICE_DAILY_ATTEMPT_CAP=2000 \
+     uv run --env-file service/.env.eval-openai.local --project service --frozen uvicorn app:app --app-dir service --port 8782
    ```
 
 4. **Run** from a clean checkout of the tag. The runner reuses the product's

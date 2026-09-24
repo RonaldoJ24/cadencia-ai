@@ -534,6 +534,9 @@ def _checked_model(raw: str, api_key: str) -> str:
     return raw
 
 
+OPENAI_REASONING_EFFORTS = ("omit", "none", "minimal", "low", "medium", "high", "xhigh", "max")
+
+
 @dataclass(frozen=True, slots=True)
 class ProviderSettings:
     """Where and how this service calls its model, read from the environment."""
@@ -549,8 +552,9 @@ class ProviderSettings:
 
 def provider_settings() -> ProviderSettings:
     """The configured provider. DeepSeek is the default. OpenAI must be configured
-    in full, with its URL, model id, token-limit parameter and temperature taken
-    from the owner or OpenAI's current API reference, never assumed here."""
+    in full, with its URL, model id, token-limit parameter, temperature and
+    reasoning effort taken from the owner or OpenAI's current API reference, never
+    assumed here."""
 
     name = os.environ.get("CADENCIA_PROVIDER", "deepseek").strip() or "deepseek"
     if name == "deepseek":
@@ -570,7 +574,13 @@ def provider_settings() -> ProviderSettings:
         url = os.environ.get("OPENAI_URL", "").strip()
         token_param = os.environ.get("OPENAI_TOKEN_PARAM", "").strip()
         temperature = os.environ.get("OPENAI_TEMPERATURE", "").strip()
-        if not url.startswith("https://") or token_param not in ("max_tokens", "max_completion_tokens") or not temperature:
+        effort = os.environ.get("OPENAI_REASONING_EFFORT", "").strip()
+        if (
+            not url.startswith("https://")
+            or token_param not in ("max_tokens", "max_completion_tokens")
+            or not temperature
+            or not effort
+        ):
             raise ValueError("incomplete provider configuration")
         if temperature == "omit":
             chosen: float | None = None
@@ -578,6 +588,9 @@ def provider_settings() -> ProviderSettings:
             chosen = float(temperature)
             if not 0.0 <= chosen <= 2.0:
                 raise ValueError("invalid temperature")
+        # Chat Completions' reasoning control; "omit" sends none, for models without one.
+        if effort not in OPENAI_REASONING_EFFORTS:
+            raise ValueError("invalid reasoning effort")
         return ProviderSettings(
             name="openai",
             url=url,
@@ -585,7 +598,7 @@ def provider_settings() -> ProviderSettings:
             model=_checked_model(os.environ.get("OPENAI_MODEL", "").strip(), api_key),
             token_param=token_param,  # type: ignore[arg-type]
             temperature=chosen,
-            extra={},
+            extra={} if effort == "omit" else {"reasoning_effort": effort},
         )
     raise ValueError("unknown provider")
 
