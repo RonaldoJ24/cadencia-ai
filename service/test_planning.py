@@ -271,6 +271,7 @@ OPENAI_SETTINGS = {
     "OPENAI_MODEL": "configured-model-1",
     "OPENAI_TOKEN_PARAM": "max_completion_tokens",
     "OPENAI_TEMPERATURE": "omit",
+    "OPENAI_REASONING_EFFORT": "omit",
 }
 
 
@@ -289,17 +290,34 @@ def test_an_openai_provider_uses_only_what_is_configured(monkeypatch: pytest.Mon
     assert payload["model"] == "configured-model-1"
     assert payload["max_completion_tokens"] == planning.READ_MAX_TOKENS
     assert payload["response_format"] == {"type": "json_object"}
-    # DeepSeek's own fields never reach another provider.
+    # DeepSeek's own fields never reach another provider, and "omit" sends no reasoning control.
     assert "thinking" not in payload and "max_tokens" not in payload and "temperature" not in payload
+    assert "reasoning_effort" not in payload
 
     monkeypatch.setenv("OPENAI_TOKEN_PARAM", "max_tokens")
     monkeypatch.setenv("OPENAI_TEMPERATURE", "0.2")
+    monkeypatch.setenv("OPENAI_REASONING_EFFORT", "none")
     run(post("/v1/read-goal", {"text": "learn chess", "language": "en", "today": "2026-09-24"}))
     second = json.loads(received[1].content)
     assert second["max_tokens"] == planning.READ_MAX_TOKENS and second["temperature"] == 0.2
+    assert second["reasoning_effort"] == "none"
 
 
-@pytest.mark.parametrize("missing", ["OPENAI_URL", "OPENAI_MODEL", "OPENAI_TOKEN_PARAM", "OPENAI_TEMPERATURE", "OPENAI_API_KEY"])
+def test_an_unknown_reasoning_effort_never_calls_a_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    configure(monkeypatch)
+    for name, value in OPENAI_SETTINGS.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("OPENAI_REASONING_EFFORT", "off")
+    received = capture(monkeypatch, READING)
+    response = run(post("/v1/read-goal", {"text": "learn chess", "language": "en", "today": "2026-09-24"}))
+    assert response.status_code == 503
+    assert received == []
+
+
+@pytest.mark.parametrize(
+    "missing",
+    ["OPENAI_URL", "OPENAI_MODEL", "OPENAI_TOKEN_PARAM", "OPENAI_TEMPERATURE", "OPENAI_REASONING_EFFORT", "OPENAI_API_KEY"],
+)
 def test_an_incomplete_openai_configuration_never_calls_a_provider(monkeypatch: pytest.MonkeyPatch, missing: str) -> None:
     configure(monkeypatch)
     for name, value in OPENAI_SETTINGS.items():
