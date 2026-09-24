@@ -60,6 +60,13 @@ DRAFT_TIMEOUTS = {"request": 40.0, "total": 50.0}
 READ_MAX_TOKENS = 800
 DRAFT_MAX_TOKENS = 4_000
 DRAFT_MAX_RESPONSE_BYTES = 65_536
+# Hard ceilings on each assembled prompt, in UTF-8 bytes. Every valid request
+# fits (tests build the largest ones), and DeepSeek's byte-level BPE yields at
+# most one token per byte plus a few template tokens, so the Worker reserves
+# spend from these numbers as a real upper bound, not an estimate.
+READ_MAX_PROMPT_BYTES = 24_576
+DRAFT_MAX_PROMPT_BYTES = 24_576
+PROBLEM_TEXT = re.compile(r"^[ -~]*$")
 
 
 def _text(value: str, limit: int) -> str:
@@ -167,11 +174,20 @@ class DraftCalendar(BaseModel):
 
 
 class Problem(BaseModel):
+    """A problem code found in a draft. Printable ASCII without <, > or &, so it stays small."""
+
     model_config = STRICT
 
     code: StrictStr = Field(max_length=40)
     path: StrictStr = Field(max_length=80)
     message: StrictStr = Field(max_length=200)
+
+    @field_validator("code", "path", "message")
+    @classmethod
+    def plain_ascii(cls, value: str) -> str:
+        if not PROBLEM_TEXT.fullmatch(value) or any(character in value for character in "<>&"):
+            raise ValueError("problems use printable ASCII without <, > or &")
+        return value
 
 
 class DraftRequest(BaseModel):
@@ -421,6 +437,31 @@ def read_goal_messages(request: ReadGoalRequest) -> list[dict[str, str]]:
     return [{"role": "system", "content": READ_GOAL_PROMPT}, {"role": "user", "content": user}]
 
 
+def prompt_bytes(messages: list[dict[str, str]]) -> int:
+    return sum(len(message["content"].encode("utf-8")) for message in messages)
+
+
+def _within(messages: list[dict[str, str]], limit: int) -> None:
+    if prompt_bytes(messages) > limit:
+        raise ValueError("the assembled prompt is over its byte ceiling")
+
+
+def read_goal_request(value: Any) -> ReadGoalRequest:
+    """A validated read-goal request whose prompt fits its byte ceiling."""
+
+    request = ReadGoalRequest.model_validate(value, strict=True)
+    _within(read_goal_messages(request), READ_MAX_PROMPT_BYTES)
+    return request
+
+
+def draft_request(value: Any) -> DraftRequest:
+    """A validated draft request whose prompt fits its byte ceiling."""
+
+    request = DraftRequest.model_validate(value, strict=True)
+    _within(draft_messages(request), DRAFT_MAX_PROMPT_BYTES)
+    return request
+
+
 def draft_messages(request: DraftRequest) -> list[dict[str, str]]:
     calendar = {
         "weeks": [
@@ -576,16 +617,21 @@ async def draft_plan(
 
 
 __all__ = [
+    "DRAFT_MAX_PROMPT_BYTES",
     "DRAFT_VERSION",
     "DraftOutput",
     "DraftRequest",
     "GoalReading",
     "READ_GOAL_VERSION",
+    "READ_MAX_PROMPT_BYTES",
     "ReadGoalRequest",
     "draft_messages",
     "draft_plan",
+    "draft_request",
     "model_for_logging",
+    "prompt_bytes",
     "read_goal",
     "read_goal_messages",
+    "read_goal_request",
     "untrusted_block",
 ]
