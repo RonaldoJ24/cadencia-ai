@@ -1,7 +1,9 @@
 // Shared HTTP helpers for API routes. Extracted verbatim from
 // app/api/routine/route.ts so behavior stays identical.
 
-export const MAX_BODY_BYTES = 32_768;
+// A goal request may carry up to 2,000 busy times (about 50 bytes each) from an
+// imported calendar, besides its text and settings.
+export const MAX_BODY_BYTES = 131_072;
 
 export type Dict = Record<string, unknown>;
 
@@ -83,7 +85,7 @@ export async function bodyJson(request: Request): Promise<unknown> {
   }
 }
 
-/** Bounded body read shared by bodyJson and the replay-start probe (single read, no clones). */
+/** Reads a request body once, refusing more than MAX_BODY_BYTES. */
 export async function readBoundedText(request: Request): Promise<string> {
   const declared = request.headers.get('content-length');
   if (declared !== null) {

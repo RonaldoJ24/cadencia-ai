@@ -297,7 +297,8 @@ Live generation on `/api/routine` also reserves a visitor slot in one D1 batch:
 | Global daily cap | 50 | `public_limits_config` |
 | Global in flight | 10 | `public_limits_config` |
 | Per-visitor in flight | 1 | unique index on `public_concurrency` |
-| Lease | 40 s | code default |
+| Lease for a goal run | 180 s | `GOAL_LEASE_SEC` in `lib/server/goal-run.ts` |
+| Request body | 128 KiB, room for 2,000 imported busy times | `MAX_BODY_BYTES` in `lib/server/http.ts` |
 
 Failed generations still count against quota. Quotas reset at 00:00 UTC.
 

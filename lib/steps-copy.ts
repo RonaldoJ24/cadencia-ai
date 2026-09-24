@@ -19,7 +19,7 @@ export type GoalStepsCopy = {
   readClarify: string;
   readDeclined: (reason: DeclineReason) => string;
   readGuard: string;
-  availability: (weeks: number, first: string, last: string, days: string, window: string, cap: number, start: number | null) => string;
+  availability: (weeks: number, first: string, last: string, days: string, window: string, cap: number, start: number | null, busy: number) => string;
   draft: (phases: number, types: number, sessions: number) => string;
   checkPassed: string;
   checkOver: (weeks: number) => string;
@@ -159,9 +159,10 @@ const EN: StepsCopy = {
     readClarify: 'Needs one answer before planning',
     readDeclined: (reason) => `Declined: ${EN.goal.declines[reason]}`,
     readGuard: 'Declined by the scope check before any model call',
-    availability: (weeks, first, last, days, window, cap, start) =>
+    availability: (weeks, first, last, days, window, cap, start, busy) =>
       `${plural(weeks, 'week', 'weeks')}, ${first} to ${last}; ${days}, ${window}; up to ${cap} min a week` +
-      (start === null ? '' : `, starting at ${start}`),
+      (start === null ? '' : `, starting at ${start}`) +
+      (busy === 0 ? '' : `; around ${plural(busy, 'busy time', 'busy times')} from your calendar`),
     draft: (phases, types, sessions) =>
       `${plural(phases, 'phase', 'phases')}, ${plural(types, 'session type', 'session types')}, ${plural(sessions, 'session', 'sessions')}`,
     checkPassed: 'Well-formed; every week is within its limits',
@@ -244,9 +245,10 @@ const ES: StepsCopy = {
     readClarify: 'Necesita una respuesta antes de planear',
     readDeclined: (reason) => `Rechazada: ${ES.goal.declines[reason]}`,
     readGuard: 'Rechazada por la revisión de alcance antes de llamar al modelo',
-    availability: (weeks, first, last, days, window, cap, start) =>
+    availability: (weeks, first, last, days, window, cap, start, busy) =>
       `${plural(weeks, 'semana', 'semanas')}, del ${first} al ${last}; ${days}, ${window}; hasta ${cap} min por semana` +
-      (start === null ? '' : `, empezando con ${start}`),
+      (start === null ? '' : `, empezando con ${start}`) +
+      (busy === 0 ? '' : `; alrededor de ${plural(busy, 'horario ocupado', 'horarios ocupados')} de tu calendario`),
     draft: (phases, types, sessions) =>
       `${plural(phases, 'fase', 'fases')}, ${plural(types, 'tipo de sesión', 'tipos de sesión')}, ${plural(sessions, 'sesión', 'sesiones')}`,
     checkPassed: 'Bien formado; cada semana está dentro de sus límites',

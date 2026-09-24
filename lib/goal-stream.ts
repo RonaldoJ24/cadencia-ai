@@ -23,6 +23,7 @@ import {
 import { weeklyCeilings } from './planner/load.ts';
 import { schedulePlan } from './planner/schedule.ts';
 import { SpecError } from './planner/spec.ts';
+import { addDays } from './planner/time.ts';
 import type { Domain, Draft, GoalPlan, GoalSpec, Level, Skeleton } from './planner/types.ts';
 import {
   diagnosticOf,
@@ -315,6 +316,9 @@ export async function runGoalPipeline(rawInput: unknown, deps: GoalPipelineDeps)
         }
         const weeks = planWeeks(spec);
         const start = spec.domain === 'fitness' ? weeklyCeilings(spec, 1)[0] : null;
+        // Busy times are clipped to the longest plan; count the ones in this one.
+        const [from, until] = [`${spec.startDate}T00:00`, `${addDays(spec.deadline, 1)}T00:00`];
+        const busy = request.busy.filter((interval) => interval.end > from && interval.start < until).length;
         return {
           value: { spec, provenance, skeleton },
           detail: copy.availability(
@@ -325,6 +329,7 @@ export async function runGoalPipeline(rawInput: unknown, deps: GoalPipelineDeps)
             `${spec.window.start}–${spec.window.end}`,
             spec.weeklyCapMinutes,
             start,
+            busy,
           ),
         };
       },
