@@ -28,7 +28,7 @@ export function PlanSteps({
       </div>
       <ol className="plan-steps-list" aria-live="polite">
         {steps.map((step) => (
-          <li key={step.stage} className={`plan-step is-${step.status}`}>
+          <li key={`${step.stage}-${step.attempt ?? 1}`} className={`plan-step is-${step.status}`}>
             <span className="plan-step-state" aria-hidden="true">
               {step.status === 'done' ? (
                 <Check size={12} strokeWidth={3} />
@@ -40,14 +40,17 @@ export function PlanSteps({
             </span>
             <span className="plan-step-title">
               {copy.labels[step.stage]}
+              {step.attempt && step.attempt > 1 ? ` ${copy.attempt(step.attempt)}` : null}
               <span className={`plan-step-actor actor-${step.actor}`}>{copy.actors[step.actor]}</span>
             </span>
             <span className="plan-step-time">
               {step.status === 'running'
                 ? copy.running
-                : step.durationMs !== undefined
-                  ? copy.duration(step.durationMs)
-                  : copy.waiting}
+                : step.status === 'skipped'
+                  ? copy.skipped
+                  : step.durationMs !== undefined
+                    ? copy.duration(step.durationMs)
+                    : copy.waiting}
             </span>
             {step.detail ? <span className="plan-step-detail">{step.detail}</span> : null}
           </li>

@@ -21,8 +21,9 @@ import { stepsCopyFor, type StageActor, type StageId, type StepsCopy } from './s
 
 export type { StageActor, StageId } from './steps-copy.ts';
 
+/** `attempt` appears from the second run of a stage on, such as a draft retry. */
 export type StageEvent =
-  | { type: 'stage'; stage: StageId; status: 'started'; actor: StageActor }
+  | { type: 'stage'; stage: StageId; status: 'started'; actor: StageActor; attempt?: number }
   | {
     type: 'stage';
     stage: StageId;
@@ -30,6 +31,7 @@ export type StageEvent =
     actor: StageActor;
     durationMs: number;
     detail: string;
+    attempt?: number;
   };
 
 export type ResultEvent = {
@@ -96,26 +98,36 @@ export class StageFailure extends Error {
   }
 }
 
-type StageWork<T> = () => Promise<{ value: T; detail: string }> | { value: T; detail: string };
+/** What a stage produced; `actor` corrects who did the work when it differs from the plan. */
+export type StageOutput<T> = { value: T; detail: string; actor?: StageActor };
+export type StageWork<T> = () => Promise<StageOutput<T>> | StageOutput<T>;
+export type StageRunner = { now: () => number; emit: (event: StageEvent) => void };
 
-async function runStage<T>(
-  deps: PipelineDeps,
+/**
+ * Runs one stage: `started` right before the work, then `completed` or
+ * `failed` with the measured duration and a detail from the work itself.
+ */
+export async function runStage<T>(
+  deps: StageRunner,
   stage: StageId,
   actor: StageActor,
   work: StageWork<T>,
   toFailure: (error: unknown) => StageFailure,
+  attempt = 1,
 ): Promise<T> {
-  deps.emit({ type: 'stage', stage, status: 'started', actor });
+  const retry = attempt > 1 ? { attempt } : {};
+  deps.emit({ type: 'stage', stage, status: 'started', actor, ...retry });
   const started = deps.now();
   try {
-    const { value, detail } = await work();
+    const { value, detail, actor: doneBy } = await work();
     deps.emit({
       type: 'stage',
       stage,
       status: 'completed',
-      actor,
+      actor: doneBy ?? actor,
       durationMs: Math.max(0, deps.now() - started),
       detail,
+      ...retry,
     });
     return value;
   } catch (error) {
@@ -127,6 +139,7 @@ async function runStage<T>(
       actor,
       durationMs: Math.max(0, deps.now() - started),
       detail: failure.publicMessage,
+      ...retry,
     });
     throw failure;
   }
@@ -157,17 +170,17 @@ function fitDetail(copy: StepsCopy, dayNames: readonly string[], input: RoutineI
   return placed.length === 0 ? copy.detail.fitNone : copy.detail.fit(placed, input.time);
 }
 
-function requestIdOf(error: unknown): string | undefined {
+export function requestIdOf(error: unknown): string | undefined {
   const value = (error as { requestId?: unknown } | null)?.requestId;
   return typeof value === 'string' ? value : undefined;
 }
 
-function reasonOf(error: unknown): string {
+export function reasonOf(error: unknown): string {
   const value = (error as { reason?: unknown } | null)?.reason;
   return typeof value === 'string' ? value : 'upstream_invalid_response';
 }
 
-function diagnosticOf(error: unknown): Record<string, unknown> | undefined {
+export function diagnosticOf(error: unknown): Record<string, unknown> | undefined {
   const value = (error as { diagnostic?: unknown } | null)?.diagnostic;
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined;
 }
@@ -326,7 +339,8 @@ export async function runPlanPipeline(rawInput: unknown, deps: PipelineDeps): Pr
 export type StepView = {
   stage: StageId;
   actor: StageActor;
-  status: 'pending' | 'running' | 'done' | 'failed';
+  status: 'pending' | 'running' | 'done' | 'failed' | 'skipped';
+  attempt?: number;
   durationMs?: number;
   detail?: string;
 };
@@ -352,10 +366,21 @@ export function plannedSteps(mode: 'demo' | 'deepseek'): StepView[] {
   return stages.map(([stage, actor]) => ({ stage, actor, status: 'pending' }));
 }
 
-/** Folds one stage event into the step list shown to the person. */
+/**
+ * Folds one stage event into the step list shown to the person. A retry the
+ * list did not plan for is inserted before the first step not yet started.
+ */
 export function applyStageEvent(steps: StepView[], event: StageEvent): StepView[] {
+  const attempt = event.attempt ?? 1;
+  const matches = (step: StepView) => step.stage === event.stage && (step.attempt ?? 1) === attempt;
+  if (!steps.some(matches)) {
+    const added: StepView = { stage: event.stage, actor: event.actor, status: 'pending', attempt };
+    const at = steps.findIndex((step) => step.status === 'pending');
+    const next = at === -1 ? [...steps, added] : [...steps.slice(0, at), added, ...steps.slice(at)];
+    return applyStageEvent(next, event);
+  }
   return steps.map((step) => {
-    if (step.stage !== event.stage) return step;
+    if (!matches(step)) return step;
     if (event.status === 'started') return { ...step, actor: event.actor, status: 'running' };
     return {
       ...step,
@@ -367,7 +392,25 @@ export function applyStageEvent(steps: StepView[], event: StageEvent): StepView[
   });
 }
 
-const STAGE_IDS: readonly StageId[] = ['check_request', 'check_availability', 'reserve', 'draft', 'check_draft', 'fit'];
+/** Once a run has its answer, steps it never needed show as skipped. */
+export function skipRemainingSteps(steps: StepView[]): StepView[] {
+  return steps.map((step) => (step.status === 'pending' ? { ...step, status: 'skipped' } : step));
+}
+
+const STAGE_IDS: readonly StageId[] = [
+  'check_request',
+  'check_availability',
+  'reserve',
+  'read_goal',
+  'draft',
+  'check_draft',
+  'fit',
+];
+
+function attemptOf(value: unknown): number | undefined | null {
+  if (value === undefined) return undefined;
+  return typeof value === 'number' && Number.isInteger(value) && value >= 2 && value <= 5 ? value : null;
+}
 const ACTORS: readonly StageActor[] = ['code', 'model', 'sample'];
 
 /** Accepts only well-formed stage events from the wire. */
@@ -376,8 +419,11 @@ export function parseStageEvent(value: unknown): StageEvent | null {
   const event = value as Record<string, unknown>;
   if (event.type !== 'stage') return null;
   if (!STAGE_IDS.includes(event.stage as StageId) || !ACTORS.includes(event.actor as StageActor)) return null;
+  const attempt = attemptOf(event.attempt);
+  if (attempt === null) return null;
+  const retry = attempt ? { attempt } : {};
   if (event.status === 'started') {
-    return { type: 'stage', stage: event.stage as StageId, status: 'started', actor: event.actor as StageActor };
+    return { type: 'stage', stage: event.stage as StageId, status: 'started', actor: event.actor as StageActor, ...retry };
   }
   if (
     (event.status === 'completed' || event.status === 'failed') &&
@@ -392,6 +438,7 @@ export function parseStageEvent(value: unknown): StageEvent | null {
       actor: event.actor as StageActor,
       durationMs: event.durationMs,
       detail: event.detail.slice(0, 300),
+      ...retry,
     };
   }
   return null;
