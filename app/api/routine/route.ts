@@ -1,14 +1,16 @@
 // The public planning route. GET reports whether live AI is available; POST
-// runs a live goal plan, streamed as server-sent events or answered as JSON.
-// The demo runs the same pipeline in the browser and never calls this route.
+// runs a live goal plan, or a pick after missed sessions, streamed as
+// server-sent events or answered as JSON. The demo runs the same pipelines in
+// the browser and never calls this route.
 
 import { runGoalPipeline } from '../../../lib/goal-stream.ts';
+import { runReplanPipeline } from '../../../lib/replan-stream.ts';
 import { copyFor, languageFrom } from '../../../lib/i18n.ts';
 import { StageFailure, type ReserveResult, type StageEvent } from '../../../lib/plan-stream.ts';
 import { formatSse, SSE_HEARTBEAT } from '../../../lib/sse.ts';
 import { dict, errorResponse, json, rateLimited, readBoundedText, sameOrigin, type Dict } from '../../../lib/server/http.ts';
-import { liveGoalRun } from '../../../lib/server/goal-run.ts';
-import { liveConfig, requestDraft, requestReadGoal, runtimeEnv } from '../../../lib/server/live.ts';
+import { liveGoalRun, liveReplanRun } from '../../../lib/server/goal-run.ts';
+import { liveConfig, requestDraft, requestReadGoal, requestReplan, runtimeEnv } from '../../../lib/server/live.ts';
 import { envDb, type Db } from '../../../lib/server/db.ts';
 import { checkRateLimit, ipScopeKey } from '../../../lib/server/ratelimit.ts';
 import type { SlotReservationResult } from '../../../lib/server/public_limits.ts';
@@ -22,6 +24,7 @@ export type PublicRoutineDeps = {
   env?: Record<string, unknown>;
   readGoalFetcher?: typeof requestReadGoal;
   draftFetcher?: typeof requestDraft;
+  replanFetcher?: typeof requestReplan;
   nowIso?: () => string;
   nowMs?: () => number;
   /** Keeps work running after the response; defaults to the Workers request context. */
@@ -153,6 +156,18 @@ function goalRun(rawInput: unknown, live: ReturnType<typeof liveGoalRun>, starte
   };
 }
 
+function replanRun(rawInput: unknown, live: ReturnType<typeof liveReplanRun>, startedMs: number): Run {
+  return async (emit) => {
+    try {
+      const outcome = await runReplanPipeline(rawInput, { ...live.deps, emit });
+      const body = { ...outcome, meta: { timingsMs: { total: Date.now() - startedMs } } };
+      return { result: body, json: body, requestId: outcome.requestIds.at(-1) };
+    } finally {
+      await live.settle();
+    }
+  };
+}
+
 async function jsonResponse(run: Run, keepAlive: KeepAlive): Promise<Response> {
   try {
     const pending = run(() => undefined);
@@ -243,7 +258,7 @@ export async function POST(request: Request, deps?: PublicRoutineDeps): Promise<
   if (value.mode !== 'deepseek') {
     return errorResponse(apiCopy.invalidMode, 400, 'invalid_mode', undefined, undefined, EVENT);
   }
-  if (value.kind !== undefined && value.kind !== 'goal') {
+  if (value.kind !== undefined && value.kind !== 'goal' && value.kind !== 'replan') {
     return errorResponse(apiCopy.invalidMode, 400, 'invalid_kind', undefined, undefined, EVENT);
   }
 
@@ -257,19 +272,10 @@ export async function POST(request: Request, deps?: PublicRoutineDeps): Promise<
   if (!config) return errorResponse(apiCopy.notConfigured, 503, 'live_not_configured', undefined, undefined, EVENT);
   // Fail closed: live provider calls strictly require atomic D1 rate/quota limits.
   if (!db) return errorResponse(apiCopy.limitsNotConfigured, 503, 'limits_not_configured', undefined, undefined, EVENT);
-  const live = liveGoalRun({
-    db,
-    config,
-    request,
-    env,
-    language,
-    nowIso,
-    nowMs,
-    slotResult: (slot) => slotResult(slot, apiCopy),
-    readGoal: deps?.readGoalFetcher,
-    draft: deps?.draftFetcher,
-  });
-  const run = goalRun(value.input, live, startedMs);
+  const base = { db, config, request, env, language, nowIso, nowMs, slotResult: (slot: SlotReservationResult) => slotResult(slot, apiCopy) };
+  const run = value.kind === 'replan'
+    ? replanRun(value.input, liveReplanRun({ ...base, replan: deps?.replanFetcher }), startedMs)
+    : goalRun(value.input, liveGoalRun({ ...base, readGoal: deps?.readGoalFetcher, draft: deps?.draftFetcher }), startedMs);
   const keepAlive = await keepAliveFor(deps);
   return wantsStream ? streamResponse(run, keepAlive) : jsonResponse(run, keepAlive);
 }

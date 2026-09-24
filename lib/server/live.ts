@@ -2,6 +2,7 @@
 // bindings, and authenticated calls that never follow a redirect, stop at a
 // deadline and read a bounded answer.
 import type { DraftPayload, ReadGoalPayload } from '../goal-stream.ts';
+import type { ReplanPayload } from '../replan-stream.ts';
 
 // The configured service URL may still end in the retired weekly endpoint's
 // path; normalizing to it and slicing it off finds the base for each call.
@@ -322,6 +323,7 @@ export const SERVICE_CALLS = {
   // The service allows 30 s for a reading and 50 s for a draft; these add headroom.
   readGoal: { path: '/v1/read-goal', timeoutMs: 35_000, maxBytes: 32_768 },
   draft: { path: '/v1/draft', timeoutMs: 55_000, maxBytes: 131_072 },
+  replan: { path: '/v1/replan', timeoutMs: 35_000, maxBytes: 16_384 },
 } as const satisfies Record<string, ServiceCall>;
 
 /** The configured intents URL with its path swapped for another endpoint's. */
@@ -474,4 +476,21 @@ export async function requestDraft(
     throw failure;
   }
   return { draft: root.draft, requestId: serviceRequestId, usage: serviceUsage(root.meta), promptVersion: promptVersionOf(root.meta) };
+}
+
+export type ReplanAnswer = { pick: unknown; requestId?: string; usage?: ServiceUsage; promptVersion?: string };
+
+/** Asks the service to pick one of the options code built, from the person's reason. */
+export async function requestReplan(
+  payload: ReplanPayload,
+  config: LiveConfig,
+  fetcher: typeof fetch = globalThis.fetch,
+): Promise<ReplanAnswer> {
+  const { root, requestId: serviceRequestId } = await postService(config, SERVICE_CALLS.replan, payload, fetcher);
+  if (!dict(root.pick)) {
+    const failure = new ServiceFailure(serviceRequestId, false, 'upstream_invalid_response');
+    failure.usage = serviceUsage(root.meta);
+    throw failure;
+  }
+  return { pick: root.pick, requestId: serviceRequestId, usage: serviceUsage(root.meta), promptVersion: promptVersionOf(root.meta) };
 }

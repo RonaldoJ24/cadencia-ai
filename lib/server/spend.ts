@@ -52,6 +52,19 @@ export const GOAL_DRAFT_ATTEMPT_MICROUSD = costMicroUsd(
 export const GOAL_WORST_CASE_MICROUSD = GOAL_BOUNDS.attempts *
   (GOAL_READ_ATTEMPT_MICROUSD + GOAL_BOUNDS.draftCalls * GOAL_DRAFT_ATTEMPT_MICROUSD);
 
+/** Bounds of one replan: a single pick call, mirrored like GOAL_BOUNDS (a test checks them). */
+export const REPLAN_BOUNDS = {
+  attempts: 2,
+  templateTokens: 64,
+  pick: { promptBytes: 8_192, outputTokens: 300 },
+} as const;
+
+export const REPLAN_ATTEMPT_MICROUSD = costMicroUsd(
+  REPLAN_BOUNDS.pick.promptBytes + REPLAN_BOUNDS.templateTokens,
+  REPLAN_BOUNDS.pick.outputTokens,
+);
+export const REPLAN_WORST_CASE_MICROUSD = REPLAN_BOUNDS.attempts * REPLAN_ATTEMPT_MICROUSD;
+
 export type SpendState = {
   liveEnabled: boolean;
   dailyCapMicroUsd: number;
