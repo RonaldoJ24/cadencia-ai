@@ -255,8 +255,8 @@ const ES: StepsCopy = {
     fit: ({ placed, trimmed, moved, unplaced }) =>
       [
         placed === 1 ? 'Se acomodó 1 sesión' : `Se acomodaron ${placed} sesiones`,
-        trimmed > 0 ? `se recortaron ${trimmed} para respetar los límites semanales` : '',
-        moved > 0 ? `se movieron ${moved}` : '',
+        trimmed === 1 ? 'se recortó 1 para respetar los límites semanales' : trimmed > 1 ? `se recortaron ${trimmed} para respetar los límites semanales` : '',
+        moved === 1 ? 'se movió 1' : moved > 1 ? `se movieron ${moved}` : '',
         unplaced > 0 ? `${unplaced} sin hueco libre` : '',
         'todas las reglas revisadas',
       ].filter(Boolean).join('; '),
