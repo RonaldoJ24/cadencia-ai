@@ -285,7 +285,7 @@ const EN: GoalCopy = {
     declinedUnclear: 'Your reason didn’t point to one option. Choose the one that fits.',
     open: 'Choose the option that fits.',
     optionHelp: {
-      keep: 'Go on as planned. What you missed is skipped.',
+      keep: 'Go on with the plan from here; what you missed is skipped. For fitness, code eases the next weeks after a miss, so this can hold less than the plan did.',
       repeat: 'Redo what you missed, starting now. What no longer fits before the deadline is left out at the end.',
       extend: 'Redo what you missed and move the deadline, so nothing is left out.',
       lighter: 'Go on with lighter weeks that keep the most important sessions.',
@@ -460,7 +460,7 @@ const ES: GoalCopy = {
     declinedUnclear: 'Tu motivo no apuntó a una opción. Elige la que te quede.',
     open: 'Elige la opción que te quede.',
     optionHelp: {
-      keep: 'Seguir como estaba planeado. Lo que faltó se omite.',
+      keep: 'Seguir con el plan desde aquí; lo que faltó se omite. En planes de ejercicio, el código aligera las siguientes semanas después de una falta, así que puede quedar menos que en el plan.',
       repeat: 'Repetir lo que faltó, empezando ahora. Lo que ya no cabe antes de la fecha límite se omite al final.',
       extend: 'Repetir lo que faltó y mover la fecha límite, para no omitir nada.',
       lighter: 'Seguir con semanas más ligeras que mantienen las sesiones más importantes.',
