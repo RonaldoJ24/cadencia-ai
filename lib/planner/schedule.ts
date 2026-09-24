@@ -49,7 +49,28 @@ function trim(types: SessionType[], limits: WeekLimits, reason: () => DropReason
   return keep.map((position) => types[position]);
 }
 
-export function schedulePlan(spec: GoalSpec, draft: Draft, busy: readonly BusyInterval[]): GoalPlan {
+export type ScheduleOptions = {
+  /**
+   * Sessions already behind the person, kept as they are with their status.
+   * Only dates on or after `from` get new sessions. Kept sessions count toward
+   * their week's cap, day and hard-session limits and rest spacing whatever
+   * their status; toward the load rule's history only when not missed.
+   */
+  keep?: readonly PlannedSession[];
+  from?: LocalDate;
+};
+
+/** The draft's request for a week, less what kept sessions already cover. */
+function stillRequested(requested: readonly string[], kept: readonly PlannedSession[]): string[] {
+  const rest = [...requested];
+  for (const session of kept) {
+    const slot = rest.indexOf(session.typeId);
+    if (slot !== -1) rest.splice(slot, 1);
+  }
+  return rest;
+}
+
+export function schedulePlan(spec: GoalSpec, draft: Draft, busy: readonly BusyInterval[], options: ScheduleOptions = {}): GoalPlan {
   const typeById = new Map(draft.sessionTypes.map((type) => [type.id, type]));
   const windowStart = minutesOf(spec.window.start);
   const fitness = spec.domain === 'fitness';
@@ -59,6 +80,8 @@ export function schedulePlan(spec: GoalSpec, draft: Draft, busy: readonly BusyIn
   // load, so it stays out of the recent average the load rule uses.
   const firstWeek = calendar[0]?.start;
   const firstWeekCut = firstWeek !== undefined && spec.days.some((day) => addDays(firstWeek, day) < spec.startDate);
+  const from = options.from;
+  const keep = from ? (options.keep ?? []).filter((session) => session.date < from) : [];
   const placedMinutes: number[] = [];
   const hardDates = new Set<LocalDate>();
   const notes: ScheduleNote[] = [];
@@ -66,8 +89,20 @@ export function schedulePlan(spec: GoalSpec, draft: Draft, busy: readonly BusyIn
 
   for (const [weekIndex, calendarWeek] of calendar.entries()) {
     const week = calendarWeek.week;
-    const dates = calendarWeek.dates;
-    const requested = (draft.weeks.find((entry) => entry.week === week)?.sessions ?? [])
+    const kept = keep
+      .filter((session) => session.date >= calendarWeek.start && session.date <= calendarWeek.end)
+      .map((session) => ({ ...session, week, blocks: session.blocks.map((block) => ({ ...block })) }));
+    for (const session of kept) if (session.intensity === 'hard') hardDates.add(session.date);
+    const keptMinutes = kept.reduce((total, session) => total + session.minutes, 0);
+    const doneMinutes = kept.reduce((total, session) => total + (session.status === 'missed' ? 0 : session.minutes), 0);
+    const dates = from ? calendarWeek.dates.filter((date) => date >= from) : calendarWeek.dates;
+    if (from && calendarWeek.end < from) {
+      // A week entirely behind the person: kept as it is.
+      if (weekIndex > 0 || !firstWeekCut) placedMinutes.push(doneMinutes);
+      weeks.push({ week, start: calendarWeek.start, end: calendarWeek.end, sessions: kept.sort((a, b) => a.date.localeCompare(b.date)) });
+      continue;
+    }
+    const requested = stillRequested(draft.weeks.find((entry) => entry.week === week)?.sessions ?? [], kept)
       .map((typeId) => typeById.get(typeId))
       .filter((type): type is SessionType => type !== undefined);
 
@@ -75,17 +110,20 @@ export function schedulePlan(spec: GoalSpec, draft: Draft, busy: readonly BusyIn
     // the fixed ones, then the load rule, which depends on the weeks before.
     const fixed: WeekLimits = {
       maxCount: dates.length,
-      maxMinutes: Math.min(spec.weeklyCapMinutes, ceilings[weekIndex]),
-      maxHard: fitness ? FITNESS_LOAD.maxHardPerWeek : Number.POSITIVE_INFINITY,
+      maxMinutes: Math.max(0, Math.min(spec.weeklyCapMinutes, ceilings[weekIndex]) - keptMinutes),
+      maxHard: fitness
+        ? Math.max(0, FITNESS_LOAD.maxHardPerWeek - kept.filter((session) => session.intensity === 'hard').length)
+        : Number.POSITIVE_INFINITY,
     };
     const withinFixed = trim(requested, fixed, () => trimReason(requested, fixed, spec), week, notes);
-    const load = fitness ? loadLimit(placedMinutes, spec.level) : null;
+    const limit = fitness ? loadLimit(placedMinutes, spec.level) : null;
+    const load = limit === null ? null : Math.max(0, limit - doneMinutes);
     const wanted = load === null
       ? withinFixed
       : trim(withinFixed, { ...fixed, maxMinutes: Math.min(fixed.maxMinutes, load) }, () => 'load', week, notes);
 
     const taken = new Set<LocalDate>();
-    const sessions: PlannedSession[] = [];
+    const sessions: PlannedSession[] = [...kept];
     wanted.forEach((type, index) => {
       if (dates.length === 0) {
         notes.push({ kind: 'dropped', week, typeId: type.id, reason: 'no_free_slot' });
@@ -120,7 +158,7 @@ export function schedulePlan(spec: GoalSpec, draft: Draft, busy: readonly BusyIn
         taken.add(date);
         if (type.intensity === 'hard') hardDates.add(date);
         sessions.push({
-          id: `w${week}-${index + 1}`,
+          id: `w${week}-${kept.length + index + 1}`,
           week,
           date,
           start: timeOf(start),
@@ -150,7 +188,8 @@ export function schedulePlan(spec: GoalSpec, draft: Draft, busy: readonly BusyIn
     });
 
     sessions.sort((a, b) => a.date.localeCompare(b.date));
-    if (weekIndex > 0 || !firstWeekCut) placedMinutes.push(sessions.reduce((total, session) => total + session.minutes, 0));
+    const newMinutes = sessions.reduce((total, session) => total + session.minutes, 0) - keptMinutes;
+    if (weekIndex > 0 || !firstWeekCut) placedMinutes.push(doneMinutes + newMinutes);
     weeks.push({ week, start: calendarWeek.start, end: calendarWeek.end, sessions });
   }
 
