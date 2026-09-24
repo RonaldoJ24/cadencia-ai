@@ -252,3 +252,81 @@ void test('the largest plan streams whole through the browser reader, in small c
   assert.equal(plan?.weeks.reduce((total, week) => total + week.sessions.length, 0), 3 + 25 * 7 + 4);
   assert.ok(text.length > 200_000, `the stream carried ${text.length} characters`);
 });
+
+void test('a goal run the visitor leaves mid-draft still settles its spend and frees its slot', async () => {
+  const db = migratedDb(MIGRATIONS);
+  const kept: Array<Promise<unknown>> = [];
+  let finishDraft = () => undefined as void;
+  const draftDone = new Promise<void>((resolve) => {
+    finishDraft = resolve;
+  });
+  const response = await POST(goalRequest({}, '203.0.113.35'), {
+    db,
+    env: liveEnv,
+    nowIso: () => NOW_ISO,
+    nowMs: () => NOW_MS,
+    waitUntil: (promise) => kept.push(promise),
+    readGoalFetcher: async () => ({ reading: READING, scopeRefused: false, usage: READ_USAGE }),
+    draftFetcher: async () => {
+      await draftDone;
+      return { draft: DRAFT, usage: DRAFT_USAGE };
+    },
+  });
+  // The visitor closes the page while the model is still drafting.
+  const reader = response.body?.getReader();
+  await reader?.read();
+  await reader?.cancel();
+  finishDraft();
+  assert.equal(kept.length, 1, 'the run is registered to outlive the response');
+  await kept[0];
+  assert.equal(ledger(db).status, 'settled');
+  assert.equal(ledger(db).actual_microusd, 3_357);
+  const leases = db.raw.prepare('SELECT COUNT(*) AS n FROM public_concurrency').get() as { n: number };
+  assert.equal(leases.n, 0);
+});
+
+void test('a quota refusal streams as a failed limits step with its retry time, before any spend', async () => {
+  const db = migratedDb(MIGRATIONS);
+  db.raw.exec("UPDATE public_limits_config SET value = 0 WHERE key = 'visitor_daily_quota'");
+  let reads = 0;
+  const response = await POST(goalRequest({}, '203.0.113.36'), {
+    db,
+    env: liveEnv,
+    nowIso: () => NOW_ISO,
+    nowMs: () => NOW_MS,
+    readGoalFetcher: async () => {
+      reads += 1;
+      return { reading: READING, scopeRefused: false };
+    },
+  });
+  const list = await quiet(() => events(response));
+  const stages = list.filter((item) => item.event === 'stage').map((item) => `${String(item.data.stage)}:${String(item.data.status)}`);
+  assert.deepEqual(stages.slice(-2), ['reserve:started', 'reserve:failed']);
+  const error = list.at(-1);
+  assert.equal(error?.data.stage, 'reserve');
+  assert.equal(typeof error?.data.retryAfterSec, 'number');
+  assert.equal(reads, 0);
+  const rows = db.raw.prepare('SELECT COUNT(*) AS n FROM spend_ledger').get() as { n: number };
+  assert.equal(rows.n, 0, 'the refused run left no reservation');
+});
+
+void test('the kill switch stops goal runs before the model', async () => {
+  const db = migratedDb(MIGRATIONS);
+  db.raw.exec("UPDATE app_settings SET value = '0' WHERE key = 'live_enabled'");
+  let reads = 0;
+  const response = await POST(goalRequest({}, '203.0.113.37'), {
+    db,
+    env: liveEnv,
+    nowIso: () => NOW_ISO,
+    nowMs: () => NOW_MS,
+    readGoalFetcher: async () => {
+      reads += 1;
+      return { reading: READING, scopeRefused: false };
+    },
+  });
+  const error = (await quiet(() => events(response))).at(-1);
+  assert.equal(error?.event, 'error');
+  assert.equal(error?.data.stage, 'reserve');
+  assert.match(String(error?.data.message), /paused/u);
+  assert.equal(reads, 0);
+});

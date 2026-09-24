@@ -9,7 +9,6 @@
     hmacIpHash,
     secondsUntilUtcMidnight,
   } from '../lib/server/public_limits.ts';
- import type { Intent, RoutineInput } from '../lib/routine.ts';
  
  const NOW_ISO = '2026-09-06T12:00:00.000Z';
  const NOW_MS = Date.parse(NOW_ISO);
@@ -69,48 +68,35 @@
    for (const file of ['0001_beta_loop.sql', '0002_rate_limits.sql', '0003_public_limits.sql', '0005_spend_controls.sql']) {
      db.raw.exec(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'));
    }
+   // Dollar caps are tested in spend.test.ts; here they must never be the
+   // limit that decides, so request limits are tested on their own.
+   db.raw.exec("UPDATE app_settings SET value = '1000000000' WHERE key IN ('daily_cap_microusd', 'monthly_cap_microusd')");
    return db;
  }
  
- const baseInput: RoutineInput = {
-   request: 'aprender TypeScript',
-   days: [0, 2],
-   sessionMinutes: 30,
-   weeklyMinutes: 90,
-   startDate: '2026-08-31',
-   time: '18:00',
-   language: 'es',
+ // Goal runs through the public route. A clarifying question ends a run after
+ // one quick service call, which is all these limit tests need.
+ const baseInput = { text: 'aprender TypeScript', language: 'es', today: NOW_ISO.slice(0, 10) };
+
+ const questionAnswer = {
+   reading: {
+     decision: 'clarify',
+     title: 'Aprender TypeScript',
+     summary: 'Quiere aprender TypeScript.',
+     domain: 'learning',
+     level: 'unknown',
+     deadline: null,
+     deadline_basis: 'none',
+     days: null,
+     window: null,
+     weekly_minutes: null,
+     session_minutes: null,
+     question: '¿Qué quieres construir con TypeScript?',
+     abstain: null,
+   },
+   scopeRefused: false,
+   usage: { promptTokens: 400, completionTokens: 90, attempts: 1 },
  };
- 
- const mockIntent: Intent = {
-   title: 'Aprender TypeScript',
-   goal: 'Construir una pequeña función tipada.',
-   domain: 'learning',
-   steps: [
-    {
-      title: 'Practica tipos',
-      instructions: 'Escribe y revisa una función.',
-      blocks: [
-        { minutes: 5, activity: 'Define el caso.' },
-        { minutes: 20, activity: 'Implementa la función.' },
-        { minutes: 5, activity: 'Comprueba el tipo.' },
-      ],
-      deliverable: 'Una función tipada.',
-      doneWhen: 'La función compila y tiene un ejemplo.',
-    },
-    {
-      title: 'Usa el tipo',
-      instructions: 'Aplica la función en un caso distinto.',
-      blocks: [
-        { minutes: 5, activity: 'Recupera la firma.' },
-        { minutes: 20, activity: 'Resuelve el caso nuevo.' },
-        { minutes: 5, activity: 'Anota el error principal.' },
-      ],
-      deliverable: 'Un segundo caso funcionando.',
-      doneWhen: 'El caso funciona sin copiar el primero.',
-    },
-  ],
-};
  
  const mockLiveEnv = {
    CADENCIA_ENABLE_LIVE: 'true',
@@ -172,20 +158,20 @@ void test('isolated daily quota race: 20 distinct IPs simultaneously at global d
   const delayedFetcher = async () => {
     providerCallsStarted += 1;
     await providerGate;
-    return { intent: mockIntent, scopeRefused: false };
+    return questionAnswer;
   };
 
   // Launch 20 distinct IPs simultaneously
   const requests = Array.from({ length: 20 }, (_, index) =>
     POST(
       makeRequest(
-        { input: baseInput, mode: 'deepseek' },
+        { input: baseInput, mode: 'deepseek', kind: 'goal' },
         { 'cf-connecting-ip': `203.0.113.${index + 1}` },
       ),
       {
         db,
         env: mockLiveEnv,
-        intentFetcher: delayedFetcher,
+        readGoalFetcher: delayedFetcher,
         nowIso: () => NOW_ISO,
         nowMs: () => NOW_MS,
       },
@@ -236,20 +222,20 @@ void test('isolated global concurrency race: 11 distinct IPs simultaneously at g
   const delayedFetcher = async () => {
     providerCallsStarted += 1;
     await gate;
-    return { intent: mockIntent, scopeRefused: false };
+    return questionAnswer;
   };
 
   // Launch 11 simultaneous distinct IPs
   const requests = Array.from({ length: 11 }, (_, index) =>
     POST(
       makeRequest(
-        { input: baseInput, mode: 'deepseek' },
+        { input: baseInput, mode: 'deepseek', kind: 'goal' },
         { 'cf-connecting-ip': `198.51.100.${index + 1}` },
       ),
       {
         db,
         env: mockLiveEnv,
-        intentFetcher: delayedFetcher,
+        readGoalFetcher: delayedFetcher,
         nowIso: () => NOW_ISO,
         nowMs: () => NOW_MS,
       },
@@ -281,20 +267,20 @@ void test('isolated global concurrency race: 11 distinct IPs simultaneously at g
    const delayedFetcher = async () => {
      providerCalls += 1;
      await gate;
-     return { intent: mockIntent, scopeRefused: false };
+     return questionAnswer;
    };
  
    // Launch 5 simultaneous requests from the same visitor IP
    const requests = Array.from({ length: 5 }, () =>
      POST(
        makeRequest(
-         { input: baseInput, mode: 'deepseek' },
+         { input: baseInput, mode: 'deepseek', kind: 'goal' },
          { 'cf-connecting-ip': ip },
        ),
        {
          db,
          env: mockLiveEnv,
-         intentFetcher: delayedFetcher,
+         readGoalFetcher: delayedFetcher,
          nowIso: () => NOW_ISO,
          nowMs: () => NOW_MS,
        },
@@ -311,24 +297,27 @@ void test('isolated global concurrency race: 11 distinct IPs simultaneously at g
  
    assert.equal(ok.length, 1);
    assert.equal(rejected.length, 4);
+   // Runs refused a slot had their spend reservation removed again.
+   const ledger = db.raw.prepare('SELECT status FROM spend_ledger').all() as Array<{ status: string }>;
+   assert.deepEqual(ledger.map((row) => row.status), ['settled']);
  });
  
  void test('daily 429 returns Retry-After until UTC midnight reset', async () => {
    const db = await migrated();
    const ip = '198.51.100.77';
-   const fetcher = async () => ({ intent: mockIntent, scopeRefused: false });
+   const fetcher = async () => questionAnswer;
  
    // Consume 5 daily quota slots
    for (let i = 0; i < 5; i += 1) {
      await POST(
        makeRequest(
-         { input: baseInput, mode: 'deepseek' },
+         { input: baseInput, mode: 'deepseek', kind: 'goal' },
          { 'cf-connecting-ip': ip },
        ),
        {
          db,
          env: mockLiveEnv,
-         intentFetcher: fetcher,
+         readGoalFetcher: fetcher,
          nowIso: () => NOW_ISO,
          nowMs: () => NOW_MS + i * 65_000,
        },
@@ -339,13 +328,13 @@ void test('isolated global concurrency race: 11 distinct IPs simultaneously at g
    const testMs = NOW_MS + 5 * 65_000;
    const res = await POST(
      makeRequest(
-       { input: baseInput, mode: 'deepseek' },
+       { input: baseInput, mode: 'deepseek', kind: 'goal' },
        { 'cf-connecting-ip': ip },
      ),
      {
        db,
        env: mockLiveEnv,
-       intentFetcher: fetcher,
+       readGoalFetcher: fetcher,
        nowIso: () => NOW_ISO,
        nowMs: () => testMs,
      },
@@ -364,7 +353,7 @@ void test('isolated global concurrency race: 11 distinct IPs simultaneously at g
    // Request with spoofed x-real-ip but missing cf-connecting-ip
    const spoofed = await POST(
      makeRequest(
-       { input: baseInput, mode: 'deepseek' },
+       { input: baseInput, mode: 'deepseek', kind: 'goal' },
        { 'x-real-ip': '1.2.3.4' },
      ),
      {
@@ -382,13 +371,13 @@ void test('isolated global concurrency race: 11 distinct IPs simultaneously at g
    // In non-bypassable fallback mode, missing IP routes to a single shared bucket
    const fallbackRes = await POST(
      makeRequest(
-       { input: baseInput, mode: 'deepseek' },
+       { input: baseInput, mode: 'deepseek', kind: 'goal' },
        {},
      ),
      {
        db,
        env: { ...mockLiveEnv, CADENCIA_ALLOW_IP_FALLBACK: 'true' },
-       intentFetcher: async () => ({ intent: mockIntent, scopeRefused: false }),
+       readGoalFetcher: async () => questionAnswer,
        nowIso: () => NOW_ISO,
        nowMs: () => NOW_MS,
      },
@@ -410,19 +399,19 @@ void test('isolated global concurrency race: 11 distinct IPs simultaneously at g
  
    // Test in route: cookie reset does not bypass quota
    const db = await migrated();
-   const fetcher = async () => ({ intent: mockIntent, scopeRefused: false });
+   const fetcher = async () => questionAnswer;
    const ip = '198.51.100.99';
  
    for (let i = 0; i < 5; i += 1) {
      await POST(
        makeRequest(
-         { input: baseInput, mode: 'deepseek' },
+         { input: baseInput, mode: 'deepseek', kind: 'goal' },
          { 'cf-connecting-ip': ip, cookie: 'auth_token=valid-cookie-1' },
        ),
        {
          db,
          env: mockLiveEnv,
-         intentFetcher: fetcher,
+         readGoalFetcher: fetcher,
          nowIso: () => NOW_ISO,
          nowMs: () => NOW_MS + i * 65_000,
        },
@@ -432,13 +421,13 @@ void test('isolated global concurrency race: 11 distinct IPs simultaneously at g
    // Attempt bypass with cleared / altered cookie
    const bypass = await POST(
      makeRequest(
-       { input: baseInput, mode: 'deepseek' },
+       { input: baseInput, mode: 'deepseek', kind: 'goal' },
        { 'cf-connecting-ip': ip, cookie: 'auth_token=fresh-reset-cookie' },
      ),
      {
        db,
        env: mockLiveEnv,
-       intentFetcher: fetcher,
+       readGoalFetcher: fetcher,
        nowIso: () => NOW_ISO,
        nowMs: () => NOW_MS + 5 * 65_000,
      },
@@ -452,7 +441,7 @@ void test('isolated global concurrency race: 11 distinct IPs simultaneously at g
  
    const res = await POST(
      makeRequest(
-       { input: baseInput, mode: 'deepseek' },
+       { input: baseInput, mode: 'deepseek', kind: 'goal' },
        { 'cf-connecting-ip': '198.51.100.5' },
      ),
    );
@@ -472,13 +461,13 @@ void test('isolated global concurrency race: 11 distinct IPs simultaneously at g
  
    const res = await POST(
      makeRequest(
-       { input: baseInput, mode: 'deepseek' },
+       { input: baseInput, mode: 'deepseek', kind: 'goal' },
        { 'cf-connecting-ip': '198.51.100.4' },
      ),
      {
        db,
        env: { ...mockLiveEnv, CADENCIA_SERVICE_TOKEN: token },
-       intentFetcher: fetcher,
+       readGoalFetcher: fetcher,
        nowIso: () => NOW_ISO,
        nowMs: () => NOW_MS,
      },
@@ -499,7 +488,7 @@ void test('missing HMAC secret throws and fails closed with 503', async () => {
 
   const res = await POST(
     makeRequest(
-      { input: baseInput, mode: 'deepseek' },
+      { input: baseInput, mode: 'deepseek', kind: 'goal' },
       { 'cf-connecting-ip': '198.51.100.9' },
     ),
     {

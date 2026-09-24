@@ -121,6 +121,14 @@ class SmokeProvider:
         messages = json.loads(request.content)["messages"]
         if messages[0]["content"] == planning.READ_GOAL_PROMPT:
             self.goal_calls += 1
+            if "leak check" in messages[1]["content"]:
+                # Unparseable provider output must stay behind the service
+                # and the route's error boundary.
+                return httpx.Response(
+                    200,
+                    content=b'{"choices":[{"finish_reason":"stop","message":{"content":"upstream secret"}}]}',
+                    headers={"content-type": "application/json"},
+                )
             return _envelope(GOAL_READING)
         if messages[0]["content"] == planning.DRAFT_PROMPT:
             self.goal_calls += 1
@@ -282,7 +290,17 @@ parser.push(await goal.text());
 parser.end();
 const goalResult = JSON.parse(goalMessages.at(-1)?.data ?? '{}');
 const goalLedger = db.raw.prepare("SELECT status, actual_microusd FROM spend_ledger WHERE reserved_microusd > 20000").get();
-const serializedBodies = JSON.stringify({ liveBody, failedBody, demoBody, goalResult });
+const goalFailed = await POST(new Request('http://localhost/api/routine', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', 'cf-connecting-ip': '127.0.0.3' },
+  body: JSON.stringify({
+    mode: 'deepseek',
+    kind: 'goal',
+    input: { text: 'Goal for the leak check', language: 'en', today: new Date().toISOString().slice(0, 10) },
+  }),
+}));
+const goalFailedBody = await goalFailed.json();
+const serializedBodies = JSON.stringify({ liveBody, failedBody, demoBody, goalResult, goalFailedBody });
 console.log(JSON.stringify({
   availability: await availability.json(),
   live: {
@@ -313,6 +331,8 @@ console.log(JSON.stringify({
       .map((event) => `${event.stage}:${event.status}`),
     sessions: (goalResult?.plan?.weeks ?? []).reduce((total, week) => total + week.sessions.length, 0),
     ledger: goalLedger ?? null,
+    failedStatus: goalFailed.status,
+    failedError: goalFailedBody?.error ?? null,
   },
   returnedBodiesSafe: !serializedBodies.includes('smoke-token') && !serializedBodies.includes('upstream secret'),
 }));
@@ -431,9 +451,11 @@ def main() -> int:
                 and goal["sessions"] > 0
                 # Two calls at 500 in and 300 out settle at 510 micro-USD each.
                 and goal.get("ledger") == {"status": "settled", "actual_microusd": 1_020}
+                and goal.get("failedStatus") == 502
+                and goal.get("failedError") == "The AI provider is not available."
                 and returned_bodies_safe is True
                 and provider.calls == 2
-                and provider.goal_calls == 2
+                and provider.goal_calls == 3
             ):
                 raise RuntimeError("smoke assertions failed")
         finally:
