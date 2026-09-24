@@ -76,8 +76,27 @@ void test('goal requests are refused field by field', () => {
   assert.equal(fieldOf(() => request({ controls: { window: { start: '07:00', end: '07:10' } } })), 'window');
   assert.equal(fieldOf(() => request({ controls: { weeklyMinutes: 10 } })), 'weeklyMinutes');
   assert.equal(fieldOf(() => request({ controls: { sessionMinutes: 300 } })), 'sessionMinutes');
-  assert.equal(fieldOf(() => request({ busy: [{ start: '2026-09-25T09:00', end: '2026-09-25T10:00' }] })), 'busy');
+  assert.equal(fieldOf(() => request({ busy: 'Tuesday mornings' })), 'busy');
+  assert.equal(fieldOf(() => request({ busy: [{ start: '2026-09-25T10:00', end: '2026-09-25T09:00' }] })), 'busy[0]');
   assert.equal(fieldOf(() => request({ clarification: { question: 'Which level?', answer: '' } })), 'answer');
+});
+
+void test('busy times from a calendar are clipped to the plan’s days and merged', () => {
+  const value = request({
+    busy: [
+      // From today into tomorrow, the plan's first day.
+      { start: '2026-09-24T09:00', end: '2026-09-25T08:00' },
+      { start: '2026-10-01T10:00', end: '2026-10-01T11:00' },
+      { start: '2026-10-01T09:00', end: '2026-10-01T10:00' },
+      // A long leave past the last day a plan can use.
+      { start: '2027-03-20T00:00', end: '2027-06-01T00:00' },
+    ],
+  });
+  assert.deepEqual(value.busy, [
+    { start: '2026-09-25T00:00', end: '2026-09-25T08:00' },
+    { start: '2026-10-01T09:00', end: '2026-10-01T11:00' },
+    { start: '2027-03-20T00:00', end: '2027-03-26T00:00' },
+  ]);
 });
 
 void test('the reading is checked again in code and mapped to camelCase', () => {

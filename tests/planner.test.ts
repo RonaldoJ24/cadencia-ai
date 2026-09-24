@@ -116,8 +116,27 @@ void test('specs and busy times are validated before scheduling', () => {
   assert.throws(() => validateGoalSpec({ ...base, window: { start: '08:50', end: '09:00' } }), /at least 15 minutes/u);
   assert.throws(() => validateGoalSpec({ ...base, days: [0, 0] }), /must not repeat/u);
   assert.throws(() => validateGoalSpec({ ...base, startDate: '2026-02-30' }), /calendar date/u);
-  assert.throws(() => validateBusy([{ start: '2026-10-01T09:00', end: '2026-10-01T08:00' }]), SpecError);
-  assert.deepEqual(validateBusy(undefined), []);
+});
+
+void test('busy times of any length are clipped to the plan’s dates and merged', () => {
+  const range = { from: '2026-09-25', to: '2027-03-25' };
+  assert.throws(() => validateBusy([{ start: '2026-10-01T09:00', end: '2026-10-01T08:00' }], range), /end after it starts/u);
+  assert.throws(() => validateBusy([{ start: '2026-10-01 09:00', end: '2026-10-01T10:00' }], range), /YYYY-MM-DDTHH:mm/u);
+  assert.throws(() => validateBusy(Array.from({ length: 2_001 }, () => ({ start: '2026-10-01T09:00', end: '2026-10-01T10:00' })), range), /at most 2000/u);
+  assert.deepEqual(validateBusy(undefined, range), []);
+  assert.deepEqual(validateBusy([
+    // A leave that runs past the plan's last day, sent first and out of order.
+    { start: '2027-03-01T00:00', end: '2027-09-01T00:00' },
+    { start: '2026-10-02T09:30', end: '2026-10-02T11:00' },
+    { start: '2026-10-02T09:00', end: '2026-10-02T10:00' },
+    // Before the plan starts, and straddling its first day.
+    { start: '2026-09-01T09:00', end: '2026-09-02T10:00' },
+    { start: '2026-09-24T20:00', end: '2026-09-25T07:00' },
+  ], range), [
+    { start: '2026-09-25T00:00', end: '2026-09-25T07:00' },
+    { start: '2026-10-02T09:00', end: '2026-10-02T11:00' },
+    { start: '2027-03-01T00:00', end: '2027-03-26T00:00' },
+  ]);
 });
 
 void test('a valid 10K draft passes and each broken rule is reported', () => {

@@ -23,6 +23,20 @@ export type GoalCopy = {
   backToAuto: string;
   fields: { deadline: string; days: string; window: string; from: string; to: string; weeklyMinutes: string; sessionMinutes: string; level: string };
   levels: Readonly<Record<Exclude<Level, 'unknown'>, string>>;
+  calendar: {
+    label: string;
+    import: string;
+    replace: string;
+    reading: string;
+    remove: string;
+    loaded: (count: number, until: string, file: string) => string;
+    none: (until: string, file: string) => string;
+    privacy: string;
+    repeatsReadOnce: (count: number) => string;
+    unknownZones: (zones: string) => string;
+    truncated: string;
+    errors: { too_large: string; not_a_calendar: string; too_many_events: string; unreadable: string };
+  };
   modeLabel: string;
   modeHelp: string;
   demo: string;
@@ -116,6 +130,25 @@ const EN: GoalCopy = {
     level: 'Level',
   },
   levels: { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced' },
+  calendar: {
+    label: 'Busy times',
+    import: 'Import a calendar (.ics)',
+    replace: 'Import another',
+    reading: 'Reading your calendar…',
+    remove: 'Remove',
+    loaded: (count, until, file) => `${count.toLocaleString('en-US')} busy ${count === 1 ? 'time' : 'times'} through ${until}, from ${file}`,
+    none: (until, file) => `No busy times through ${until} in ${file}`,
+    privacy: 'The file is read on this device. Only the start and end of each busy time are sent with your plan; titles, places and other details stay here.',
+    repeatsReadOnce: (count) => `${count} repeating ${count === 1 ? 'event uses' : 'events use'} a rule Cadencia doesn’t expand, so only the first time counts.`,
+    unknownZones: (zones) => `Times in ${zones} were read as your local time.`,
+    truncated: 'This calendar has more busy times than Cadencia reads; only the earliest are used.',
+    errors: {
+      too_large: 'That file is too large; the limit is 10 MB.',
+      not_a_calendar: 'That file isn’t a calendar (.ics).',
+      too_many_events: 'That calendar has more than 50,000 events. Export a shorter date range and try again.',
+      unreadable: 'That file couldn’t be read.',
+    },
+  },
   modeLabel: 'Who reads and drafts',
   modeHelp: 'Either way, code sizes the calendar, checks the draft and places every session.',
   demo: 'Demo',
@@ -234,6 +267,25 @@ const ES: GoalCopy = {
     level: 'Nivel',
   },
   levels: { beginner: 'Principiante', intermediate: 'Intermedio', advanced: 'Avanzado' },
+  calendar: {
+    label: 'Horarios ocupados',
+    import: 'Importar un calendario (.ics)',
+    replace: 'Importar otro',
+    reading: 'Leyendo tu calendario…',
+    remove: 'Quitar',
+    loaded: (count, until, file) => `${count.toLocaleString('es-MX')} ${count === 1 ? 'horario ocupado' : 'horarios ocupados'} hasta el ${until}, de ${file}`,
+    none: (until, file) => `${file} no tiene horarios ocupados hasta el ${until}`,
+    privacy: 'El archivo se lee en este dispositivo. Solo se envían con tu plan el inicio y el fin de cada horario ocupado; los títulos, lugares y demás detalles se quedan aquí.',
+    repeatsReadOnce: (count) => `${count} ${count === 1 ? 'evento repetido usa' : 'eventos repetidos usan'} una regla que Cadencia no expande, así que solo cuenta la primera vez.`,
+    unknownZones: (zones) => `Las horas en ${zones} se leyeron como tu hora local.`,
+    truncated: 'Este calendario tiene más horarios ocupados de los que Cadencia lee; solo se usan los primeros.',
+    errors: {
+      too_large: 'Ese archivo es demasiado grande; el límite es de 10 MB.',
+      not_a_calendar: 'Ese archivo no es un calendario (.ics).',
+      too_many_events: 'Ese calendario tiene más de 50,000 eventos. Exporta un periodo más corto e inténtalo de nuevo.',
+      unreadable: 'No se pudo leer ese archivo.',
+    },
+  },
   modeLabel: 'Quién lee y propone',
   modeHelp: 'En ambos casos, el código dimensiona el calendario, revisa el borrador y acomoda cada sesión.',
   demo: 'Demo',

@@ -2,6 +2,7 @@ import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { POST } from '../app/api/routine/route.ts';
 import { normalizeServiceUrl, serviceEndpoint } from '../lib/server/live.ts';
+import { addDays, weekdayOf } from '../lib/planner/time.ts';
 import { migratedDb } from './helpers/sqlite-d1.ts';
 
 // The live goal run's calls to the Python service, end to end through the
@@ -129,6 +130,51 @@ void test('a goal run calls read-goal and then draft with the server token and n
     assert.equal(call.init.redirect, 'manual');
   }
   assert.deepEqual(JSON.parse(bodyOf(calls[0].init)), { ...input, provided: [] });
+});
+
+void test('busy times shape the room the draft is offered but never reach the service', async () => {
+  // Every Monday evening is taken, so of Monday and Wednesday only Wednesday is left.
+  const busy = Array.from({ length: 26 }, (_, index) => {
+    const monday = addDays('2026-09-28', index * 7);
+    return { start: `${monday}T17:00`, end: `${monday}T23:00` };
+  });
+  const bodies: string[] = [];
+  const rooms: number[] = [];
+  const fetcher: typeof fetch = async (url, init) => {
+    bodies.push(bodyOf(init));
+    if (urlOf(url).endsWith('/v1/read-goal')) return json({ reading, scope_refused: false, meta: { attempts: 1 } });
+    const payload = JSON.parse(bodyOf(init)) as { calendar: { weeks: Array<{ room: number }> } };
+    rooms.push(...payload.calendar.weeks.map((week) => week.room));
+    return json({ draft: draftFor(payload.calendar.weeks.length), meta: { attempts: 1 } });
+  };
+  const response = await withFetch(fetcher, () => post({ mode: 'deepseek', kind: 'goal', input: { ...input, busy } }));
+  assert.equal(response.status, 200);
+  const body = (await response.json()) as { outcome: string; plan: { weeks: Array<{ sessions: Array<{ date: string }> }> } };
+  assert.equal(body.outcome, 'ready');
+  assert.equal(bodies.length, 2);
+  for (const sent of bodies) assert.doesNotMatch(sent, /busy|T17:00|T23:00/u);
+  assert.ok(rooms.length > 0 && rooms.every((room) => room <= 1));
+  const days = body.plan.weeks.flatMap((week) => week.sessions.map((session) => weekdayOf(session.date)));
+  assert.ok(days.length > 0 && days.every((day) => day === 2));
+});
+
+void test('a request with the most busy times fits the body limit, and a larger body is refused', async () => {
+  // 2,000 half-hour busy times, about 104 KB of JSON.
+  const busy = Array.from({ length: 2_000 }, (_, index) => {
+    const date = addDays('2026-09-25', Math.floor(index / 11));
+    const hour = String(8 + (index % 11)).padStart(2, '0');
+    return { start: `${date}T${hour}:00`, end: `${date}T${hour}:30` };
+  });
+  const fetcher: typeof fetch = async (url, init) => {
+    if (urlOf(url).endsWith('/v1/read-goal')) return json({ reading, scope_refused: false, meta: { attempts: 1 } });
+    const payload = JSON.parse(bodyOf(init)) as { calendar: { weeks: unknown[] } };
+    return json({ draft: draftFor(payload.calendar.weeks.length), meta: { attempts: 1 } });
+  };
+  const full = await withFetch(fetcher, () => post({ mode: 'deepseek', kind: 'goal', input: { ...input, busy } }));
+  assert.equal(full.status, 200);
+  const oversized = await withFetch(fetcher, () => post({ mode: 'deepseek', kind: 'goal', input: { ...input, busy, notes: 'x'.repeat(30_000) } }));
+  assert.equal(oversized.status, 400);
+  assert.equal(((await oversized.json()) as { error: string }).error.length > 0, true);
 });
 
 void test('service errors stay generic and expose at most an opaque request ID', async () => {

@@ -3,8 +3,8 @@
 // calendar, so each one is checked here before any scheduling runs.
 
 import { isLanguage } from '../i18n.ts';
-import { daysBetween, isLocalDate, isLocalTime, minutesOf, splitDateTime } from './time.ts';
-import type { BusyInterval, Domain, GoalSpec, Level, Weekday } from './types.ts';
+import { addDays, daysBetween, isLocalDate, isLocalTime, minutesOf, splitDateTime } from './time.ts';
+import type { BusyInterval, Domain, GoalSpec, Level, LocalDate, Weekday } from './types.ts';
 
 export const PLAN_LIMITS = {
   maxHorizonDays: 26 * 7,
@@ -14,7 +14,6 @@ export const PLAN_LIMITS = {
   maxWeeklyCapMinutes: 1_200,
   maxTitleChars: 160,
   maxBusyIntervals: 2_000,
-  maxBusyDays: 31,
 } as const;
 
 export class SpecError extends Error {
@@ -107,21 +106,35 @@ export function validateGoalSpec(raw: unknown): GoalSpec {
   };
 }
 
-/** Busy times from a calendar; each must be a forward interval of at most a month. */
-export function validateBusy(raw: unknown): BusyInterval[] {
+/**
+ * Busy times from a calendar: forward intervals of any length, clipped to the
+ * dates a plan can use and merged. A long absence is a common entry, and
+ * clipping keeps it from costing more than the days it covers.
+ */
+export function validateBusy(raw: unknown, range: { from: LocalDate; to: LocalDate }): BusyInterval[] {
   if (raw === undefined) return [];
   if (!Array.isArray(raw) || raw.length > PLAN_LIMITS.maxBusyIntervals) {
     throw new SpecError('busy', `busy must list at most ${PLAN_LIMITS.maxBusyIntervals} intervals`);
   }
-  return raw.map((item, index) => {
+  // 'YYYY-MM-DDTHH:mm' strings sort in time order, so they compare directly.
+  const lower = `${range.from}T00:00`;
+  const upper = `${addDays(range.to, 1)}T00:00`;
+  const spans = raw.flatMap((item, index): Array<[string, string]> => {
     const value = record(item, `busy[${index}]`);
-    const start = typeof value.start === 'string' ? splitDateTime(value.start) : null;
-    const end = typeof value.end === 'string' ? splitDateTime(value.end) : null;
+    const start = typeof value.start === 'string' && splitDateTime(value.start) ? value.start : null;
+    const end = typeof value.end === 'string' && splitDateTime(value.end) ? value.end : null;
     if (!start || !end) throw new SpecError(`busy[${index}]`, 'busy times must use YYYY-MM-DDTHH:mm');
-    const days = daysBetween(start.date, end.date);
-    if (days < 0 || (days === 0 && end.minutes <= start.minutes) || days > PLAN_LIMITS.maxBusyDays) {
-      throw new SpecError(`busy[${index}]`, 'a busy time must end after it starts and last at most a month');
-    }
-    return { start: value.start as string, end: value.end as string };
+    if (end <= start) throw new SpecError(`busy[${index}]`, 'a busy time must end after it starts');
+    const from = start > lower ? start : lower;
+    const to = end < upper ? end : upper;
+    return from < to ? [[from, to]] : [];
   });
+  spans.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  const merged: Array<[string, string]> = [];
+  for (const [start, end] of spans) {
+    const last = merged[merged.length - 1];
+    if (last && start <= last[1]) last[1] = end > last[1] ? end : last[1];
+    else merged.push([start, end]);
+  }
+  return merged.map(([start, end]) => ({ start, end }));
 }

@@ -2036,6 +2036,51 @@ textarea:focus-visible {
   opacity: 0.55;
 }
 
+.calendar-import {
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 0 6px;
+  border-bottom: 1px solid rgb(201 216 201 / 55%);
+}
+
+.calendar-import > .field-label {
+  margin-top: 6px;
+}
+
+.calendar-import-body {
+  min-width: 0;
+}
+
+.calendar-import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.calendar-status,
+.calendar-warning,
+.calendar-error {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.calendar-status {
+  display: block;
+  color: var(--foreground);
+}
+
+.calendar-warning {
+  color: #7a5b1e;
+}
+
+.calendar-error {
+  color: #a1352b;
+}
+
 .day-toggle-row.compact {
   margin: 0;
 }
@@ -2544,6 +2589,11 @@ textarea:focus-visible {
 @media (max-width: 600px) {
   .setting-row {
     grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .calendar-import {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
   }
 
   .setting-row .setting-control {

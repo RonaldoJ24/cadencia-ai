@@ -4,7 +4,7 @@
 // the rest. Every field records where its value came from.
 
 import { isLanguage, type Language } from '../i18n.ts';
-import { PLAN_LIMITS, SpecError, hasControl, validateGoalSpec } from './spec.ts';
+import { PLAN_LIMITS, SpecError, hasControl, validateBusy, validateGoalSpec } from './spec.ts';
 import { addDays, daysBetween, isLocalDate, isLocalTime, minutesOf } from './time.ts';
 import type { BusyInterval, Domain, GoalSpec, Level, LocalDate, TimeWindow, Weekday } from './types.ts';
 
@@ -218,10 +218,9 @@ export function validateGoalRequest(raw: unknown, serverToday?: LocalDate): Goal
     throw new SpecError('today', 'today does not match the current date');
   }
   const controls = controlsOf(value.controls, value.today);
-  // Calendar import arrives with its own limits and indexing in a later phase.
-  if (value.busy !== undefined && (!Array.isArray(value.busy) || value.busy.length > 0)) {
-    throw new SpecError('busy', 'busy times are not accepted yet');
-  }
+  // Busy times from an imported calendar, clipped to the days a plan can use.
+  const { first, last } = deadlineRange(value.today);
+  const busy = validateBusy(value.busy, { from: first, to: last });
   let clarification: GoalRequest['clarification'] = null;
   if (value.clarification !== undefined && value.clarification !== null) {
     const answer = record(value.clarification);
@@ -231,7 +230,7 @@ export function validateGoalRequest(raw: unknown, serverToday?: LocalDate): Goal
       answer: plainText(answer.answer, 'answer', GOAL_LIMITS.maxAnswerChars),
     };
   }
-  return { text, language: value.language, today: value.today, controls, busy: [], clarification };
+  return { text, language: value.language, today: value.today, controls, busy, clarification };
 }
 
 /** The settings the person touched, named as the service expects. */
