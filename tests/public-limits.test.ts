@@ -165,7 +165,7 @@ void test('isolated daily quota race: 20 distinct IPs simultaneously at global d
   const requests = Array.from({ length: 20 }, (_, index) =>
     POST(
       makeRequest(
-        { input: baseInput, mode: 'deepseek', kind: 'goal' },
+        { input: baseInput, mode: 'live', kind: 'goal' },
         { 'cf-connecting-ip': `203.0.113.${index + 1}` },
       ),
       {
@@ -229,7 +229,7 @@ void test('isolated global concurrency race: 11 distinct IPs simultaneously at g
   const requests = Array.from({ length: 11 }, (_, index) =>
     POST(
       makeRequest(
-        { input: baseInput, mode: 'deepseek', kind: 'goal' },
+        { input: baseInput, mode: 'live', kind: 'goal' },
         { 'cf-connecting-ip': `198.51.100.${index + 1}` },
       ),
       {
@@ -274,7 +274,7 @@ void test('isolated global concurrency race: 11 distinct IPs simultaneously at g
    const requests = Array.from({ length: 5 }, () =>
      POST(
        makeRequest(
-         { input: baseInput, mode: 'deepseek', kind: 'goal' },
+         { input: baseInput, mode: 'live', kind: 'goal' },
          { 'cf-connecting-ip': ip },
        ),
        {
@@ -311,7 +311,7 @@ void test('isolated global concurrency race: 11 distinct IPs simultaneously at g
    for (let i = 0; i < 5; i += 1) {
      await POST(
        makeRequest(
-         { input: baseInput, mode: 'deepseek', kind: 'goal' },
+         { input: baseInput, mode: 'live', kind: 'goal' },
          { 'cf-connecting-ip': ip },
        ),
        {
@@ -328,7 +328,7 @@ void test('isolated global concurrency race: 11 distinct IPs simultaneously at g
    const testMs = NOW_MS + 5 * 65_000;
    const res = await POST(
      makeRequest(
-       { input: baseInput, mode: 'deepseek', kind: 'goal' },
+       { input: baseInput, mode: 'live', kind: 'goal' },
        { 'cf-connecting-ip': ip },
      ),
      {
@@ -353,7 +353,7 @@ void test('isolated global concurrency race: 11 distinct IPs simultaneously at g
    // Request with spoofed x-real-ip but missing cf-connecting-ip
    const spoofed = await POST(
      makeRequest(
-       { input: baseInput, mode: 'deepseek', kind: 'goal' },
+       { input: baseInput, mode: 'live', kind: 'goal' },
        { 'x-real-ip': '1.2.3.4' },
      ),
      {
@@ -371,7 +371,7 @@ void test('isolated global concurrency race: 11 distinct IPs simultaneously at g
    // In non-bypassable fallback mode, missing IP routes to a single shared bucket
    const fallbackRes = await POST(
      makeRequest(
-       { input: baseInput, mode: 'deepseek', kind: 'goal' },
+       { input: baseInput, mode: 'live', kind: 'goal' },
        {},
      ),
      {
@@ -405,7 +405,7 @@ void test('isolated global concurrency race: 11 distinct IPs simultaneously at g
    for (let i = 0; i < 5; i += 1) {
      await POST(
        makeRequest(
-         { input: baseInput, mode: 'deepseek', kind: 'goal' },
+         { input: baseInput, mode: 'live', kind: 'goal' },
          { 'cf-connecting-ip': ip, cookie: 'auth_token=valid-cookie-1' },
        ),
        {
@@ -421,7 +421,7 @@ void test('isolated global concurrency race: 11 distinct IPs simultaneously at g
    // Attempt bypass with cleared / altered cookie
    const bypass = await POST(
      makeRequest(
-       { input: baseInput, mode: 'deepseek', kind: 'goal' },
+       { input: baseInput, mode: 'live', kind: 'goal' },
        { 'cf-connecting-ip': ip, cookie: 'auth_token=fresh-reset-cookie' },
      ),
      {
@@ -441,7 +441,7 @@ void test('isolated global concurrency race: 11 distinct IPs simultaneously at g
  
    const res = await POST(
      makeRequest(
-       { input: baseInput, mode: 'deepseek', kind: 'goal' },
+       { input: baseInput, mode: 'live', kind: 'goal' },
        { 'cf-connecting-ip': '198.51.100.5' },
      ),
    );
@@ -461,7 +461,7 @@ void test('isolated global concurrency race: 11 distinct IPs simultaneously at g
  
    const res = await POST(
      makeRequest(
-       { input: baseInput, mode: 'deepseek', kind: 'goal' },
+       { input: baseInput, mode: 'live', kind: 'goal' },
        { 'cf-connecting-ip': '198.51.100.4' },
      ),
      {
@@ -488,7 +488,7 @@ void test('missing HMAC secret throws and fails closed with 503', async () => {
 
   const res = await POST(
     makeRequest(
-      { input: baseInput, mode: 'deepseek', kind: 'goal' },
+      { input: baseInput, mode: 'live', kind: 'goal' },
       { 'cf-connecting-ip': '198.51.100.9' },
     ),
     {

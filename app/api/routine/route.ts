@@ -254,8 +254,9 @@ export async function POST(request: Request, deps?: PublicRoutineDeps): Promise<
 
   const language = languageFrom(dict(value.input)?.language);
   const apiCopy = copyFor(language).api;
-  // Every run here is live; the demo runs in the browser.
-  if (value.mode !== 'deepseek') {
+  // Every run here is live; the demo runs in the browser. 'deepseek' is the name
+  // pages loaded before 2026-09-25 still send.
+  if (value.mode !== 'live' && value.mode !== 'deepseek') {
     return errorResponse(apiCopy.invalidMode, 400, 'invalid_mode', undefined, undefined, EVENT);
   }
   if (value.kind !== undefined && value.kind !== 'goal' && value.kind !== 'replan') {

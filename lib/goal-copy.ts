@@ -130,7 +130,7 @@ export type GoalCopy = {
 
 const EN: GoalCopy = {
   brandNote: 'Goal planner',
-  modePill: { demo: 'Demo · recorded samples', live: 'Live AI · DeepSeek' },
+  modePill: { demo: 'Demo · recorded samples', live: 'Live AI · GPT-6 Luna' },
   eyebrow: 'Your goal → a plan that fits your weeks',
   intro: 'Write what you want to reach and by when. A model reads it and drafts the sessions; code checks every rule and fits them into your calendar.',
   goalLabel: 'What do you want to reach?',
@@ -185,7 +185,7 @@ const EN: GoalCopy = {
   demo: 'Demo',
   demoHelp: 'Recorded model outputs for the examples. No model call.',
   live: 'Live AI',
-  liveHelp: 'DeepSeek reads your goal and drafts sessions. Up to 5 plans a day.',
+  liveHelp: 'GPT-6 Luna reads your goal and drafts sessions. Up to 5 plans a day.',
   liveUnavailable: 'Live AI is not available right now. The demo still works.',
   submit: 'Plan it',
   planning: 'Planning…',
@@ -305,7 +305,7 @@ const EN: GoalCopy = {
 
 const ES: GoalCopy = {
   brandNote: 'Planeador de metas',
-  modePill: { demo: 'Demo · muestras grabadas', live: 'IA en vivo · DeepSeek' },
+  modePill: { demo: 'Demo · muestras grabadas', live: 'IA en vivo · GPT-6 Luna' },
   eyebrow: 'Tu meta → un plan que cabe en tus semanas',
   intro: 'Escribe qué quieres lograr y para cuándo. Un modelo lo lee y propone las sesiones; el código revisa cada regla y las acomoda en tu calendario.',
   goalLabel: '¿Qué quieres lograr?',
@@ -360,7 +360,7 @@ const ES: GoalCopy = {
   demo: 'Demo',
   demoHelp: 'Salidas del modelo grabadas para los ejemplos. Sin llamar al modelo.',
   live: 'IA en vivo',
-  liveHelp: 'DeepSeek lee tu meta y propone sesiones. Hasta 5 planes al día.',
+  liveHelp: 'GPT-6 Luna lee tu meta y propone sesiones. Hasta 5 planes al día.',
   liveUnavailable: 'La IA en vivo no está disponible ahora. La demo sigue funcionando.',
   submit: 'Planear',
   planning: 'Planeando…',
