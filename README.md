@@ -102,8 +102,9 @@ four recorded reasons.
 Every live run reserves its worst case before any model call (23,584 micro-USD
 for a goal plan, 1,952 for a replan, at GPT-6 Luna's prices, defined in
 `lib/server/spend.ts`) and
-settles once from what each call reported; a goal run usually settles at about
-$0.002. Runs stop before the model when the daily or monthly cap would be passed
+settles once from what each call reported. A goal run costs about a tenth of a
+cent: in the evaluation, Luna's runs cost a median of $0.0008 and at most
+$0.0014. Runs stop before the model when the daily or monthly cap would be passed
 (by default $0.50 a day and $5.00 a month), when live AI is switched off, or
 after a visitor's 25 live runs of the day (150 across all visitors). The demo
 always works. Details are in [DEPLOYMENT.md](DEPLOYMENT.md).
