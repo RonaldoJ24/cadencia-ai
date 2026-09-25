@@ -1,4 +1,4 @@
-// Picks recorded from the real model on 2026-09-24 through the replan service,
+// Picks recorded from GPT-6 Luna on 2026-09-25 through the replan service,
 // for the demo's four reasons against the 10K demo plan with a simulated
 // missed week. The demo replays them; code still builds and checks every
 // option on the visitor's own plan.
@@ -8,142 +8,142 @@ export const REPLAN_SAMPLES = [
   "reason": "trip",
   "language": "en",
   "text": "I was away on a work trip all week, and I’m back now.",
-  "recordedOn": "2026-09-24",
+  "recordedOn": "2026-09-25",
   "pick": {
    "decision": "pick",
    "option": "repeat",
-   "why": "Since your work trip is over and you're back now, redoing what you missed fits best.",
+   "why": "Since your work trip is over and you’re back, repeating what you missed fits best.",
    "abstain": null
   },
   "meta": {
-   "model": "deepseek-v4-flash",
+   "model": "gpt-6-luna",
    "promptVersion": "replan-aff51c833ae2",
-   "requestId": "bdae189c-7bd0-44ee-9d6c-5d7a1c174ed9"
+   "requestId": "dcc50c78-f55f-4667-a02b-bcb79ef41b67"
   }
  },
  {
   "reason": "swamped",
   "language": "en",
   "text": "Work has been overwhelming for weeks and I’m worn out.",
-  "recordedOn": "2026-09-24",
+  "recordedOn": "2026-09-25",
   "pick": {
    "decision": "pick",
    "option": "lighter",
-   "why": "Since work has left you worn out for weeks, lighter weeks that keep the most important sessions fit best.",
+   "why": "Lighter weeks fit because work has been overwhelming and you’re worn out.",
    "abstain": null
   },
   "meta": {
-   "model": "deepseek-v4-flash",
+   "model": "gpt-6-luna",
    "promptVersion": "replan-aff51c833ae2",
-   "requestId": "8894af67-fc4b-46f6-8f6b-a2d6b9353c91"
+   "requestId": "6ee524c3-9601-44d8-91ad-9597b1aeb8ce"
   }
  },
  {
   "reason": "forgot",
   "language": "en",
   "text": "I just forgot. I’m ready to get back to it.",
-  "recordedOn": "2026-09-24",
+  "recordedOn": "2026-09-25",
   "pick": {
    "decision": "pick",
    "option": "keep",
-   "why": "Since you just forgot and feel ready to get back to it, continuing the plan as it is fits best.",
+   "why": "Since this was a one-off miss and you’re ready to continue, keep going with the plan as it is.",
    "abstain": null
   },
   "meta": {
-   "model": "deepseek-v4-flash",
+   "model": "gpt-6-luna",
    "promptVersion": "replan-aff51c833ae2",
-   "requestId": "160cc9d2-743e-4171-8a69-a1fb93180171"
+   "requestId": "2f568f41-bb21-4ec3-9706-c6955b16891a"
   }
  },
  {
   "reason": "pain",
   "language": "en",
   "text": "My knee hurts when I run.",
-  "recordedOn": "2026-09-24",
+  "recordedOn": "2026-09-25",
   "pick": {
    "decision": "abstain",
    "option": null,
    "why": null,
    "abstain": {
     "category": "medical",
-    "reason": "Knee pain should be checked by a professional before you continue with the plan."
+    "reason": "Knee pain can affect safe training; check with a medical professional before continuing."
    }
   },
   "meta": {
-   "model": "deepseek-v4-flash",
+   "model": "gpt-6-luna",
    "promptVersion": "replan-aff51c833ae2",
-   "requestId": "39ea8a6e-fabe-45e0-8fa7-bf57261d6ed5"
+   "requestId": "b4268b6b-99cb-4f8f-bab6-4e6328ba3ca3"
   }
  },
  {
   "reason": "trip",
   "language": "es",
   "text": "Estuve de viaje de trabajo toda la semana y ya regresé.",
-  "recordedOn": "2026-09-24",
+  "recordedOn": "2026-09-25",
   "pick": {
    "decision": "pick",
    "option": "repeat",
-   "why": "Como el viaje ya terminó, retomar lo que se perdió encaja bien con tu situación.",
+   "why": "Como ya regresaste del viaje, repetir lo que te perdiste encaja con tu situación.",
    "abstain": null
   },
   "meta": {
-   "model": "deepseek-v4-flash",
+   "model": "gpt-6-luna",
    "promptVersion": "replan-aff51c833ae2",
-   "requestId": "c90a4faa-5c9e-4f60-8471-d33565a3c20a"
+   "requestId": "596b209f-43af-4ab2-8063-a1b89c496d78"
   }
  },
  {
   "reason": "swamped",
   "language": "es",
   "text": "El trabajo me ha rebasado desde hace semanas y ando sin energía.",
-  "recordedOn": "2026-09-24",
+  "recordedOn": "2026-09-25",
   "pick": {
    "decision": "pick",
    "option": "lighter",
-   "why": "Como el trabajo te ha rebasado y sigues sin energía, conviene seguir con semanas más ligeras que mantengan lo esencial.",
+   "why": "Las semanas más ligeras encajan con el estrés y la falta de energía que vienes sintiendo.",
    "abstain": null
   },
   "meta": {
-   "model": "deepseek-v4-flash",
+   "model": "gpt-6-luna",
    "promptVersion": "replan-aff51c833ae2",
-   "requestId": "068be80f-7731-4458-9958-f40d93ca1a50"
+   "requestId": "7585cc06-e287-465e-b1ea-29a2b1672698"
   }
  },
  {
   "reason": "forgot",
   "language": "es",
   "text": "Simplemente se me olvidó. Ya quiero retomarlo.",
-  "recordedOn": "2026-09-24",
+  "recordedOn": "2026-09-25",
   "pick": {
    "decision": "pick",
    "option": "keep",
-   "why": "Como solo fue un olvido y ya quieres retomarlo, lo mejor es continuar con el plan tal como está.",
+   "why": "Como solo se te olvidó y ya estás listo para continuar, puedes seguir con el plan tal como está.",
    "abstain": null
   },
   "meta": {
-   "model": "deepseek-v4-flash",
+   "model": "gpt-6-luna",
    "promptVersion": "replan-aff51c833ae2",
-   "requestId": "dab8dfa0-379a-415d-a594-9290d3c93998"
+   "requestId": "00960e2e-43e2-40ae-b5df-195107b15f1a"
   }
  },
  {
   "reason": "pain",
   "language": "es",
   "text": "Me duele la rodilla cuando corro.",
-  "recordedOn": "2026-09-24",
+  "recordedOn": "2026-09-25",
   "pick": {
    "decision": "abstain",
    "option": null,
    "why": null,
    "abstain": {
     "category": "medical",
-    "reason": "El dolor de rodilla al correr es una señal para consultar con un profesional antes de continuar con el plan."
+    "reason": "El dolor de rodilla requiere consultar con un profesional antes de continuar."
    }
   },
   "meta": {
-   "model": "deepseek-v4-flash",
+   "model": "gpt-6-luna",
    "promptVersion": "replan-aff51c833ae2",
-   "requestId": "0014072a-26e5-4d28-a8c8-febc83d3c3f2"
+   "requestId": "82c7edb1-1ce0-4f4e-8cd7-1d2cc5c7be55"
   }
  }
 ] as const;
