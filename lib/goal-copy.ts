@@ -6,6 +6,16 @@ import type { ReplanReasonId } from './replan-demo.ts';
 import type { Source } from './planner/goal-input.ts';
 import type { DropReason, Intensity, Level, MoveReason, ReplanOptionId, Role } from './planner/types.ts';
 
+/** 42 s, 5 min or 9 h 18 min: the units read the same in English and Spanish. */
+export function waitTime(seconds: number): string {
+  if (seconds < 60) return `${seconds} s`;
+  const minutes = Math.ceil(seconds / 60);
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest > 0 ? `${hours} h ${rest} min` : `${hours} h`;
+}
+
 export type GoalCopy = {
   brandNote: string;
   modePill: { demo: string; live: string };
@@ -185,7 +195,7 @@ const EN: GoalCopy = {
   demo: 'Demo',
   demoHelp: 'Recorded model outputs for the examples. No model call.',
   live: 'Live AI',
-  liveHelp: 'GPT-6 Luna reads your goal and drafts sessions. Up to 5 plans a day.',
+  liveHelp: 'GPT-6 Luna reads your goal and drafts sessions. Live runs have a daily limit.',
   liveUnavailable: 'Live AI is not available right now. The demo still works.',
   submit: 'Plan it',
   planning: 'Planning…',
@@ -299,7 +309,7 @@ const EN: GoalCopy = {
   errors: {
     generic: 'Something went wrong. Try again.',
     reference: 'Reference',
-    wait: (seconds) => `try again in ${seconds} s`,
+    wait: (seconds) => `try again in ${waitTime(seconds)}`,
   },
 };
 
@@ -360,7 +370,7 @@ const ES: GoalCopy = {
   demo: 'Demo',
   demoHelp: 'Salidas del modelo grabadas para los ejemplos. Sin llamar al modelo.',
   live: 'IA en vivo',
-  liveHelp: 'GPT-6 Luna lee tu meta y propone sesiones. Hasta 5 planes al día.',
+  liveHelp: 'GPT-6 Luna lee tu meta y propone sesiones. Las ejecuciones en vivo tienen un límite diario.',
   liveUnavailable: 'La IA en vivo no está disponible ahora. La demo sigue funcionando.',
   submit: 'Planear',
   planning: 'Planeando…',
@@ -474,7 +484,7 @@ const ES: GoalCopy = {
   errors: {
     generic: 'Algo salió mal. Inténtalo de nuevo.',
     reference: 'Referencia',
-    wait: (seconds) => `inténtalo de nuevo en ${seconds} s`,
+    wait: (seconds) => `inténtalo de nuevo en ${waitTime(seconds)}`,
   },
 };
 

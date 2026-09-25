@@ -106,11 +106,12 @@ semana y probarlo con cuatro motivos grabados.
 
 Cada ejecución en vivo reserva su costo máximo antes de llamar al modelo (23,584
 micro-USD para un plan, 1,952 para un ajuste, a los precios de GPT-6 Luna,
-definidos en `lib/server/spend.ts`) y se liquida una sola vez con lo que reportó cada llamada.
-Las ejecuciones se detienen antes del modelo si se pasaría el tope diario o
-mensual (por defecto $0.50 al día y $5.00 al mes), si la IA en vivo está apagada,
-o después de las cinco ejecuciones en vivo del día de un visitante. La demo
-siempre funciona. Los detalles están en [DEPLOYMENT.md](DEPLOYMENT.md), en inglés.
+definidos en `lib/server/spend.ts`) y se liquida una sola vez con lo que reportó cada llamada;
+un plan suele liquidarse en unos $0.002. Las ejecuciones se detienen antes del
+modelo si se pasaría el tope diario o mensual (por defecto $0.50 al día y $5.00
+al mes), si la IA en vivo está apagada, o después de las 25 ejecuciones en vivo
+del día de un visitante (150 entre todos los visitantes). La demo siempre
+funciona. Los detalles están en [DEPLOYMENT.md](DEPLOYMENT.md), en inglés.
 
 ## Evaluación
 

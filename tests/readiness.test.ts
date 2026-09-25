@@ -8,7 +8,7 @@ import { migratedDb } from './helpers/sqlite-d1.ts';
 
 const ENV_NAMES = ['CADENCIA_ENABLE_LIVE', 'CADENCIA_INTENT_SERVICE_URL', 'CADENCIA_SERVICE_TOKEN'] as const;
 const RUNTIME_ENV_KEY = '__cadencia_runtime_env_v1';
-const MIGRATIONS = ['0001_beta_loop.sql', '0002_rate_limits.sql', '0003_public_limits.sql', '0005_spend_controls.sql'];
+const MIGRATIONS = ['0001_beta_loop.sql', '0002_rate_limits.sql', '0003_public_limits.sql', '0005_spend_controls.sql', '0006_live_limits.sql'];
 
 async function withEnvironment<T>(
   updates: Partial<Record<(typeof ENV_NAMES)[number], string | undefined>>,

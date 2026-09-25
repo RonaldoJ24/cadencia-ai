@@ -6,7 +6,9 @@
   import { POST } from '../app/api/routine/route.ts';
   import { checkRateLimit } from '../lib/server/ratelimit.ts';
   import {
+    DEFAULT_PUBLIC_LIMITS,
     hmacIpHash,
+    loadPublicLimits,
     secondsUntilUtcMidnight,
   } from '../lib/server/public_limits.ts';
  
@@ -65,13 +67,18 @@
  async function migrated(): Promise<Db & { raw: DatabaseSync }> {
    const db = sqliteDb();
    db.raw.exec('PRAGMA foreign_keys = ON');
-   for (const file of ['0001_beta_loop.sql', '0002_rate_limits.sql', '0003_public_limits.sql', '0005_spend_controls.sql']) {
+   for (const file of ['0001_beta_loop.sql', '0002_rate_limits.sql', '0003_public_limits.sql', '0005_spend_controls.sql', '0006_live_limits.sql']) {
      db.raw.exec(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'));
    }
    // Dollar caps are tested in spend.test.ts; here they must never be the
    // limit that decides, so request limits are tested on their own.
    db.raw.exec("UPDATE app_settings SET value = '1000000000' WHERE key IN ('daily_cap_microusd', 'monthly_cap_microusd')");
    return db;
+ }
+
+ /** A count limit as the migrations leave it, so these tests follow the real values. */
+ function configured(db: Db & { raw: DatabaseSync }, key: string): number {
+   return (db.raw.prepare('SELECT value FROM public_limits_config WHERE key = ?').get(key) as { value: number }).value;
  }
  
  // Goal runs through the public route. A clarifying question ends a run after
@@ -116,6 +123,10 @@
    });
  }
  
+ void test('the fallback limits match what the migrations leave in D1', async () => {
+   assert.deepEqual(await loadPublicLimits(await migrated()), DEFAULT_PUBLIC_LIMITS);
+ });
+
  void test('atomic admission on checkRateLimit: simultaneous requests from same key cannot exceed limit', async () => {
    const db = await migrated();
    const key = 'ip:test-atomic-ratelimit:public_live';
@@ -140,14 +151,15 @@
    assert.equal(rejectedCount, 8, '8 requests must be rejected');
  });
  
-void test('isolated daily quota race: 20 distinct IPs simultaneously at global daily 49 and concurrency 0 admits at most 1 and caps count at 50', async () => {
+void test('isolated daily quota race: 20 distinct IPs simultaneously one below the global daily cap and at concurrency 0 admit at most 1 and stop the count at the cap', async () => {
   const db = await migrated();
   const day = NOW_ISO.slice(0, 10);
+  const cap = configured(db, 'global_daily_cap');
 
-  // Pre-seed global daily usage at 49 (concurrency is 0)
+  // Pre-seed global daily usage one below the cap (concurrency is 0)
   db.raw
     .prepare('INSERT INTO public_daily_usage (scope, day, count) VALUES (?, ?, ?)')
-    .run('global', day, 49);
+    .run('global', day, cap - 1);
 
   let providerCallsStarted = 0;
   let releaseProviderGate: () => void;
@@ -185,7 +197,7 @@ void test('isolated daily quota race: 20 distinct IPs simultaneously at global d
   assert.equal(
     providerCallsStarted,
     1,
-    'AT MOST 1 provider call must start at daily 49 / concurrency 0',
+    'AT MOST 1 provider call must start one below the daily cap / concurrency 0',
   );
 
   releaseProviderGate!();
@@ -197,11 +209,11 @@ void test('isolated daily quota race: 20 distinct IPs simultaneously at global d
   assert.equal(okResponses.length, 1, 'Exactly 1 request must succeed');
   assert.equal(limitedResponses.length, 19, 'Exactly 19 requests must receive 429');
 
-  // Verify daily usage counter was capped strictly at 50
+  // Verify daily usage counter was capped strictly at the cap
   const finalUsage = db.raw
     .prepare('SELECT count FROM public_daily_usage WHERE scope = ? AND day = ?')
     .get('global', day) as { count: number };
-  assert.equal(finalUsage.count, 50, 'Global daily count must be capped at 50');
+  assert.equal(finalUsage.count, cap, 'Global daily count must stop at the cap');
 });
 
 void test('isolated global concurrency race: 11 distinct IPs simultaneously at global daily 0 and concurrency 9 admits at most 1', async () => {
@@ -306,9 +318,10 @@ void test('isolated global concurrency race: 11 distinct IPs simultaneously at g
    const db = await migrated();
    const ip = '198.51.100.77';
    const fetcher = async () => questionAnswer;
+   const quota = configured(db, 'visitor_daily_quota');
  
-   // Consume 5 daily quota slots
-   for (let i = 0; i < 5; i += 1) {
+   // Consume every daily quota slot
+   for (let i = 0; i < quota; i += 1) {
      await POST(
        makeRequest(
          { input: baseInput, mode: 'live', kind: 'goal' },
@@ -324,8 +337,8 @@ void test('isolated global concurrency race: 11 distinct IPs simultaneously at g
      );
    }
  
-   // 6th call hits visitor daily quota
-   const testMs = NOW_MS + 5 * 65_000;
+   // The next call hits the visitor daily quota
+   const testMs = NOW_MS + quota * 65_000;
    const res = await POST(
      makeRequest(
        { input: baseInput, mode: 'live', kind: 'goal' },
@@ -401,8 +414,9 @@ void test('isolated global concurrency race: 11 distinct IPs simultaneously at g
    const db = await migrated();
    const fetcher = async () => questionAnswer;
    const ip = '198.51.100.99';
+   const quota = configured(db, 'visitor_daily_quota');
  
-   for (let i = 0; i < 5; i += 1) {
+   for (let i = 0; i < quota; i += 1) {
      await POST(
        makeRequest(
          { input: baseInput, mode: 'live', kind: 'goal' },
@@ -429,7 +443,7 @@ void test('isolated global concurrency race: 11 distinct IPs simultaneously at g
        env: mockLiveEnv,
        readGoalFetcher: fetcher,
        nowIso: () => NOW_ISO,
-       nowMs: () => NOW_MS + 5 * 65_000,
+       nowMs: () => NOW_MS + quota * 65_000,
      },
    );
    assert.equal(bypass.status, 429);

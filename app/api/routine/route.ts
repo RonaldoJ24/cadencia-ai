@@ -107,7 +107,7 @@ function slotResult(slot: SlotReservationResult, apiCopy: ApiCopy): ReserveResul
   const message = (() => {
     switch (slot.reason) {
       case 'rate_limited':
-        return apiCopy.rateLimited(slot.retryAfterSec);
+        return apiCopy.rateLimited;
       case 'visitor_quota_exceeded':
         return apiCopy.visitorQuotaExceeded;
       case 'global_quota_exceeded':
