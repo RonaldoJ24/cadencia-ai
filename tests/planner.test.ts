@@ -175,6 +175,17 @@ void test('a valid 10K draft passes and each broken rule is reported', () => {
   assert.deepEqual(codes(overCeiling), ['week_minutes']);
 });
 
+void test('session type ids may start with a digit but stay snake_case', () => {
+  const skeleton = buildSkeleton(tenK, []);
+  // GPT-6 Luna names sessions like "10k_finish"; those ids used to fail the check.
+  const renamed = (id: string) => JSON.parse(JSON.stringify(tenKDraft(skeleton.weeks.length)).replaceAll('"long_run"', JSON.stringify(id))) as Draft;
+  assert.equal(validateDraft(renamed('10k_long_run'), tenK, skeleton).ok, true);
+  for (const bad of ['Long_run', 'long-run', '_long', 'l']) {
+    const result = validateDraft(renamed(bad), tenK, skeleton);
+    assert.ok(!result.ok && result.issues.some((issue) => issue.code === 'session_type_id'), bad);
+  }
+});
+
 void test('fitness load may not jump more than 30% above the average of the last four weeks', () => {
   assert.equal(loadLimit([], 'beginner'), null);
   assert.equal(loadLimit([100], 'beginner'), 130);

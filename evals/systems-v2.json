@@ -1,0 +1,18 @@
+{
+  "frozen": true,
+  "about": "Section 11 of evals/PREREGISTRATION.md, frozen at the tag eval-freeze-v2: arm B2 is GPT-6 Luna with the section 10 settings and the read-goal prompt read-goal-319f4ce09354.",
+  "arms": [
+    {
+      "id": "B2",
+      "label": "GPT-6 Luna, read-goal v2",
+      "serviceUrl": "http://127.0.0.1:8782",
+      "prices": {
+        "inputPerMillion": 0.1,
+        "outputPerMillion": 0.5,
+        "source": "https://developers.openai.com/api/docs/pricing (standard)",
+        "read": "2026-09-24"
+      },
+      "expect": { "readGoal": "read-goal-319f4ce09354", "draft": "draft-6ea4a82036d6", "model": "gpt-6-luna" }
+    }
+  ]
+}
