@@ -59,8 +59,8 @@ const DRAFT = {
   templateId: null,
 };
 
-const READ_USAGE = { promptTokens: 827, completionTokens: 133, attempts: 1, model: 'deepseek-flash' };
-const DRAFT_USAGE = { promptTokens: 952, completionTokens: 2_219, attempts: 1, model: 'deepseek-flash' };
+const READ_USAGE = { promptTokens: 827, completionTokens: 133, attempts: 1, model: 'gpt-6-luna' };
+const DRAFT_USAGE = { promptTokens: 952, completionTokens: 2_219, attempts: 1, model: 'gpt-6-luna' };
 
 function goalRequest(input: Record<string, unknown>, ip: string, stream = true): Request {
   return new Request('http://localhost/api/routine', {
@@ -71,7 +71,7 @@ function goalRequest(input: Record<string, unknown>, ip: string, stream = true):
       ...(stream ? { accept: 'text/event-stream' } : {}),
     },
     body: JSON.stringify({
-      mode: 'deepseek',
+      mode: 'live',
       kind: 'goal',
       input: { text: 'I want to run a 10K by December, weekday mornings', language: 'en', today: '2026-09-24', ...input },
     }),
@@ -128,7 +128,7 @@ void test('a live goal run reserves its worst case, settles every call and frees
   assert.deepEqual(ledger(db), {
     status: 'settled',
     reserved_microusd: GOAL_WORST_CASE_MICROUSD,
-    actual_microusd: 3_357,
+    actual_microusd: 1_355,
     prompt_tokens: 1_779,
     completion_tokens: 2_352,
     attempts: 2,
@@ -181,7 +181,7 @@ void test('a draft call that fails without usage is charged at its worst case', 
   const list = await quiet(() => events(response));
   assert.equal(list.at(-1)?.event, 'error');
   assert.equal(list.at(-1)?.data.stage, 'draft');
-  assert.equal(ledger(db).actual_microusd, 408 + 2 * GOAL_DRAFT_ATTEMPT_MICROUSD);
+  assert.equal(ledger(db).actual_microusd, 150 + 2 * GOAL_DRAFT_ATTEMPT_MICROUSD);
 });
 
 void test('goal runs are live only on the server and answer JSON without the stream header', async () => {
@@ -280,7 +280,7 @@ void test('a goal run the visitor leaves mid-draft still settles its spend and f
   assert.equal(kept.length, 1, 'the run is registered to outlive the response');
   await kept[0];
   assert.equal(ledger(db).status, 'settled');
-  assert.equal(ledger(db).actual_microusd, 3_357);
+  assert.equal(ledger(db).actual_microusd, 1_355);
   const leases = db.raw.prepare('SELECT COUNT(*) AS n FROM public_concurrency').get() as { n: number };
   assert.equal(leases.n, 0);
 });

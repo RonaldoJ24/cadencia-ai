@@ -179,11 +179,11 @@ void test('a live replan reserves its own worst case, sends only the checked req
   );
   assert.equal(list.at(-1)?.data.outcome, 'suggested');
   assert.deepEqual(sent, [REQUEST]);
-  // 760 in and 45 out cost 228 + 54 micro-USD.
+  // 760 in and 45 out cost 76 + 22.5, rounded up to 99 micro-USD.
   assert.deepEqual(ledger(db), {
     status: 'settled',
     reserved_microusd: REPLAN_WORST_CASE_MICROUSD,
-    actual_microusd: 282,
+    actual_microusd: 99,
     prompt_tokens: 760,
     completion_tokens: 45,
     attempts: 1,
