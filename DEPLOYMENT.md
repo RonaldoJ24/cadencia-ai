@@ -80,14 +80,16 @@ Rules that hold across both runtimes:
 ## 3. Cloud Run intent service
 
 Production as read on 2026-09-25 with `gcloud run services describe`: revision
-`cadencia-intents-00009-zws`, image `cadencia-intents:a5ff6e4`, 1 CPU, 256 MiB,
+`cadencia-intents-00010-pfc`, image `cadencia-intents:2a965eb`, 1 CPU, 256 MiB,
 concurrency 8, min 0 and max 1 instances, 60 s timeout, public ingress (the app
 checks the bearer token), `CADENCIA_PROVIDER=openai` with `OPENAI_MODEL=gpt-6-luna`,
 `OPENAI_TOKEN_PARAM=max_completion_tokens`, `OPENAI_TEMPERATURE=0.2` and
 `OPENAI_REASONING_EFFORT=none`, and the OpenAI key and service token from Secret
 Manager. It serves prompts
-`read-goal-f2bbb9b5a76f`, `draft-6ea4a82036d6` and `replan-aff51c833ae2`; a
-service test pins all three, which the evaluation and the demo samples name.
+`read-goal-319f4ce09354`, `draft-6ea4a82036d6` and `replan-aff51c833ae2`; a
+service test pins all three. The scored evaluation used `read-goal-f2bbb9b5a76f`
+(`evals/systems.json`), and its follow-up the current reading prompt
+(`evals/systems-v2.json`).
 
 `/v1/draft` allows 40 s per provider attempt and 50 s in total, so the service
 needs a 60 s request timeout, which the deploy command below sets.
@@ -354,3 +356,9 @@ therefore also resets every visitor's quota for the day.
   and the `openai-api-key` secret; the DeepSeek key is no longer mounted. A live
   goal run afterwards completed all seven stages and logged `gpt-6-luna` for the
   reading and the draft. Rollback: send traffic to revision 00008 (DeepSeek).
+- **2026-09-25**: revision 00010 runs image `2a965eb`: the narrower decline rules
+  that passed the pre-registered follow-up (`read-goal-319f4ce09354`), session ids
+  that may start with a digit, and one retry for an answer that fails the format
+  check. A live goal run afterwards, a goal the earlier prompt declined, was
+  planned and logged the new prompt. The DeepSeek secret is disabled, so
+  revision 00008 is no longer a working rollback; revision 00009 is.
