@@ -229,7 +229,7 @@ curl -sN -X POST "$W/api/routine" -H "origin: $W" -H 'content-type: application/
   -d '{"mode":"live","kind":"goal","input":{"text":"Learn guitar chords by December, Tuesday and Thursday evenings","language":"en","today":"YYYY-MM-DD"}}'
 ```
 
-A live goal run makes two or three model calls and settles at a few tenths of a
+A live goal run makes two or three model calls and settles at about a tenth of a
 cent; it counts toward the caller's 25 live runs a day.
 
 ---
@@ -326,9 +326,10 @@ Goal runs and replans share the quota, and failed runs still count against it.
 Quotas reset at 00:00 UTC.
 
 Migration `0006` raised the quota from 5 to 25 and the global cap from 50 to 150
-once production ran on GPT-6 Luna. A goal run settles at about $0.002, so the old
-counts stopped visitors long before the dollar caps would; 150 runs is about
-$0.30 a day, under the daily cap. The global cap also keeps a typical day under
+once production ran on GPT-6 Luna. A goal run costs about a tenth of a cent (in
+the evaluation, Luna's runs cost a median of $0.0008 and at most $0.0014), so the
+old counts stopped visitors long before the dollar caps would; even at that
+maximum, 150 runs is about $0.21 a day, under the daily cap. The global cap also keeps a typical day under
 the service's 400 provider attempts (a goal run usually makes two calls), so
 raising it much further needs a higher `CADENCIA_SERVICE_DAILY_ATTEMPT_CAP` too,
 or the service starts refusing calls before the Worker's limits do.

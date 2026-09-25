@@ -117,7 +117,7 @@ approved adjustments, and misses on or before the latest one count as answered.
 
 ## How it was checked
 
-- Tests on both sides, 143 in TypeScript on Node 26 and 22 and 109 in Python,
+- Tests on both sides, 149 in TypeScript on Node 26 and 22 and 113 in Python,
   plus a smoke test that runs the Worker route against the real service with a
   fake provider ([evidence](evidence/README.md)).
 - Planted bugs: for the calendar reader, the busy-time index and the replan
