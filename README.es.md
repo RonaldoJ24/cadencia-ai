@@ -93,7 +93,7 @@ semana y probarlo con cuatro motivos grabados.
   no hay cuentas. Una ejecución en vivo envía lo que necesita y los servidores de
   Cadencia no guardan nada de eso.
 - La IA en vivo envía el texto de tu meta, tu respuesta a una pregunta y el motivo
-  de un ajuste al proveedor del modelo, DeepSeek, un tercero. Los horarios
+  de un ajuste al proveedor del modelo, OpenAI (GPT-6 Luna), un tercero. Los horarios
   ocupados de tu calendario llegan al Worker de Cadencia pero nunca al proveedor;
   el modelo solo ve cuánto espacio tiene cada semana. La demo no envía nada de esto.
 - El texto de tu meta y tus motivos llegan al modelo solo como datos escapados, y
@@ -104,9 +104,9 @@ semana y probarlo con cuatro motivos grabados.
 
 ## Límites y costo de la IA en vivo
 
-Cada ejecución en vivo reserva su costo máximo antes de llamar al modelo (65,472
-micro-USD para un plan, 5,674 para un ajuste, definidos en
-`lib/server/spend.ts`) y se liquida una sola vez con lo que reportó cada llamada.
+Cada ejecución en vivo reserva su costo máximo antes de llamar al modelo (23,584
+micro-USD para un plan, 1,952 para un ajuste, a los precios de GPT-6 Luna,
+definidos en `lib/server/spend.ts`) y se liquida una sola vez con lo que reportó cada llamada.
 Las ejecuciones se detienen antes del modelo si se pasaría el tope diario o
 mensual (por defecto $0.50 al día y $5.00 al mes), si la IA en vivo está apagada,
 o después de las cinco ejecuciones en vivo del día de un visitante. La demo
@@ -147,8 +147,9 @@ necesitaban a un profesional, y ningún plan rompió una regla del calendario.
 Hubo una sola persona que calificó y ninguna prueba de significancia, como se
 pre-registró. Todo está en
 [evals/runs/2026-09-24-freeze-v1](evals/runs/2026-09-24-freeze-v1/report.md),
-con la [calificación a ciegas](evals/runs/2026-09-24-freeze-v1/ratings.md). En
-producción sigue DeepSeek.
+con la [calificación a ciegas](evals/runs/2026-09-24-freeze-v1/ratings.md).
+Después de la evaluación, producción cambió a GPT-6 Luna con la misma
+configuración que se evaluó.
 
 ## Evidencia de ingeniería
 
@@ -163,7 +164,7 @@ con el comando, el commit, la fecha y la salida completa. Dos ejemplos:
 ## Arquitectura
 
 ```text
-Navegador ──SSE── Worker /api/routine ──bearer── Servicio Python ──── DeepSeek
+Navegador ──SSE── Worker /api/routine ──bearer── Servicio Python ──── OpenAI (GPT-6 Luna)
   la demo           │  límites, gasto, D1          /v1/read-goal
   corre los         │  flujos de plan y            /v1/draft
   mismos flujos     │  ajuste (TS)                 /v1/replan
@@ -193,7 +194,7 @@ npm run dev
 ```
 
 La demo no necesita clave. Para ejecuciones en vivo en tu máquina, pon
-`DEEPSEEK_API_KEY` en `service/.env.local` y arranca ambos servidores con
+`OPENAI_API_KEY` en `service/.env.local` y arranca ambos servidores con
 `npm run dev:live`, que crea un token interno desechable y envía la clave solo a
 Python.
 

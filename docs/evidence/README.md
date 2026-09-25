@@ -25,6 +25,6 @@ What these files do not show:
 - **Timings elsewhere.** Local timings come from one machine and will differ on
   another; the ratio between the two versions is the point.
 
-Design constants, such as the spend reservations (65,472 micro-USD for a goal run,
-5,674 for a replan), the caps and the request limits, are stated with a pointer
+Design constants, such as the spend reservations (23,584 micro-USD for a goal run,
+1,952 for a replan, at GPT-6 Luna's prices), the caps and the request limits, are stated with a pointer
 to the code that defines them, in [DEPLOYMENT.md](../../DEPLOYMENT.md).
