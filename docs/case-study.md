@@ -132,10 +132,19 @@ approved adjustments, and misses on or before the latest one count as answered.
   recordings). These guided the work, but they are not results and are not
   quoted as such.
 
-## What is not claimed
+## What was measured, and what is not claimed
 
-Model quality. The scored evaluation needs its 100 to 150 cases, adapted from
-goals people describe in public posts, audited by a separate agent and
-spot-checked by the owner, and the GPT-6 Luna settings. Until it runs, the project claims how the system is built
-and checked, not how good its plans are. Retrieval templates were not built:
-they ship only if the evaluation shows a gain.
+The pre-registered evaluation ran once, from the tag `eval-freeze-v1`, on 148
+goals: 80 adapted from public posts and 68 written for coverage, audited by a
+separate agent, with the owner agreeing with 20 of 20 labels checked at random.
+In the blind rating the owner preferred GPT-6 Luna's plan in 74 of 93 pairs and
+DeepSeek's in 16. Luna also declined 14 of 99 goals that should have been
+planned, against DeepSeek's 8, and it was slower. Both declined all 24 goals
+that needed a professional, and no plan broke a scheduling rule
+([report](../evals/runs/2026-09-24-freeze-v1/report.md)).
+
+The evaluation doesn't claim that the cases represent Cadencia's users, that the
+preference would hold with other raters, or anything about replanning or live
+latency. There was one rater and no significance test. Retrieval templates were
+not built: they ship only if a third arm beats DeepSeek in the same kind of blind
+rating, and that hasn't run.

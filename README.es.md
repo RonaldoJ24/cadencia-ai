@@ -121,14 +121,34 @@ porcentajes), un protocolo de calificación a ciegas, un presupuesto de $10 y la
 regla para lanzar plantillas de recuperación. Compara DeepSeek con GPT-6 Luna en
 el mismo flujo.
 
-**Todavía no hay una corrida con puntaje, así que este README no afirma nada
-sobre la calidad del modelo.** La corrida necesita de 100 a 150 casos, adaptados
-de metas que la gente describe en publicaciones públicas, auditados por otro
-agente y con una revisión al azar del dueño
-([protocolo](evals/cases/SOURCING.md)), y la configuración de GPT-6 Luna.
-Los pasos están en
-[evals/README.md](evals/README.md), y los resultados se guardarán con la corrida
-en `evals/runs/`.
+Se corrió una vez, el 2026-09-24, desde la etiqueta `eval-freeze-v1`. Usó 148
+metas: 80 adaptadas de metas que la gente describe en publicaciones públicas y 68
+escritas para cubrir casos ([protocolo](evals/cases/SOURCING.md)). Otro agente
+auditó las etiquetas, y el dueño estuvo de acuerdo con 20 de 20 revisadas al
+azar. Comparó DeepSeek `deepseek-flash` con GPT-6 Luna, sin razonamiento, en el
+mismo flujo, con los mismos prompts y las mismas revisiones de código. El dueño
+calificó los planes a ciegas, antes de ver cualquier tabla.
+
+| | DeepSeek | GPT-6 Luna |
+|---|---:|---:|
+| Calificación a ciegas: plan preferido (93 pares, 3 casi iguales) | 16 | 74 |
+| Metas que se deben planear: planeadas en la primera lectura | 88 / 99 | 82 / 99 |
+| Metas que se deben planear: rechazadas | 8 / 99 | 14 / 99 |
+| Metas que necesitan una pregunta: preguntó | 15 / 25 | 16 / 25 |
+| Metas que necesitan a un profesional: rechazadas | 24 / 24 | 24 / 24 |
+| Borradores que fallaron dos veces | 0 / 109 | 0 / 104 |
+| Planes que rompieron una regla del calendario | 0 | 0 |
+| Costo de todas las ejecuciones | $0.29 | $0.11 |
+| Tiempo mediano por ejecución, servicio local | 6.4 s | 12.2 s |
+
+El dueño prefirió los planes de Luna. Luna también rechazó más metas que debía
+planear y tardó casi el doble. Los dos modelos rechazaron todas las metas que
+necesitaban a un profesional, y ningún plan rompió una regla del calendario.
+Hubo una sola persona que calificó y ninguna prueba de significancia, como se
+pre-registró. Todo está en
+[evals/runs/2026-09-24-freeze-v1](evals/runs/2026-09-24-freeze-v1/report.md),
+con la [calificación a ciegas](evals/runs/2026-09-24-freeze-v1/ratings.md). En
+producción sigue DeepSeek.
 
 ## Evidencia de ingeniería
 
@@ -192,11 +212,12 @@ docker build -t cadencia-intents:local service
 
 ## Limitaciones
 
-- **La calidad del modelo no está medida.** La evaluación está pre-registrada pero
-  no se ha corrido. Sus casos adaptan metas que la gente decidió publicar, que
-  no son una muestra al azar; un agente auditó las etiquetas, una sola persona
-  revisó 20 al azar y es la única que califica a ciegas; y cubre la lectura y el
-  borrador, no los ajustes.
+- **La calidad del modelo se midió una vez y de forma acotada.** Una corrida de
+  148 casos, una sola persona que califica a ciegas y ninguna prueba de
+  significancia. Los casos adaptan metas que la gente decidió publicar, que no
+  son una muestra al azar; un agente auditó las etiquetas y una persona revisó 20
+  al azar. Cubre la lectura y el borrador, no los ajustes, y sus tiempos vienen
+  de un servicio local, no del sitio en vivo.
 - **No es asesoría.** Los límites de ejercicio son reglas generales para adultos
   sanos, no una guía individual, y los rechazos cubren solo las categorías
   declaradas.
@@ -209,7 +230,8 @@ docker build -t cadencia-intents:local service
 - **Los ajustes miran dos semanas atrás** y sugieren una opción a partir de un
   motivo breve; no rehacen todo el plan.
 - **No se construyeron las plantillas de recuperación.** El planteamiento las
-  condiciona a una mejora en la evaluación, que no se ha corrido.
+  condiciona a una mejora en la evaluación; el tercer brazo que las probaría no
+  se ha corrido.
 - **La demo reproduce respuestas grabadas.** La IA en vivo tiene topes y puede no
   estar disponible; la demo sigue funcionando.
 - **La latencia depende del modelo.** Un plan en vivo tarda varios segundos, casi
