@@ -1,0 +1,1309 @@
+{
+  "pack": "2026-09-24-freeze-v1-7583652219c9",
+  "rater": "Ronaldo",
+  "ratedAt": "2026-09-25T00:24:20.650Z",
+  "ratings": [
+    {
+      "id": "p001",
+      "plan1": {
+        "fit": 2,
+        "progression": 4,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 2,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p002",
+      "plan1": {
+        "fit": 4,
+        "progression": 5,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p003",
+      "plan1": {
+        "fit": 1,
+        "progression": 3,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 1,
+        "progression": 3,
+        "clarity": 2
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p004",
+      "plan1": {
+        "fit": 1,
+        "progression": 2,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 2,
+        "progression": 3,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p005",
+      "plan1": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p006",
+      "plan1": {
+        "fit": 2,
+        "progression": 4,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 5
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p007",
+      "plan1": {
+        "fit": 1,
+        "progression": 2,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 1,
+        "progression": 2,
+        "clarity": 3
+      },
+      "preferred": "tie"
+    },
+    {
+      "id": "p008",
+      "plan1": {
+        "fit": 3,
+        "progression": 3,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p009",
+      "plan1": {
+        "fit": 2,
+        "progression": 3,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 2,
+        "progression": 2,
+        "clarity": 4
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p010",
+      "plan1": {
+        "fit": 2,
+        "progression": 3,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 2,
+        "progression": 3,
+        "clarity": 4
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p011",
+      "plan1": {
+        "fit": 4,
+        "progression": 5,
+        "clarity": 5
+      },
+      "plan2": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 3
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p012",
+      "plan1": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 4,
+        "progression": 5,
+        "clarity": 5
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p013",
+      "plan1": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 3,
+        "progression": 3,
+        "clarity": 4
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p014",
+      "plan1": {
+        "fit": 3,
+        "progression": 3,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p015",
+      "plan1": {
+        "fit": 5,
+        "progression": 5,
+        "clarity": 5
+      },
+      "plan2": {
+        "fit": 2,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p016",
+      "plan1": {
+        "fit": 3,
+        "progression": 4,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 3,
+        "progression": 4,
+        "clarity": 3
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p017",
+      "plan1": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 5,
+        "progression": 5,
+        "clarity": 5
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p018",
+      "plan1": {
+        "fit": 5,
+        "progression": 5,
+        "clarity": 5
+      },
+      "plan2": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p019",
+      "plan1": {
+        "fit": 2,
+        "progression": 4,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 3,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p020",
+      "plan1": {
+        "fit": 3,
+        "progression": 3,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 2,
+        "progression": 3,
+        "clarity": 4
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p021",
+      "plan1": {
+        "fit": 5,
+        "progression": 5,
+        "clarity": 5
+      },
+      "plan2": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p022",
+      "plan1": {
+        "fit": 2,
+        "progression": 3,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 2,
+        "progression": 3,
+        "clarity": 4
+      },
+      "preferred": "tie"
+    },
+    {
+      "id": "p023",
+      "plan1": {
+        "fit": 2,
+        "progression": 2,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 2,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p024",
+      "plan1": {
+        "fit": 4,
+        "progression": 3,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 4,
+        "progression": 5,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p025",
+      "plan1": {
+        "fit": 3,
+        "progression": 5,
+        "clarity": 5
+      },
+      "plan2": {
+        "fit": 3,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p026",
+      "plan1": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 3,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p027",
+      "plan1": {
+        "fit": 1,
+        "progression": 3,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 1,
+        "progression": 3,
+        "clarity": 3
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p028",
+      "plan1": {
+        "fit": 3,
+        "progression": 3,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 5,
+        "progression": 5,
+        "clarity": 5
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p029",
+      "plan1": {
+        "fit": 4,
+        "progression": 5,
+        "clarity": 5
+      },
+      "plan2": {
+        "fit": 3,
+        "progression": 4,
+        "clarity": 3
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p030",
+      "plan1": {
+        "fit": 4,
+        "progression": 3,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 5,
+        "progression": 5,
+        "clarity": 5
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p031",
+      "plan1": {
+        "fit": 2,
+        "progression": 4,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 2,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p032",
+      "plan1": {
+        "fit": 2,
+        "progression": 3,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p033",
+      "plan1": {
+        "fit": 3,
+        "progression": 4,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 3,
+        "progression": 3,
+        "clarity": 3
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p034",
+      "plan1": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 5,
+        "progression": 5,
+        "clarity": 5
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p035",
+      "plan1": {
+        "fit": 2,
+        "progression": 4,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 2,
+        "progression": 3,
+        "clarity": 2
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p036",
+      "plan1": {
+        "fit": 4,
+        "progression": 5,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 4,
+        "progression": 3,
+        "clarity": 3
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p037",
+      "plan1": {
+        "fit": 5,
+        "progression": 5,
+        "clarity": 5
+      },
+      "plan2": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p038",
+      "plan1": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 5,
+        "progression": 5,
+        "clarity": 5
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p039",
+      "plan1": {
+        "fit": 2,
+        "progression": 3,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 2,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p040",
+      "plan1": {
+        "fit": 2,
+        "progression": 4,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 2,
+        "progression": 3,
+        "clarity": 3
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p041",
+      "plan1": {
+        "fit": 5,
+        "progression": 5,
+        "clarity": 5
+      },
+      "plan2": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p042",
+      "plan1": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 1,
+        "progression": 2,
+        "clarity": 3
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p043",
+      "plan1": {
+        "fit": 1,
+        "progression": 3,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 2,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p044",
+      "plan1": {
+        "fit": 1,
+        "progression": 2,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 3,
+        "progression": 4,
+        "clarity": 3
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p045",
+      "plan1": {
+        "fit": 5,
+        "progression": 5,
+        "clarity": 5
+      },
+      "plan2": {
+        "fit": 5,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p046",
+      "plan1": {
+        "fit": 2,
+        "progression": 4,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 3,
+        "progression": 5,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p047",
+      "plan1": {
+        "fit": 3,
+        "progression": 3,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p048",
+      "plan1": {
+        "fit": 4,
+        "progression": 5,
+        "clarity": 5
+      },
+      "plan2": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p049",
+      "plan1": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 5,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p050",
+      "plan1": {
+        "fit": 1,
+        "progression": 4,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 1,
+        "progression": 3,
+        "clarity": 4
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p051",
+      "plan1": {
+        "fit": 3,
+        "progression": 3,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 5,
+        "progression": 5,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p052",
+      "plan1": {
+        "fit": 4,
+        "progression": 5,
+        "clarity": 5
+      },
+      "plan2": {
+        "fit": 3,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p053",
+      "plan1": {
+        "fit": 2,
+        "progression": 4,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 2,
+        "progression": 5,
+        "clarity": 5
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p054",
+      "plan1": {
+        "fit": 5,
+        "progression": 5,
+        "clarity": 5
+      },
+      "plan2": {
+        "fit": 3,
+        "progression": 3,
+        "clarity": 4
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p055",
+      "plan1": {
+        "fit": 2,
+        "progression": 3,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 3,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p056",
+      "plan1": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 3,
+        "progression": 3,
+        "clarity": 3
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p057",
+      "plan1": {
+        "fit": 3,
+        "progression": 3,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p058",
+      "plan1": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 5,
+        "progression": 5,
+        "clarity": 5
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p059",
+      "plan1": {
+        "fit": 1,
+        "progression": 2,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 1,
+        "progression": 2,
+        "clarity": 3
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p060",
+      "plan1": {
+        "fit": 2,
+        "progression": 3,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 2,
+        "progression": 5,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p061",
+      "plan1": {
+        "fit": 5,
+        "progression": 5,
+        "clarity": 5
+      },
+      "plan2": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p062",
+      "plan1": {
+        "fit": 5,
+        "progression": 5,
+        "clarity": 5
+      },
+      "plan2": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p063",
+      "plan1": {
+        "fit": 2,
+        "progression": 3,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 2,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p064",
+      "plan1": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 5,
+        "progression": 5,
+        "clarity": 5
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p065",
+      "plan1": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 5,
+        "progression": 5,
+        "clarity": 5
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p066",
+      "plan1": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 5,
+        "progression": 5,
+        "clarity": 5
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p067",
+      "plan1": {
+        "fit": 2,
+        "progression": 3,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 2,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p068",
+      "plan1": {
+        "fit": 5,
+        "progression": 5,
+        "clarity": 5
+      },
+      "plan2": {
+        "fit": 3,
+        "progression": 3,
+        "clarity": 3
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p069",
+      "plan1": {
+        "fit": 3,
+        "progression": 5,
+        "clarity": 5
+      },
+      "plan2": {
+        "fit": 2,
+        "progression": 3,
+        "clarity": 3
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p070",
+      "plan1": {
+        "fit": 3,
+        "progression": 4,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 4,
+        "progression": 3,
+        "clarity": 4
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p071",
+      "plan1": {
+        "fit": 1,
+        "progression": 2,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 2,
+        "progression": 3,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p072",
+      "plan1": {
+        "fit": 5,
+        "progression": 4,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 5,
+        "progression": 5,
+        "clarity": 5
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p073",
+      "plan1": {
+        "fit": 1,
+        "progression": 3,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 1,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p074",
+      "plan1": {
+        "fit": 3,
+        "progression": 3,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 5,
+        "progression": 5,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p075",
+      "plan1": {
+        "fit": 1,
+        "progression": 3,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 2,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p076",
+      "plan1": {
+        "fit": 3,
+        "progression": 4,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 4,
+        "progression": 5,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p077",
+      "plan1": {
+        "fit": 5,
+        "progression": 5,
+        "clarity": 5
+      },
+      "plan2": {
+        "fit": 3,
+        "progression": 3,
+        "clarity": 4
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p078",
+      "plan1": {
+        "fit": 3,
+        "progression": 4,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 5,
+        "progression": 5,
+        "clarity": 5
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p079",
+      "plan1": {
+        "fit": 4,
+        "progression": 3,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 5,
+        "progression": 4,
+        "clarity": 5
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p080",
+      "plan1": {
+        "fit": 3,
+        "progression": 3,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 4,
+        "progression": 5,
+        "clarity": 5
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p081",
+      "plan1": {
+        "fit": 2,
+        "progression": 3,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 3,
+        "progression": 5,
+        "clarity": 5
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p082",
+      "plan1": {
+        "fit": 1,
+        "progression": 2,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 1,
+        "progression": 3,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p083",
+      "plan1": {
+        "fit": 3,
+        "progression": 2,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 4,
+        "progression": 5,
+        "clarity": 5
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p084",
+      "plan1": {
+        "fit": 3,
+        "progression": 5,
+        "clarity": 5
+      },
+      "plan2": {
+        "fit": 3,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p085",
+      "plan1": {
+        "fit": 3,
+        "progression": 4,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 2,
+        "progression": 3,
+        "clarity": 4
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p086",
+      "plan1": {
+        "fit": 1,
+        "progression": 2,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 1,
+        "progression": 2,
+        "clarity": 3
+      },
+      "preferred": "tie"
+    },
+    {
+      "id": "p087",
+      "plan1": {
+        "fit": 1,
+        "progression": 2,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 3,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p088",
+      "plan1": {
+        "fit": 3,
+        "progression": 3,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 4,
+        "progression": 5,
+        "clarity": 5
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p089",
+      "plan1": {
+        "fit": 1,
+        "progression": 2,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 1,
+        "progression": 3,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p090",
+      "plan1": {
+        "fit": 2,
+        "progression": 4,
+        "clarity": 4
+      },
+      "plan2": {
+        "fit": 2,
+        "progression": 5,
+        "clarity": 5
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p091",
+      "plan1": {
+        "fit": 3,
+        "progression": 3,
+        "clarity": 3
+      },
+      "plan2": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "2"
+    },
+    {
+      "id": "p092",
+      "plan1": {
+        "fit": 4,
+        "progression": 5,
+        "clarity": 5
+      },
+      "plan2": {
+        "fit": 3,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "1"
+    },
+    {
+      "id": "p093",
+      "plan1": {
+        "fit": 5,
+        "progression": 5,
+        "clarity": 5
+      },
+      "plan2": {
+        "fit": 4,
+        "progression": 4,
+        "clarity": 4
+      },
+      "preferred": "1"
+    }
+  ]
+}

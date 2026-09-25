@@ -1,0 +1,48 @@
+{
+  "runId": "2026-09-24-freeze-v1",
+  "gitSha": "0f4d7536c1e00ce65c215259ae298d4601dfd449",
+  "casesSha256": "4d2e810781540564e604deecfb001a6e829e85e863b252edb6efd818823824c7",
+  "cases": 148,
+  "arms": [
+    {
+      "id": "A",
+      "label": "DeepSeek",
+      "prices": {
+        "inputPerMillion": 0.3,
+        "outputPerMillion": 1.2,
+        "source": "https://api-docs.deepseek.com/quick_start/pricing (peak prices)",
+        "read": "2026-09-24"
+      },
+      "expect": {
+        "readGoal": "read-goal-f2bbb9b5a76f",
+        "draft": "draft-6ea4a82036d6",
+        "model": "deepseek-flash"
+      }
+    },
+    {
+      "id": "B",
+      "label": "GPT-6 Luna",
+      "prices": {
+        "inputPerMillion": 0.1,
+        "outputPerMillion": 0.5,
+        "source": "https://developers.openai.com/api/docs/pricing (standard)",
+        "read": "2026-09-24"
+      },
+      "expect": {
+        "readGoal": "read-goal-f2bbb9b5a76f",
+        "draft": "draft-6ea4a82036d6",
+        "model": "gpt-6-luna"
+      }
+    }
+  ],
+  "order": "cases by id; within a case, arms in listed order",
+  "sessions": [
+    {
+      "startedAt": "2026-09-24T21:52:03.247Z",
+      "budgetMicroUsd": 10000000
+    }
+  ],
+  "status": "completed",
+  "spentMicroUsd": 399337,
+  "finishedAt": "2026-09-24T22:33:15.746Z"
+}

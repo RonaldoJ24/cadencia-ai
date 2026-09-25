@@ -114,13 +114,33 @@ questions, the metrics (counts with their denominators, no percentages), a blind
 rating protocol, a $10 budget and the rule for shipping retrieval templates. It
 compares DeepSeek with GPT-6 Luna on the same pipeline.
 
-**No scored run exists yet, so this README makes no claim about model quality.**
-The run needs 100 to 150 cases, adapted from goals people describe in public
-posts, audited by a separate agent and spot-checked by the owner
-([protocol](evals/cases/SOURCING.md)), and the
-GPT-6 Luna settings. The steps
-are in [evals/README.md](evals/README.md), and results will be committed with the
-run under `evals/runs/`.
+It ran once, on 2026-09-24, from the tag `eval-freeze-v1`. It used 148 goals:
+80 adapted from goals people describe in public posts, and 68 written for
+coverage ([protocol](evals/cases/SOURCING.md)). A separate agent audited the
+labels, and the owner agreed with 20 of 20 checked at random. It compared
+DeepSeek `deepseek-flash` with GPT-6 Luna, reasoning off, on the same pipeline,
+prompts and code checks. The owner rated the plans blind, before reading any
+table.
+
+| | DeepSeek | GPT-6 Luna |
+|---|---:|---:|
+| Blind rating: preferred plan (93 pairs, 3 rated about the same) | 16 | 74 |
+| Goals that should be planned: planned on the first reading | 88 / 99 | 82 / 99 |
+| Goals that should be planned: declined instead | 8 / 99 | 14 / 99 |
+| Goals that need one question: asked | 15 / 25 | 16 / 25 |
+| Goals that need a professional: declined | 24 / 24 | 24 / 24 |
+| Drafts that failed twice | 0 / 109 | 0 / 104 |
+| Plans that broke a scheduling rule | 0 | 0 |
+| Cost of all runs | $0.29 | $0.11 |
+| Median time per run, local service | 6.4 s | 12.2 s |
+
+The owner preferred Luna's plans. Luna also declined more goals it should have
+planned, and it took about twice as long. Both models declined every goal that
+needed a professional, and no plan broke a scheduling rule. There was one rater
+and no significance test, as pre-registered. Everything is committed in
+[evals/runs/2026-09-24-freeze-v1](evals/runs/2026-09-24-freeze-v1/report.md),
+with the [blind rating](evals/runs/2026-09-24-freeze-v1/ratings.md). Production
+still runs DeepSeek.
 
 ## Engineering evidence
 
@@ -180,11 +200,11 @@ docker build -t cadencia-intents:local service
 
 ## Limitations
 
-- **Model quality is unmeasured.** The evaluation is pre-registered but not run.
-  Its cases adapt goals people chose to post in public, which are not a random
-  sample; an agent audited the labels, one person checked a random 20 and is the
-  only blind rater; and it covers
-  reading and drafting, not replanning.
+- **Model quality is measured once, narrowly.** One run of 148 cases, one blind
+  rater and no significance test. The cases adapt goals people chose to post in
+  public, which are not a random sample; an agent audited the labels and one
+  person checked a random 20. It covers reading and drafting, not replanning, and
+  its times come from a local service, not the live site.
 - **Not advice.** Fitness limits are general rules for healthy adults, not
   individual guidance, and refusals cover the declared categories only.
 - **Calendar import covers the common cases.** Daily and weekly repeats are
@@ -194,7 +214,7 @@ docker build -t cadencia-intents:local service
 - **Replanning looks back two weeks** and suggests one option from a short
   reason; it doesn't reshape the whole plan.
 - **Retrieval templates were not built.** The brief ties them to a gain in the
-  evaluation, which hasn't run.
+  evaluation; the third arm that would test them hasn't run.
 - **The demo replays recorded outputs.** Live runs are capped and can be
   unavailable; the demo keeps working.
 - **Latency depends on the model.** A live plan takes several seconds, most of it

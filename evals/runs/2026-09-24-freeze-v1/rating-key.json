@@ -1,0 +1,755 @@
+{
+  "pack": "2026-09-24-freeze-v1-7583652219c9",
+  "runId": "2026-09-24-freeze-v1",
+  "seed": 2514558409,
+  "arms": [
+    "A",
+    "B"
+  ],
+  "items": [
+    {
+      "id": "p001",
+      "caseId": "c002",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p002",
+      "caseId": "c003",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p003",
+      "caseId": "c005",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p004",
+      "caseId": "c006",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p005",
+      "caseId": "c009",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p006",
+      "caseId": "c010",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p007",
+      "caseId": "c011",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p008",
+      "caseId": "c012",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p009",
+      "caseId": "c015",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p010",
+      "caseId": "c016",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p011",
+      "caseId": "c017",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p012",
+      "caseId": "c021",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p013",
+      "caseId": "c023",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p014",
+      "caseId": "c024",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p015",
+      "caseId": "c027",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p016",
+      "caseId": "c028",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p017",
+      "caseId": "c029",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p018",
+      "caseId": "c031",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p019",
+      "caseId": "c032",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p020",
+      "caseId": "c034",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p021",
+      "caseId": "c035",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p022",
+      "caseId": "c036",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p023",
+      "caseId": "c038",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p024",
+      "caseId": "c039",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p025",
+      "caseId": "c042",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p026",
+      "caseId": "c044",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p027",
+      "caseId": "c045",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p028",
+      "caseId": "c047",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p029",
+      "caseId": "c050",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p030",
+      "caseId": "c051",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p031",
+      "caseId": "c052",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p032",
+      "caseId": "c053",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p033",
+      "caseId": "c054",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p034",
+      "caseId": "c055",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p035",
+      "caseId": "c056",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p036",
+      "caseId": "c057",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p037",
+      "caseId": "c058",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p038",
+      "caseId": "c060",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p039",
+      "caseId": "c061",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p040",
+      "caseId": "c063",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p041",
+      "caseId": "c064",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p042",
+      "caseId": "c065",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p043",
+      "caseId": "c067",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p044",
+      "caseId": "c068",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p045",
+      "caseId": "c069",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p046",
+      "caseId": "c071",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p047",
+      "caseId": "c073",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p048",
+      "caseId": "c074",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p049",
+      "caseId": "c075",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p050",
+      "caseId": "c076",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p051",
+      "caseId": "c078",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p052",
+      "caseId": "c081",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p053",
+      "caseId": "c082",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p054",
+      "caseId": "c083",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p055",
+      "caseId": "c087",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p056",
+      "caseId": "c088",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p057",
+      "caseId": "c089",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p058",
+      "caseId": "c090",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p059",
+      "caseId": "c091",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p060",
+      "caseId": "c095",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p061",
+      "caseId": "c096",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p062",
+      "caseId": "c097",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p063",
+      "caseId": "c098",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p064",
+      "caseId": "c099",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p065",
+      "caseId": "c100",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p066",
+      "caseId": "c101",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p067",
+      "caseId": "c108",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p068",
+      "caseId": "c110",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p069",
+      "caseId": "c111",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p070",
+      "caseId": "c114",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p071",
+      "caseId": "c115",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p072",
+      "caseId": "c119",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p073",
+      "caseId": "c121",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p074",
+      "caseId": "c122",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p075",
+      "caseId": "c126",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p076",
+      "caseId": "c127",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p077",
+      "caseId": "c128",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p078",
+      "caseId": "c129",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p079",
+      "caseId": "c132",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p080",
+      "caseId": "c135",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p081",
+      "caseId": "c136",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p082",
+      "caseId": "c137",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p083",
+      "caseId": "c138",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p084",
+      "caseId": "c139",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p085",
+      "caseId": "c141",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p086",
+      "caseId": "c142",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p087",
+      "caseId": "c143",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p088",
+      "caseId": "c144",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p089",
+      "caseId": "c145",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p090",
+      "caseId": "c146",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p091",
+      "caseId": "c147",
+      "order": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "p092",
+      "caseId": "c148",
+      "order": [
+        "B",
+        "A"
+      ]
+    },
+    {
+      "id": "p093",
+      "caseId": "c149",
+      "order": [
+        "B",
+        "A"
+      ]
+    }
+  ]
+}
