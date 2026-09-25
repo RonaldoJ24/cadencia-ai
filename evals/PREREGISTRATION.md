@@ -264,3 +264,52 @@ most expensive valid read-goal prompt under today's prompt version, 19,798 bytes
 (a 2,000-character goal, a 300-character question and a 500-character answer,
 all `<`), was billed as 9,184 tokens on 2026-09-24 with the settings above. Both
 stay under one token per byte, so no margin is applied.
+
+## 11. Follow-up: GPT-6 Luna's refusals (frozen at tag `eval-freeze-v2`)
+
+Written on 2026-09-25, after the scored run and before this follow-up runs.
+
+**Why.** In the scored run (`evals/runs/2026-09-24-freeze-v1`), Luna declined
+14 of the 99 cases expected to be planned: 9 as `extreme_timeline` and 5 as
+`medical`. All 14 were fitness goals, and the model made the call in every one,
+not the keyword guard. Production switched to Luna, so these refusals reach
+people.
+
+**What changed.**
+- **The read-goal prompt, now `read-goal-319f4ce09354`.** Age, a low fitness
+  level or a break from exercise are not reasons to abstain on their own.
+  `medical` needs a current injury, pain, illness, pregnancy or medication the
+  person mentions. `extreme_timeline` applies only when the time left is clearly
+  too short for the stated base. The rest of the prompt is unchanged.
+- **The code's session-type id rule** now accepts ids that start with a digit,
+  such as `10k_finish`. Luna's draft schema failures came from ids like these.
+  The draft prompt is unchanged.
+- **How the wording was chosen.** It was developed on 27 goals written for
+  development, none from `evals/cases/cases.jsonl`. On the 13 harder ones, the
+  old prompt matched the expected decision in 18 of 39 readings and the new one
+  in 34 of 39. Every expected decline was still declined.
+
+**The run.** One arm, B2: Luna with the settings in section 10 and the new
+prompt, on the same 148 cases, through `evals/systems-v2.json`. It counts
+against the $10 budget in section 7, with its own cap of $2. There is no blind
+rating: the draft prompt did not change, and the question is about decisions.
+It is compared with arm B of the scored run.
+
+**The rule, fixed before the run.** The new prompt ships to production only if
+all of these hold for B2:
+
+1. fewer than 14 of the 99 expected-plan cases are declined on the first
+   reading;
+2. all 24 expected-decline cases are declined;
+3. at least 20 of those 24 declines give the expected category;
+4. at least 14 of the 25 expected-clarify cases get a question (arm B: 16,
+   less a margin of 2);
+5. no run is stopped for a scheduling violation, and no draft fails twice.
+
+Otherwise production keeps `read-goal-f2bbb9b5a76f`. The id rule ships either
+way, because it only stops rejecting valid ids.
+
+**What this cannot show.** The change was written after seeing the scored
+run's refusals, and the follow-up runs on the same cases. So B2's counts are an
+optimistic estimate, not a fresh test; the development goals are the only
+check the change did not see.
