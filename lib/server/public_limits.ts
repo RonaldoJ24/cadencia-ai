@@ -1,6 +1,6 @@
 // Public API abuse and cost controls: keyed HMAC client identity,
 // atomic in-flight concurrency reservations via SQL triggers, visitor daily quota,
-// and global hard usage cap before invoking upstream Cloud Run / DeepSeek.
+// and global hard usage cap before invoking upstream Cloud Run and the model provider.
 
 import { createHmac } from 'node:crypto';
 import type { Db } from './db.ts';

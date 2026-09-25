@@ -111,7 +111,7 @@ async function streamRun<T>(
   const response = await fetch('/api/routine', {
     method: 'POST',
     headers: { 'content-type': 'application/json', accept: 'text/event-stream' },
-    body: JSON.stringify({ mode: 'deepseek', kind, input }),
+    body: JSON.stringify({ mode: 'live', kind, input }),
     signal: options.signal,
   });
   const contentType = response.headers.get('content-type') ?? '';

@@ -11,21 +11,23 @@ import type { Db } from './db.ts';
 import { secondsUntilUtcMidnight } from './public_limits.ts';
 
 /**
- * DeepSeek's peak-hour list prices, the highest rates on the page, so every
- * settled cost is an upper bound. USD per million tokens equals micro-USD
- * per token.
+ * GPT-6 Luna's standard list prices, the model production runs since
+ * 2026-09-25. USD per million tokens equals micro-USD per token. Luna runs
+ * with reasoning off, so no hidden reasoning tokens are billed.
  */
 export const RATE_CARD = {
-  inputUsdPerMillion: 0.3,
-  outputUsdPerMillion: 1.2,
-  source: 'https://api-docs.deepseek.com/quick_start/pricing (read 2026-09-24)',
+  inputUsdPerMillion: 0.1,
+  outputUsdPerMillion: 0.5,
+  source: 'https://developers.openai.com/api/docs/pricing (gpt-6-luna, standard, read 2026-09-24)',
 } as const;
 
 /**
  * Bounds of one goal run, mirrored from service/planning.py and provider.py
  * (a test checks they match): one read-goal call and up to two draft calls,
  * each with up to two provider attempts. Byte-level BPE gives at most one
- * token per prompt byte; `templateTokens` covers the chat template.
+ * token per prompt byte (Luna measured 0.46 on the longest prompt, see
+ * evals/PREREGISTRATION.md section 10); `templateTokens` covers the chat
+ * template.
  */
 export const GOAL_BOUNDS = {
   attempts: 2,

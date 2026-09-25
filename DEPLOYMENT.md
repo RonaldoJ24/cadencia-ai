@@ -6,7 +6,8 @@ Cadencia runs in two places:
    `https://cadencia-ai.ronaldo-jesus-alvarez.workers.dev`, with a D1 database for
    public limits.
 2. **Cloud Run service `cadencia-intents`**: the FastAPI planning service that
-   calls DeepSeek. Only the Worker calls it, with a shared bearer token. (The
+   calls GPT-6 Luna through OpenAI. Only the Worker calls it, with a shared
+   bearer token. (The
    service keeps its original name from the weekly-routine era.)
 
 **Deploy order.** When a Worker change stops calling a service endpoint, deploy
@@ -41,13 +42,13 @@ to, must find every endpoint it calls.
     │                     (all: constant-time token check, strict schemas,
     │                     prompt byte ceilings; a scope guard on the reading)
     │
-    ▼  HTTPS, Bearer <DEEPSEEK_API_KEY>
-[ DeepSeek API ]  https://api.deepseek.com/chat/completions
+    ▼  HTTPS, Bearer <OPENAI_API_KEY>
+[ OpenAI API ]  https://api.openai.com/v1/chat/completions (gpt-6-luna)
 ```
 
 Rules that hold across both runtimes:
 
-- **No secrets in the browser.** `CADENCIA_SERVICE_TOKEN` and `DEEPSEEK_API_KEY`
+- **No secrets in the browser.** `CADENCIA_SERVICE_TOKEN` and `OPENAI_API_KEY`
   live only in platform secret stores (Worker secrets, GCP Secret Manager).
 - **Live mode fails closed.** Without `CADENCIA_ENABLE_LIVE="true"`, a valid https
   service URL and the token, or without D1, `/api/routine` answers 503 and makes
@@ -69,19 +70,22 @@ Rules that hold across both runtimes:
 | D1 | `public_limits_config` | Table (migration `0003`) | Request limits per visitor and overall (§8) |
 | Cloud Run | `CADENCIA_SERVICE_DAILY_ATTEMPT_CAP` | Env var (optional) | Provider attempts allowed per UTC day in the running instance; default 400 |
 | Cloud Run | `CADENCIA_SERVICE_TOKEN` | Secret Manager `cadencia-service-token` | Token checked on every request |
-| Cloud Run | `DEEPSEEK_API_KEY` | Secret Manager `deepseek-api-key` | Provider key |
-| Cloud Run | `DEEPSEEK_MODEL` | Env var | Model name; code default `deepseek-flash` |
+| Cloud Run | `OPENAI_API_KEY` | Secret Manager `openai-api-key` | Provider key |
+| Cloud Run | `CADENCIA_PROVIDER` | Env var | `openai`; the code default is `deepseek`, kept only as a fallback |
+| Cloud Run | `OPENAI_URL`, `OPENAI_MODEL`, `OPENAI_TOKEN_PARAM`, `OPENAI_TEMPERATURE`, `OPENAI_REASONING_EFFORT` | Env vars | All required: `https://api.openai.com/v1/chat/completions`, `gpt-6-luna`, `max_completion_tokens`, `0.2`, `none` (the evaluated settings) |
 | Cloud Run | `PORT` | Set by Cloud Run | Defaults to 8080 |
 
 ---
 
 ## 3. Cloud Run intent service
 
-Production as read on 2026-09-24 with `gcloud run services describe`: revision
-`cadencia-intents-00008-jsx`, image `cadencia-intents:175dab6`, 1 CPU, 256 MiB,
+Production as read on 2026-09-25 with `gcloud run services describe`: revision
+`cadencia-intents-00009-zws`, image `cadencia-intents:a5ff6e4`, 1 CPU, 256 MiB,
 concurrency 8, min 0 and max 1 instances, 60 s timeout, public ingress (the app
-checks the bearer token), `DEEPSEEK_MODEL=deepseek-flash`, and the DeepSeek
-key and service token from Secret Manager. It serves prompts
+checks the bearer token), `CADENCIA_PROVIDER=openai` with `OPENAI_MODEL=gpt-6-luna`,
+`OPENAI_TOKEN_PARAM=max_completion_tokens`, `OPENAI_TEMPERATURE=0.2` and
+`OPENAI_REASONING_EFFORT=none`, and the OpenAI key and service token from Secret
+Manager. It serves prompts
 `read-goal-f2bbb9b5a76f`, `draft-6ea4a82036d6` and `replan-aff51c833ae2`; a
 service test pins all three, which the evaluation and the demo samples name.
 
@@ -134,8 +138,8 @@ gcloud run deploy cadencia-intents --project "$CADENCIA_GCP_PROJECT" \
   --region us-central1 --port 8080 --cpu 1 --memory 256Mi \
   --concurrency 8 --min-instances 0 --max-instances 1 --timeout 60s \
   --ingress all --no-invoker-iam-check \
-  --set-env-vars "DEEPSEEK_MODEL=deepseek-flash" \
-  --set-secrets "DEEPSEEK_API_KEY=deepseek-api-key:latest,CADENCIA_SERVICE_TOKEN=cadencia-service-token:latest"
+  --set-env-vars "CADENCIA_PROVIDER=openai,OPENAI_URL=https://api.openai.com/v1/chat/completions,OPENAI_MODEL=gpt-6-luna,OPENAI_TOKEN_PARAM=max_completion_tokens,OPENAI_TEMPERATURE=0.2,OPENAI_REASONING_EFFORT=none" \
+  --set-secrets "OPENAI_API_KEY=openai-api-key:latest,CADENCIA_SERVICE_TOKEN=cadencia-service-token:latest"
 ```
 
 `service/artifact-cleanup-policy.json` keeps the three newest images and deletes
@@ -220,7 +224,7 @@ curl -fsS "https://cadencia-ai.ronaldo-jesus-alvarez.workers.dev/api/routine"
 W=https://cadencia-ai.ronaldo-jesus-alvarez.workers.dev
 curl -sN -X POST "$W/api/routine" -H "origin: $W" -H 'content-type: application/json' \
   -H 'accept: text/event-stream' \
-  -d '{"mode":"deepseek","kind":"goal","input":{"text":"Learn guitar chords by December, Tuesday and Thursday evenings","language":"en","today":"YYYY-MM-DD"}}'
+  -d '{"mode":"live","kind":"goal","input":{"text":"Learn guitar chords by December, Tuesday and Thursday evenings","language":"en","today":"YYYY-MM-DD"}}'
 ```
 
 A live goal run makes two or three model calls and settles at a few tenths of a
@@ -267,8 +271,8 @@ against the service's constants):
 
 | Run | Calls | Worst case |
 |---|---|---|
-| Goal plan | one reading and up to two drafts | 65,472 micro-USD ($0.0655) |
-| Replan after missed sessions | one pick | 5,674 micro-USD ($0.0057) |
+| Goal plan | one reading and up to two drafts | 23,584 micro-USD ($0.0236) |
+| Replan after missed sessions | one pick | 1,952 micro-USD ($0.0020) |
 
 The reservation is written only if the day's and the month's committed spend plus
 that amount stay within the caps, in one statement, so concurrent requests cannot
@@ -282,8 +286,9 @@ case, and a call with unknown usage is charged in full.
 | `daily_cap_microusd` | `500000` | $0.50 per UTC day |
 | `monthly_cap_microusd` | `5000000` | $5.00 per UTC month |
 
-Prices come from DeepSeek's pricing page (read 2026-09-24) at the peak-hour
-rates, so settled costs are an upper bound. When a cap is reached, live requests
+Prices come from OpenAI's pricing page for GPT-6 Luna (standard, read
+2026-09-24). Luna runs with reasoning off, so no hidden reasoning tokens are
+billed. When a cap is reached, live requests
 stop before the model is called and the page says why; the demo keeps working.
 
 ```bash
@@ -344,3 +349,8 @@ therefore also resets every visitor's quota for the day.
   phase from `main`. Revision 00008 changed only `DEEPSEEK_MODEL`, from the
   retired name `deepseek-v4-flash` to `deepseek-flash`, the name the evaluation
   uses; a live goal run afterwards logged `deepseek-flash`.
+- **2026-09-25**: production moved to GPT-6 Luna after the evaluation. Revision
+  00009 runs image `a5ff6e4` with the OpenAI settings the evaluation measured
+  and the `openai-api-key` secret; the DeepSeek key is no longer mounted. A live
+  goal run afterwards completed all seven stages and logged `gpt-6-luna` for the
+  reading and the draft. Rollback: send traffic to revision 00008 (DeepSeek).

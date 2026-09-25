@@ -3,9 +3,11 @@
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 
-const apiKey = process.env.DEEPSEEK_API_KEY?.trim();
-if (!apiKey) {
-  console.error('Falta DEEPSEEK_API_KEY en service/.env.local.');
+// Production runs GPT-6 Luna; DeepSeek remains only as a fallback.
+const openaiKey = process.env.OPENAI_API_KEY?.trim();
+const deepseekKey = process.env.DEEPSEEK_API_KEY?.trim();
+if (!openaiKey && !deepseekKey) {
+  console.error('Falta OPENAI_API_KEY en service/.env.local.');
   process.exit(1);
 }
 
@@ -15,11 +17,26 @@ if (!Number.isInteger(port) || port < 1 || port > 65_535) {
   process.exit(1);
 }
 
-const model = process.env.DEEPSEEK_MODEL?.trim() || 'deepseek-v4-flash';
+// The same settings as production (evals/PREREGISTRATION.md, section 10).
+const provider = openaiKey
+  ? {
+      CADENCIA_PROVIDER: 'openai',
+      OPENAI_API_KEY: openaiKey,
+      OPENAI_URL: 'https://api.openai.com/v1/chat/completions',
+      OPENAI_MODEL: process.env.OPENAI_MODEL?.trim() || 'gpt-6-luna',
+      OPENAI_TOKEN_PARAM: 'max_completion_tokens',
+      OPENAI_TEMPERATURE: '0.2',
+      OPENAI_REASONING_EFFORT: 'none',
+    }
+  : {
+      CADENCIA_PROVIDER: 'deepseek',
+      DEEPSEEK_API_KEY: deepseekKey,
+      DEEPSEEK_MODEL: process.env.DEEPSEEK_MODEL?.trim() || 'deepseek-flash',
+    };
 const serviceToken = randomBytes(32).toString('base64url');
 const serviceUrl = `http://127.0.0.1:${port}`;
 const frontendEnv = Object.fromEntries(
-  Object.entries(process.env).filter(([name]) => !name.startsWith('DEEPSEEK_')),
+  Object.entries(process.env).filter(([name]) => !name.startsWith('DEEPSEEK_') && !name.startsWith('OPENAI_')),
 );
 
 Object.assign(frontendEnv, {
@@ -31,8 +48,7 @@ Object.assign(frontendEnv, {
 
 const serviceEnv = {
   ...process.env,
-  DEEPSEEK_API_KEY: apiKey,
-  DEEPSEEK_MODEL: model,
+  ...provider,
   CADENCIA_SERVICE_TOKEN: serviceToken,
   PORT: String(port),
 };
@@ -40,6 +56,7 @@ const serviceEnv = {
 if (process.argv.includes('--check')) {
   if (
     'DEEPSEEK_API_KEY' in frontendEnv ||
+    'OPENAI_API_KEY' in frontendEnv ||
     frontendEnv.CADENCIA_ENABLE_LIVE !== 'true' ||
     frontendEnv.CADENCIA_LOCAL_NODE !== 'true'
   ) {

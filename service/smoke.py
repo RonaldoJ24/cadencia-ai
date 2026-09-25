@@ -218,7 +218,7 @@ function goalRequest(text, ip, stream) {
       'cf-connecting-ip': ip,
       ...(stream ? { accept: 'text/event-stream' } : {}),
     },
-    body: JSON.stringify({ mode: 'deepseek', kind: 'goal', input: { text, language: 'en', today } }),
+    body: JSON.stringify({ mode: 'live', kind: 'goal', input: { text, language: 'en', today } }),
   });
 }
 const availability = await GET();
@@ -235,7 +235,7 @@ const summary = (id, deadline, weeksLeft) => ({ id, deadline, weeksLeft, session
 const replan = await POST(new Request('http://localhost/api/routine', {
   method: 'POST',
   headers: { 'content-type': 'application/json', 'cf-connecting-ip': '127.0.0.4', accept: 'text/event-stream' },
-  body: JSON.stringify({ mode: 'deepseek', kind: 'replan', input: {
+  body: JSON.stringify({ mode: 'live', kind: 'replan', input: {
     language: 'en', today, domain: 'learning', level: 'unknown',
     situation: { missedSessions: 2, missedWeeks: 1, weeksLeft: 6 },
     options: [summary('keep', '2026-12-01', 6), summary('extend', '2026-12-08', 7)],
@@ -356,8 +356,8 @@ def main() -> int:
                 ]
                 and isinstance(goal.get("sessions"), int)
                 and goal["sessions"] > 0
-                # Two calls at 500 in and 300 out settle at 510 micro-USD each.
-                and goal.get("ledger") == {"status": "settled", "actual_microusd": 1_020}
+                # Two calls at 500 in and 300 out settle at 200 micro-USD each (Luna's rates).
+                and goal.get("ledger") == {"status": "settled", "actual_microusd": 400}
                 and isinstance(failed, dict)
                 and failed.get("status") == 502
                 and failed.get("error") == "The AI provider is not available."
@@ -371,7 +371,7 @@ def main() -> int:
                     "pick_option:completed",
                     "check_pick:completed",
                 ]
-                and replan.get("ledger") == {"status": "settled", "actual_microusd": 510}
+                and replan.get("ledger") == {"status": "settled", "actual_microusd": 200}
                 and value.get("returnedBodiesSafe") is True
                 and provider.calls == 4
             ):

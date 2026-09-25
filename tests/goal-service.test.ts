@@ -52,7 +52,7 @@ function draftFor(weeks: number) {
 }
 
 let ip = 10;
-function request(body: unknown = { mode: 'deepseek', kind: 'goal', input }, headers: Record<string, string> = {}): Request {
+function request(body: unknown = { mode: 'live', kind: 'goal', input }, headers: Record<string, string> = {}): Request {
   ip += 1;
   return new Request('http://localhost/api/routine', {
     method: 'POST',
@@ -147,7 +147,7 @@ void test('busy times shape the room the draft is offered but never reach the se
     rooms.push(...payload.calendar.weeks.map((week) => week.room));
     return json({ draft: draftFor(payload.calendar.weeks.length), meta: { attempts: 1 } });
   };
-  const response = await withFetch(fetcher, () => post({ mode: 'deepseek', kind: 'goal', input: { ...input, busy } }));
+  const response = await withFetch(fetcher, () => post({ mode: 'live', kind: 'goal', input: { ...input, busy } }));
   assert.equal(response.status, 200);
   const body = (await response.json()) as { outcome: string; plan: { weeks: Array<{ sessions: Array<{ date: string }> }> } };
   assert.equal(body.outcome, 'ready');
@@ -170,9 +170,9 @@ void test('a request with the most busy times fits the body limit, and a larger 
     const payload = JSON.parse(bodyOf(init)) as { calendar: { weeks: unknown[] } };
     return json({ draft: draftFor(payload.calendar.weeks.length), meta: { attempts: 1 } });
   };
-  const full = await withFetch(fetcher, () => post({ mode: 'deepseek', kind: 'goal', input: { ...input, busy } }));
+  const full = await withFetch(fetcher, () => post({ mode: 'live', kind: 'goal', input: { ...input, busy } }));
   assert.equal(full.status, 200);
-  const oversized = await withFetch(fetcher, () => post({ mode: 'deepseek', kind: 'goal', input: { ...input, busy, notes: 'x'.repeat(30_000) } }));
+  const oversized = await withFetch(fetcher, () => post({ mode: 'live', kind: 'goal', input: { ...input, busy, notes: 'x'.repeat(30_000) } }));
   assert.equal(oversized.status, 400);
   assert.equal(((await oversized.json()) as { error: string }).error.length > 0, true);
 });
@@ -292,7 +292,7 @@ void test('origin, body, kind and mode checks stay enforced for goal runs', asyn
     [403, request(undefined, { referer: 'https://evil.example/page' })],
     [400, new Request('http://localhost/api/routine', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{' })],
     [400, new Request('http://localhost/api/routine', { method: 'POST', headers: { 'content-type': 'application/json' }, body: 'x'.repeat(40_000) })],
-    [400, request({ mode: 'deepseek', kind: 'weekly', input })],
+    [400, request({ mode: 'live', kind: 'weekly', input })],
     [400, request({ mode: 'provider', kind: 'goal', input })],
   ];
   const { value: statuses } = await withLogs(async () => {

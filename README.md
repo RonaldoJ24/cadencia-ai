@@ -88,7 +88,7 @@ four recorded reasons.
   accounts. A live run sends what it needs, and Cadencia's servers keep none of
   it.
 - Live AI sends your goal text, a clarifying answer and a replan reason to the
-  model provider, DeepSeek, a third party. Busy times from your calendar reach
+  model provider, OpenAI (GPT-6 Luna), a third party. Busy times from your calendar reach
   Cadencia's Worker but never the provider; the model only sees how much room
   each week has. The demo sends none of this.
 - Your goal text and reasons reach the model only as escaped data, and whatever
@@ -99,8 +99,9 @@ four recorded reasons.
 
 ## Live AI limits and cost
 
-Every live run reserves its worst case before any model call (65,472 micro-USD
-for a goal plan, 5,674 for a replan, defined in `lib/server/spend.ts`) and
+Every live run reserves its worst case before any model call (23,584 micro-USD
+for a goal plan, 1,952 for a replan, at GPT-6 Luna's prices, defined in
+`lib/server/spend.ts`) and
 settles once from what each call reported. Runs stop before the model when the
 daily or monthly cap would be passed (by default $0.50 a day and $5.00 a month),
 when live AI is switched off, or after a visitor's five live runs of the day.
@@ -139,8 +140,9 @@ planned, and it took about twice as long. Both models declined every goal that
 needed a professional, and no plan broke a scheduling rule. There was one rater
 and no significance test, as pre-registered. Everything is committed in
 [evals/runs/2026-09-24-freeze-v1](evals/runs/2026-09-24-freeze-v1/report.md),
-with the [blind rating](evals/runs/2026-09-24-freeze-v1/ratings.md). Production
-still runs DeepSeek.
+with the [blind rating](evals/runs/2026-09-24-freeze-v1/ratings.md). After the
+evaluation, production switched to GPT-6 Luna with the settings it was evaluated
+with.
 
 ## Engineering evidence
 
@@ -154,7 +156,7 @@ command, commit, date and raw output. Two examples:
 ## Architecture
 
 ```text
-Browser ──SSE── Worker /api/routine ──bearer── Python service ──── DeepSeek
+Browser ──SSE── Worker /api/routine ──bearer── Python service ──── OpenAI (GPT-6 Luna)
   the demo       │  limits, spend, D1          /v1/read-goal
   runs the same  │  goal and replan            /v1/draft
   pipelines      │  pipelines (TS)             /v1/replan
@@ -181,7 +183,7 @@ npm ci
 npm run dev
 ```
 
-The demo needs no key. For live runs on your machine, put `DEEPSEEK_API_KEY` in
+The demo needs no key. For live runs on your machine, put `OPENAI_API_KEY` in
 `service/.env.local` and start both servers with `npm run dev:live`, which
 creates a throwaway internal token and sends the key only to Python.
 

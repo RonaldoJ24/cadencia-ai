@@ -40,9 +40,10 @@ fitness load rule over the previous four weeks. A draft that breaks structure
 gets one retry.
 
 **Make spend a bound, not an estimate.** Every live run reserves its worst case
-in D1 before any model call: 65,472 micro-USD for a goal plan, 5,674 for a
-replan. The service refuses prompts over a byte ceiling, and DeepSeek's tokenizer
-gives at most one token per byte, so the reservation really is the worst case.
+in D1 before any model call: at GPT-6 Luna's prices, 23,584 micro-USD for a goal
+plan and 1,952 for a replan. The service refuses prompts over a byte ceiling, and
+the model's tokenizer gives at most one token per byte (Luna measured 0.46 on the
+longest prompt), so the reservation really is the worst case.
 The run settles once from the usage each call reported. Daily and monthly caps,
 a kill switch and per-visitor quotas sit in front of every model call.
 
@@ -148,3 +149,8 @@ preference would hold with other raters, or anything about replanning or live
 latency. There was one rater and no significance test. Retrieval templates were
 not built: they ship only if a third arm beats DeepSeek in the same kind of blind
 rating, and that hasn't run.
+
+After the evaluation, production switched from DeepSeek to GPT-6 Luna, with the
+settings it was evaluated with: reasoning off, temperature 0.2 and the same
+prompts. The trade-off came with it: more goals declined that should have been
+planned, and slower runs.

@@ -13,7 +13,7 @@ export const RATE_SCOPES = {
   strict: { limit: 10, windowSec: 60 },
   /** Irreversible: account deletion. */
   danger: { limit: 5, windowSec: 60 },
-  /** Public generation: Connected AI / deepseek mode (conservative 2/min). */
+  /** Public generation: live mode (conservative 2/min). */
   public_live: { limit: 2, windowSec: 60 },
   /** Public generation: Local demo mode (30/min). */
   public_demo: { limit: 30, windowSec: 60 },
