@@ -1,0 +1,33 @@
+{
+  "runId": "2026-09-25-followup-v2",
+  "gitSha": "4093043544311f2cde7120d7122cbc9bfb20e805",
+  "casesSha256": "4d2e810781540564e604deecfb001a6e829e85e863b252edb6efd818823824c7",
+  "cases": 148,
+  "arms": [
+    {
+      "id": "B2",
+      "label": "GPT-6 Luna, read-goal v2",
+      "prices": {
+        "inputPerMillion": 0.1,
+        "outputPerMillion": 0.5,
+        "source": "https://developers.openai.com/api/docs/pricing (standard)",
+        "read": "2026-09-24"
+      },
+      "expect": {
+        "readGoal": "read-goal-319f4ce09354",
+        "draft": "draft-6ea4a82036d6",
+        "model": "gpt-6-luna"
+      }
+    }
+  ],
+  "order": "cases by id; within a case, arms in listed order",
+  "sessions": [
+    {
+      "startedAt": "2026-09-25T06:08:54.497Z",
+      "budgetMicroUsd": 2000000
+    }
+  ],
+  "status": "completed",
+  "spentMicroUsd": 118479,
+  "finishedAt": "2026-09-25T06:37:52.161Z"
+}

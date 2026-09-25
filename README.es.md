@@ -151,6 +151,28 @@ con la [calificación a ciegas](evals/runs/2026-09-24-freeze-v1/ratings.md).
 Después de la evaluación, producción cambió a GPT-6 Luna con la misma
 configuración que se evaluó.
 
+**Seguimiento de los rechazos de Luna.** Los 14 rechazos equivocados de Luna
+fueron metas de ejercicio: tomaba la edad, una condición física baja, una pausa
+en el ejercicio o un evento a meses de distancia como motivos para rechazar. El
+prompt de lectura ahora dice cuándo aplican `medical` y `extreme_timeline`. Un
+seguimiento pre-registrado ([sección 11](evals/PREREGISTRATION.md)) corrió Luna
+con el prompt nuevo en los mismos 148 casos, con una regla para publicarlo fijada
+de antemano, y se cumplieron todas las condiciones:
+
+| GPT-6 Luna | Antes | Después |
+|---|---:|---:|
+| Metas que se deben planear: rechazadas | 14 / 99 | 5 / 99 |
+| Metas que se deben planear: planeadas en la primera lectura | 82 / 99 | 92 / 99 |
+| Metas que necesitan a un profesional: rechazadas | 24 / 24 | 24 / 24 |
+| Metas que necesitan una pregunta: preguntó | 16 / 25 | 18 / 25 |
+
+El cambio se escribió después de ver esos rechazos y se probó en los mismos
+casos, así que los conteos de "después" son optimistas
+([reporte](evals/runs/2026-09-25-followup-v2/report.md)). Llegaron dos arreglos
+de confiabilidad: los nombres de sesión pueden empezar con un dígito (Luna
+escribe `10k_finish`), y una respuesta que no pasa la revisión de formato recibe
+el segundo intento de la llamada, que la reserva de gasto ya cubría.
+
 ## Evidencia de ingeniería
 
 Los números medidos están en [docs/evidence](docs/evidence/README.md), cada uno

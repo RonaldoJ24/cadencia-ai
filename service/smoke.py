@@ -373,7 +373,8 @@ def main() -> int:
                 ]
                 and replan.get("ledger") == {"status": "settled", "actual_microusd": 200}
                 and value.get("returnedBodiesSafe") is True
-                and provider.calls == 4
+                # The leak check's non-JSON answer is retried once: 2 + 2 + 1 calls.
+                and provider.calls == 5
             ):
                 raise RuntimeError("smoke assertions failed")
         finally:

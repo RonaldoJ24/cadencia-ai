@@ -488,12 +488,15 @@ def _parse_provider_response(
             observed_model=observed_model,
             system_fingerprint=system_fingerprint,
         )
+    # A bad answer gets the call's second attempt, like a 429 or a 5xx: the
+    # Worker's spend reservation already covers two attempts per call.
     try:
         intent_value = parse_json_object(content)
     except ValueError:
         raise _Failure(
             outcome="malformed_response",
             status_category=status_category,
+            retryable=True,
             provider_completed=True,
             usage=usage,
             observed_model=observed_model,
@@ -505,6 +508,7 @@ def _parse_provider_response(
         raise _Failure(
             outcome="schema_invalid",
             status_category=status_category,
+            retryable=True,
             provider_completed=True,
             schema_valid=False,
             usage=usage,

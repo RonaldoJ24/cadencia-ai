@@ -154,3 +154,21 @@ After the evaluation, production switched from DeepSeek to GPT-6 Luna, with the
 settings it was evaluated with: reasoning off, temperature 0.2 and the same
 prompts. The trade-off came with it: more goals declined that should have been
 planned, and slower runs.
+
+**The refusals were then fixed, and measured the same way.** Luna declined
+fitness goals over age, a low fitness level, a break from exercise or an event
+months away. The reading prompt now says `medical` needs a current injury, pain,
+illness, pregnancy or medication, and `extreme_timeline` only a clearly too
+short time for the stated base. The wording was developed on 27 goals written for
+development; a follow-up with a shipping rule fixed in advance (pre-registration
+section 11) then ran Luna on the same 148 cases. Wrong refusals went from 14 of
+99 to 5, every goal that needed a professional was still declined, and questions
+went from 16 of 25 to 18. Because the change was written after seeing those
+refusals, these counts are optimistic.
+
+**Draft failures had two causes, found by replaying drafts.** Luna sometimes
+started a session name with a digit (`10k_finish`), which the id rule forbade,
+and on long plans sometimes defined more than the eight session types the format
+allows. The id rule now accepts a leading digit, and an answer that fails the
+format check gets the call's second attempt, which the spend reservation already
+counted.

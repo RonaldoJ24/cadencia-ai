@@ -144,6 +144,26 @@ with the [blind rating](evals/runs/2026-09-24-freeze-v1/ratings.md). After the
 evaluation, production switched to GPT-6 Luna with the settings it was evaluated
 with.
 
+**Follow-up on Luna's refusals.** Luna's 14 wrong refusals were all fitness
+goals: it treated age, a low fitness level, a break from exercise or an event
+months away as reasons to decline. The reading prompt now says when `medical` and
+`extreme_timeline` apply. A pre-registered follow-up
+([section 11](evals/PREREGISTRATION.md)) ran Luna with the new prompt on the same
+148 cases, with a shipping rule fixed in advance, and every condition held:
+
+| GPT-6 Luna | Before | After |
+|---|---:|---:|
+| Goals that should be planned: declined instead | 14 / 99 | 5 / 99 |
+| Goals that should be planned: planned on the first reading | 82 / 99 | 92 / 99 |
+| Goals that need a professional: declined | 24 / 24 | 24 / 24 |
+| Goals that need one question: asked | 16 / 25 | 18 / 25 |
+
+The change was written after seeing those refusals and tested on the same cases,
+so the "after" counts are optimistic ([report](evals/runs/2026-09-25-followup-v2/report.md)).
+Two reliability fixes came with it: session names may start with a digit (Luna
+writes `10k_finish`), and an answer that fails the format check gets the call's
+second attempt, which the spend reservation already covered.
+
 ## Engineering evidence
 
 Measured numbers live in [docs/evidence](docs/evidence/README.md), each with the

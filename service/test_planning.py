@@ -152,7 +152,7 @@ def test_inconsistent_readings_are_rejected(monkeypatch: pytest.MonkeyPatch, cha
     capture(monkeypatch, {**READING, **change})
     response = run(post("/v1/read-goal", {"text": "learn chess", "language": "en", "today": "2026-09-24"}))
     assert response.status_code == 502
-    assert response.json()["attempts"] == 1
+    assert response.json()["attempts"] == 2
 
 
 @pytest.mark.parametrize(
@@ -431,7 +431,7 @@ def test_replan_picks_are_checked(monkeypatch: pytest.MonkeyPatch, change: dict[
     capture(monkeypatch, {**PICK, **change})
     response = run(post("/v1/replan", REPLAN_REQUEST))
     assert response.status_code == 502
-    assert response.json()["attempts"] == 1
+    assert response.json()["attempts"] == 2
 
 
 @pytest.mark.parametrize(

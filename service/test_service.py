@@ -516,9 +516,10 @@ def test_provider_retries_429_and_5xx_only_once(monkeypatch: pytest.MonkeyPatch,
     assert calls == 2
 
 
-def test_provider_does_not_retry_other_status_or_malformed_output(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_provider_retries_a_bad_answer_once_but_not_other_failures(monkeypatch: pytest.MonkeyPatch) -> None:
     configure(monkeypatch)
-    for response in (envelope(status=400), envelope(content="{bad"), envelope(finish_reason="length")):
+    # A 400 and a truncated answer are final; malformed output gets the second attempt.
+    for response, expected in ((envelope(status=400), 1), (envelope(content="{bad"), 2), (envelope(finish_reason="length"), 1)):
         calls = 0
 
         def handler(request: httpx.Request, response: httpx.Response = response) -> httpx.Response:
@@ -530,8 +531,8 @@ def test_provider_does_not_retry_other_status_or_malformed_output(monkeypatch: p
         with pytest.raises(provider.ProviderError) as raised:
             run(read_goal_result(client))
         run(client.aclose())
-        assert raised.value.attempts == 1
-        assert calls == 1
+        assert raised.value.attempts == expected
+        assert calls == expected
 
 
 def test_usage_is_retained_when_completion_is_truncated(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -549,11 +550,12 @@ def test_usage_is_retained_when_completion_is_truncated(monkeypatch: pytest.Monk
 
 
 @pytest.mark.parametrize(
-    "content",
-    [None, "", "not json", {**READING, "domain": "medical"}],
+    ("content", "attempts"),
+    # An empty answer is final; malformed and schema-invalid answers get the second attempt.
+    [(None, 1), ("", 1), ("not json", 2), ({**READING, "domain": "medical"}, 2)],
 )
 def test_empty_malformed_and_schema_invalid_provider_output(
-    monkeypatch: pytest.MonkeyPatch, content: Any
+    monkeypatch: pytest.MonkeyPatch, content: Any, attempts: int
 ) -> None:
     configure(monkeypatch)
     response_content: Any = content
@@ -565,8 +567,18 @@ def test_empty_malformed_and_schema_invalid_provider_output(
     with pytest.raises(provider.ProviderError) as raised:
         run(read_goal_result(client))
     run(client.aclose())
-    assert raised.value.attempts == 1
+    assert raised.value.attempts == attempts
     assert raised.value.SAFE_MESSAGE not in {""}
+
+
+def test_a_bad_answer_is_retried_once_and_a_good_second_answer_is_used(monkeypatch: pytest.MonkeyPatch) -> None:
+    configure(monkeypatch)
+    answers = iter([envelope({**READING, "domain": "medical"}), envelope(READING)])
+    client = mock_client(lambda request: next(answers))
+    result = run(read_goal_result(client))
+    run(client.aclose())
+    assert result.attempts == 2
+    assert result.intent.domain == READING["domain"]
 
 
 class OversizedStream(AsyncByteStream):
@@ -752,7 +764,8 @@ def test_error_body_reports_spend_only_after_provider_attempts(monkeypatch: pyte
     response = run(app_request(body=json.dumps(READ_BODY)))
     assert response.status_code == 502
     body = response.json()
-    assert body["attempts"] == 1
+    # Both attempts gave the same bad answer; the usage is the last attempt's.
+    assert body["attempts"] == 2
     assert body["usage"] == {"prompt_tokens": 40, "completion_tokens": 9, "total_tokens": 49}
     assert set(body) == {"error", "request_id", "attempts", "usage"}
 
