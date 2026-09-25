@@ -1,17 +1,18 @@
-// Demo samples: real outputs recorded from the model through the Cadencia
-// service on 2026-09-24, for fixed example texts written by the developer.
-// They drive the model-free demo only; they are not evaluation data.
+// Demo samples: real outputs recorded from GPT-6 Luna through the Cadencia
+// service on 2026-09-25, with the production settings (reasoning off,
+// temperature 0.2), for fixed example texts written by the developer. They
+// drive the model-free demo only; they are not evaluation data.
 
 export const GOAL_SAMPLES: ReadonlyArray<Record<string, unknown>> = [
  {
   "id": "ten_k",
   "language": "en",
   "text": "Run a 10K by December. Weekday mornings only, 3 hours a week at most.",
-  "recordedOn": "2026-09-24",
+  "recordedOn": "2026-09-25",
   "reading": {
    "decision": "plan",
-   "title": "Run a 10K by December",
-   "summary": "They want to run a 10K by December, training on weekday mornings with at most 3 hours a week.",
+   "title": "Train for a 10K",
+   "summary": "You want to run a 10K by December, practicing on weekday mornings and spending at most 3 hours per week.",
    "domain": "fitness",
    "level": "unknown",
    "deadline": "2026-12-01",
@@ -31,318 +32,291 @@ export const GOAL_SAMPLES: ReadonlyArray<Record<string, unknown>> = [
   },
   "scopeRefused": false,
   "readMeta": {
-   "model": "deepseek-flash",
+   "model": "gpt-6-luna",
    "promptVersion": "read-goal-f2bbb9b5a76f",
-   "requestId": "f84175b8-c20a-485c-9f66-1cf179c51ffd"
+   "requestId": "b2a3d0cc-6431-4177-bb55-208e166d766a"
   },
   "draft": {
    "phases": [
     {
-     "title": "Base Building",
+     "title": "Build a running habit",
      "fromWeek": 1,
-     "toWeek": 4,
-     "focus": "Establish a consistent running routine and build easy aerobic volume."
+     "toWeek": 3,
+     "focus": "Establish easy, repeatable run-walk sessions."
     },
     {
-     "title": "Volume Build",
-     "fromWeek": 5,
-     "toWeek": 8,
-     "focus": "Gradually increase weekly running time and introduce longer efforts."
+     "title": "Build endurance",
+     "fromWeek": 4,
+     "toWeek": 7,
+     "focus": "Gradually extend easy running and add controlled quality work."
     },
     {
-     "title": "Peak & Taper",
-     "fromWeek": 9,
+     "title": "Prepare for 10K",
+     "fromWeek": 8,
+     "toWeek": 10,
+     "focus": "Build sustained endurance with one weekly quality session."
+    },
+    {
+     "title": "Ease off",
+     "fromWeek": 11,
      "toWeek": 11,
-     "focus": "Reach peak volume, then taper to arrive fresh for the 10K."
+     "focus": "Reduce training and finish feeling fresh."
     }
    ],
    "sessionTypes": [
     {
-     "id": "easy_run_30",
-     "title": "Easy Run 30",
+     "id": "easy_run",
+     "title": "Easy run-walk",
+     "minutes": 20,
+     "intensity": "easy",
+     "role": "support",
+     "blocks": [
+      {
+       "minutes": 5,
+       "activity": "Walk briskly to warm up."
+      },
+      {
+       "minutes": 10,
+       "activity": "Alternate easy jogging and walking as needed."
+      },
+      {
+       "minutes": 5,
+       "activity": "Walk gently to cool down."
+      }
+     ],
+     "deliverable": "A completed easy run-walk.",
+     "doneWhen": "Finish all 20 minutes at a conversational effort."
+    },
+    {
+     "id": "steady_run",
+     "title": "Steady run-walk",
+     "minutes": 25,
+     "intensity": "moderate",
+     "role": "key",
+     "blocks": [
+      {
+       "minutes": 5,
+       "activity": "Walk briskly to warm up."
+      },
+      {
+       "minutes": 15,
+       "activity": "Jog steadily, using short walk breaks when needed."
+      },
+      {
+       "minutes": 5,
+       "activity": "Walk gently to cool down."
+      }
+     ],
+     "deliverable": "A steady run-walk session.",
+     "doneWhen": "Complete 25 minutes at a controlled, sustainable effort."
+    },
+    {
+     "id": "long_easy",
+     "title": "Long easy run-walk",
+     "minutes": 35,
+     "intensity": "easy",
+     "role": "key",
+     "blocks": [
+      {
+       "minutes": 5,
+       "activity": "Walk briskly to warm up."
+      },
+      {
+       "minutes": 25,
+       "activity": "Jog easily, taking walk breaks as needed."
+      },
+      {
+       "minutes": 5,
+       "activity": "Walk gently to cool down."
+      }
+     ],
+     "deliverable": "A longer easy run-walk.",
+     "doneWhen": "Complete 35 minutes without pushing the pace."
+    },
+    {
+     "id": "intervals",
+     "title": "Controlled intervals",
+     "minutes": 25,
+     "intensity": "hard",
+     "role": "key",
+     "blocks": [
+      {
+       "minutes": 5,
+       "activity": "Walk and jog easily to warm up."
+      },
+      {
+       "minutes": 15,
+       "activity": "Repeat 1 minute brisk jogging and 2 minutes easy jogging or walking."
+      },
+      {
+       "minutes": 5,
+       "activity": "Walk gently to cool down."
+      }
+     ],
+     "deliverable": "A controlled interval session.",
+     "doneWhen": "Finish each brisk segment with enough control to continue."
+    },
+    {
+     "id": "long_build",
+     "title": "Extended easy run-walk",
+     "minutes": 45,
+     "intensity": "easy",
+     "role": "key",
+     "blocks": [
+      {
+       "minutes": 5,
+       "activity": "Walk briskly to warm up."
+      },
+      {
+       "minutes": 35,
+       "activity": "Jog easily, taking walk breaks as needed."
+      },
+      {
+       "minutes": 5,
+       "activity": "Walk gently to cool down."
+      }
+     ],
+     "deliverable": "An extended easy run-walk.",
+     "doneWhen": "Complete 45 minutes at a conversational effort."
+    },
+    {
+     "id": "tempo_intro",
+     "title": "Steady effort intervals",
      "minutes": 30,
-     "intensity": "easy",
-     "role": "support",
-     "blocks": [
-      {
-       "minutes": 5,
-       "activity": "Warm-up walk"
-      },
-      {
-       "minutes": 20,
-       "activity": "Easy run at conversational pace"
-      },
-      {
-       "minutes": 5,
-       "activity": "Cool-down walk"
-      }
-     ],
-     "deliverable": "A completed 30-minute easy run.",
-     "doneWhen": "You finish the run and can speak in full sentences throughout."
-    },
-    {
-     "id": "easy_run_40",
-     "title": "Easy Run 40",
-     "minutes": 40,
-     "intensity": "easy",
-     "role": "support",
-     "blocks": [
-      {
-       "minutes": 5,
-       "activity": "Warm-up walk"
-      },
-      {
-       "minutes": 30,
-       "activity": "Easy run at conversational pace"
-      },
-      {
-       "minutes": 5,
-       "activity": "Cool-down walk"
-      }
-     ],
-     "deliverable": "A completed 40-minute easy run.",
-     "doneWhen": "You finish the run and can speak in full sentences throughout."
-    },
-    {
-     "id": "easy_run_50",
-     "title": "Easy Run 50",
-     "minutes": 50,
-     "intensity": "easy",
-     "role": "support",
-     "blocks": [
-      {
-       "minutes": 5,
-       "activity": "Warm-up walk"
-      },
-      {
-       "minutes": 40,
-       "activity": "Easy run at conversational pace"
-      },
-      {
-       "minutes": 5,
-       "activity": "Cool-down walk"
-      }
-     ],
-     "deliverable": "A completed 50-minute easy run.",
-     "doneWhen": "You finish the run and can speak in full sentences throughout."
-    },
-    {
-     "id": "long_run_60",
-     "title": "Long Run 60",
-     "minutes": 60,
      "intensity": "moderate",
      "role": "key",
      "blocks": [
       {
        "minutes": 5,
-       "activity": "Warm-up walk"
-      },
-      {
-       "minutes": 50,
-       "activity": "Steady run at comfortable pace"
-      },
-      {
-       "minutes": 5,
-       "activity": "Cool-down walk"
-      }
-     ],
-     "deliverable": "A completed 60-minute long run.",
-     "doneWhen": "You finish the run at a steady, sustainable effort."
-    },
-    {
-     "id": "long_run_70",
-     "title": "Long Run 70",
-     "minutes": 70,
-     "intensity": "moderate",
-     "role": "key",
-     "blocks": [
-      {
-       "minutes": 5,
-       "activity": "Warm-up walk"
-      },
-      {
-       "minutes": 60,
-       "activity": "Steady run at comfortable pace"
-      },
-      {
-       "minutes": 5,
-       "activity": "Cool-down walk"
-      }
-     ],
-     "deliverable": "A completed 70-minute long run.",
-     "doneWhen": "You finish the run at a steady, sustainable effort."
-    },
-    {
-     "id": "long_run_80",
-     "title": "Long Run 80",
-     "minutes": 80,
-     "intensity": "moderate",
-     "role": "key",
-     "blocks": [
-      {
-       "minutes": 5,
-       "activity": "Warm-up walk"
-      },
-      {
-       "minutes": 70,
-       "activity": "Steady run at comfortable pace"
-      },
-      {
-       "minutes": 5,
-       "activity": "Cool-down walk"
-      }
-     ],
-     "deliverable": "A completed 80-minute long run.",
-     "doneWhen": "You finish the run at a steady, sustainable effort."
-    },
-    {
-     "id": "tempo_run_40",
-     "title": "Tempo Run 40",
-     "minutes": 40,
-     "intensity": "hard",
-     "role": "key",
-     "blocks": [
-      {
-       "minutes": 5,
-       "activity": "Warm-up walk"
-      },
-      {
-       "minutes": 10,
-       "activity": "Easy jog"
+       "activity": "Walk and jog easily to warm up."
       },
       {
        "minutes": 20,
-       "activity": "Tempo run at comfortably hard pace"
+       "activity": "Alternate 4 minutes steady jogging with 1 minute easy walking."
       },
       {
        "minutes": 5,
-       "activity": "Cool-down walk"
+       "activity": "Walk gently to cool down."
       }
      ],
-     "deliverable": "A completed 40-minute tempo run.",
-     "doneWhen": "You hold a comfortably hard pace for the 20-minute tempo block."
+     "deliverable": "A session of controlled steady intervals.",
+     "doneWhen": "Complete the steady portions without straining."
     },
     {
-     "id": "interval_run_40",
-     "title": "Interval Run 40",
-     "minutes": 40,
-     "intensity": "hard",
+     "id": "long_10k",
+     "title": "10K endurance run-walk",
+     "minutes": 55,
+     "intensity": "easy",
      "role": "key",
      "blocks": [
       {
        "minutes": 5,
-       "activity": "Warm-up walk"
+       "activity": "Walk briskly to warm up."
       },
       {
-       "minutes": 10,
-       "activity": "Easy jog"
-      },
-      {
-       "minutes": 20,
-       "activity": "6 x 2 min hard with 1 min easy recovery"
+       "minutes": 45,
+       "activity": "Jog easily, using walk breaks whenever needed."
       },
       {
        "minutes": 5,
-       "activity": "Cool-down walk"
+       "activity": "Walk gently to cool down."
       }
      ],
-     "deliverable": "A completed interval session.",
-     "doneWhen": "You complete all 6 hard intervals with recovery jogs."
+     "deliverable": "A 55-minute easy endurance session.",
+     "doneWhen": "Finish at a conversational effort and complete the cool-down."
     }
    ],
    "weeks": [
     {
      "week": 1,
-     "sessions": [
-      "easy_run_30"
-     ]
+     "sessions": []
     },
     {
      "week": 2,
      "sessions": [
-      "easy_run_30",
-      "easy_run_30",
-      "long_run_60"
+      "easy_run",
+      "easy_run",
+      "long_easy"
      ]
     },
     {
      "week": 3,
      "sessions": [
-      "easy_run_30",
-      "easy_run_30",
-      "long_run_60"
+      "easy_run",
+      "steady_run",
+      "long_easy"
      ]
     },
     {
      "week": 4,
      "sessions": [
-      "easy_run_30",
-      "easy_run_30",
-      "long_run_60"
+      "easy_run",
+      "steady_run",
+      "long_easy"
      ]
     },
     {
      "week": 5,
      "sessions": [
-      "easy_run_30",
-      "easy_run_40",
-      "long_run_60"
+      "easy_run",
+      "steady_run",
+      "long_easy"
      ]
     },
     {
      "week": 6,
      "sessions": [
-      "easy_run_30",
-      "easy_run_40",
-      "long_run_70"
+      "easy_run",
+      "intervals",
+      "long_build"
      ]
     },
     {
      "week": 7,
      "sessions": [
-      "easy_run_30",
-      "easy_run_40",
-      "long_run_70"
+      "easy_run",
+      "tempo_intro",
+      "long_build"
      ]
     },
     {
      "week": 8,
      "sessions": [
-      "easy_run_30",
-      "easy_run_40",
-      "long_run_80"
+      "easy_run",
+      "intervals",
+      "long_10k"
      ]
     },
     {
      "week": 9,
      "sessions": [
-      "easy_run_30",
-      "tempo_run_40",
-      "long_run_80"
+      "easy_run",
+      "tempo_intro",
+      "long_10k"
      ]
     },
     {
      "week": 10,
      "sessions": [
-      "easy_run_30",
-      "interval_run_40",
-      "long_run_80"
+      "easy_run",
+      "intervals",
+      "long_10k"
      ]
     },
     {
      "week": 11,
      "sessions": [
-      "easy_run_30",
-      "easy_run_30"
+      "easy_run",
+      "long_easy"
      ]
     }
    ],
    "templateId": null
   },
   "draftMeta": {
-   "model": "deepseek-flash",
+   "model": "gpt-6-luna",
    "promptVersion": "draft-6ea4a82036d6",
-   "requestId": "c224f5e8-6dd1-4ad6-93dc-6c6bc9050293",
+   "requestId": "644fa96e-f48e-4dde-9713-bb132dfb899f",
    "attempt": 1
   },
   "recordedWeeks": 11
@@ -351,10 +325,10 @@ export const GOAL_SAMPLES: ReadonlyArray<Record<string, unknown>> = [
   "id": "ten_k",
   "language": "es",
   "text": "Correr 10 km para diciembre. Solo entre semana en la mañana, máximo 3 horas por semana.",
-  "recordedOn": "2026-09-24",
+  "recordedOn": "2026-09-25",
   "reading": {
    "decision": "plan",
-   "title": "Correr 10 km para diciembre",
+   "title": "Prepararme para correr 10 km",
    "summary": "Quiere correr 10 km para diciembre, solo entre semana por la mañana y con un máximo de 3 horas por semana.",
    "domain": "fitness",
    "level": "unknown",
@@ -375,264 +349,261 @@ export const GOAL_SAMPLES: ReadonlyArray<Record<string, unknown>> = [
   },
   "scopeRefused": false,
   "readMeta": {
-   "model": "deepseek-flash",
+   "model": "gpt-6-luna",
    "promptVersion": "read-goal-f2bbb9b5a76f",
-   "requestId": "c5f9984e-a5d7-4d55-9e92-34a5b223fdae"
+   "requestId": "f91efcdc-094c-4f44-aef3-b76b11f0b226"
   },
   "draft": {
    "phases": [
     {
-     "title": "Base aeróbica",
+     "title": "Base y constancia",
      "fromWeek": 1,
-     "toWeek": 4,
-     "focus": "Construir el hábito y una base cómoda de carrera continua."
+     "toWeek": 3,
+     "focus": "Crear hábito con carrera suave y caminatas."
     },
     {
-     "title": "Desarrollo de resistencia",
-     "fromWeek": 5,
-     "toWeek": 8,
-     "focus": "Aumentar gradualmente el volumen y la duración de la tirada larga."
+     "title": "Construcción",
+     "fromWeek": 4,
+     "toWeek": 7,
+     "focus": "Aumentar gradualmente el tiempo de carrera."
     },
     {
-     "title": "Consolidación y afinado",
-     "fromWeek": 9,
+     "title": "Resistencia y descarga",
+     "fromWeek": 8,
      "toWeek": 11,
-     "focus": "Consolidar la distancia de 10 km y llegar descansado."
+     "focus": "Consolidar la distancia y llegar descansado."
     }
    ],
    "sessionTypes": [
     {
-     "id": "rodaje_suave",
-     "title": "Rodaje suave",
-     "minutes": 30,
+     "id": "suave",
+     "title": "Carrera suave",
+     "minutes": 25,
      "intensity": "easy",
      "role": "support",
      "blocks": [
       {
        "minutes": 5,
-       "activity": "Caminar rápido para entrar en calor"
+       "activity": "Caminar a paso ligero."
       },
       {
-       "minutes": 20,
-       "activity": "Trote continuo a ritmo cómodo"
+       "minutes": 15,
+       "activity": "Alternar trote cómodo y caminata si hace falta."
       },
       {
        "minutes": 5,
-       "activity": "Caminar y estirar suavemente"
+       "activity": "Caminar para terminar."
       }
      ],
-     "deliverable": "Registro de 30 minutos de actividad con sensación de esfuerzo bajo.",
-     "doneWhen": "Completas los 20 minutos de trote sin parar y terminas sin fatiga."
+     "deliverable": "Registro del tiempo de trote y caminata.",
+     "doneWhen": "Completa 25 minutos a ritmo cómodo."
     },
     {
-     "id": "rodaje_medio",
-     "title": "Rodaje medio",
-     "minutes": 45,
-     "intensity": "moderate",
-     "role": "support",
-     "blocks": [
-      {
-       "minutes": 5,
-       "activity": "Calentamiento caminando"
-      },
-      {
-       "minutes": 35,
-       "activity": "Trote continuo a ritmo conversacional"
-      },
-      {
-       "minutes": 5,
-       "activity": "Vuelta a la calma caminando"
-      }
-     ],
-     "deliverable": "Registro de 45 minutos con ritmo constante.",
-     "doneWhen": "Mantienes el trote los 35 minutos centrales sin caminar."
-    },
-    {
-     "id": "tirada_larga",
-     "title": "Tirada larga",
-     "minutes": 60,
-     "intensity": "moderate",
+     "id": "larga",
+     "title": "Carrera larga suave",
+     "minutes": 40,
+     "intensity": "easy",
      "role": "key",
      "blocks": [
       {
        "minutes": 5,
-       "activity": "Calentamiento caminando"
-      },
-      {
-       "minutes": 50,
-       "activity": "Carrera continua a ritmo suave"
-      },
-      {
-       "minutes": 5,
-       "activity": "Caminar y estirar"
-      }
-     ],
-     "deliverable": "Distancia y tiempo de la tirada larga anotados.",
-     "doneWhen": "Completas 50 minutos de carrera continua sin parar."
-    },
-    {
-     "id": "tirada_larga_progresiva",
-     "title": "Tirada larga progresiva",
-     "minutes": 75,
-     "intensity": "moderate",
-     "role": "key",
-     "blocks": [
-      {
-       "minutes": 5,
-       "activity": "Calentamiento caminando"
+       "activity": "Caminar a paso ligero."
       },
       {
        "minutes": 30,
-       "activity": "Carrera suave"
-      },
-      {
-       "minutes": 35,
-       "activity": "Carrera a ritmo algo más vivo"
+       "activity": "Trotar cómodamente, alternando caminata cuando sea necesario."
       },
       {
        "minutes": 5,
-       "activity": "Caminar y estirar"
+       "activity": "Caminar para terminar."
       }
      ],
-     "deliverable": "Registro de 75 minutos con la parte final más rápida.",
-     "doneWhen": "Terminas los 35 minutos finales a ritmo vivo sin parar."
+     "deliverable": "Registro del tiempo total y la distancia recorrida.",
+     "doneWhen": "Completa 40 minutos sin forzar el ritmo."
     },
     {
-     "id": "simulacion_10k",
-     "title": "Simulación 10 km",
-     "minutes": 90,
-     "intensity": "hard",
+     "id": "progresiva",
+     "title": "Carrera progresiva",
+     "minutes": 30,
+     "intensity": "moderate",
      "role": "key",
      "blocks": [
       {
-       "minutes": 10,
-       "activity": "Calentamiento caminando y movilidad"
+       "minutes": 5,
+       "activity": "Caminar y trotar muy suave."
       },
       {
-       "minutes": 70,
-       "activity": "Carrera continua intentando cubrir 10 km"
+       "minutes": 20,
+       "activity": "Trotar cómodo y acelerar ligeramente en los últimos 5 minutos."
       },
       {
-       "minutes": 10,
-       "activity": "Caminar y estirar"
+       "minutes": 5,
+       "activity": "Caminar para terminar."
       }
      ],
-     "deliverable": "Tiempo y distancia de la simulación de 10 km.",
-     "doneWhen": "Cubres 10 km corriendo o trotando sin parar."
+     "deliverable": "Registro de sensaciones y distancia.",
+     "doneWhen": "Termina con esfuerzo controlado y puede hablar en frases."
     },
     {
-     "id": "activacion_suave",
-     "title": "Activación suave",
+     "id": "larga_extendida",
+     "title": "Carrera larga extendida",
+     "minutes": 50,
+     "intensity": "easy",
+     "role": "key",
+     "blocks": [
+      {
+       "minutes": 5,
+       "activity": "Caminar a paso ligero."
+      },
+      {
+       "minutes": 40,
+       "activity": "Trotar a ritmo cómodo, alternando caminata si hace falta."
+      },
+      {
+       "minutes": 5,
+       "activity": "Caminar para terminar."
+      }
+     ],
+     "deliverable": "Registro del tiempo y la distancia recorrida.",
+     "doneWhen": "Completa 50 minutos manteniendo un esfuerzo fácil."
+    },
+    {
+     "id": "larga_maxima",
+     "title": "Carrera larga de resistencia",
+     "minutes": 60,
+     "intensity": "easy",
+     "role": "key",
+     "blocks": [
+      {
+       "minutes": 5,
+       "activity": "Caminar a paso ligero."
+      },
+      {
+       "minutes": 50,
+       "activity": "Trotar cómodamente, alternando caminata cuando sea necesario."
+      },
+      {
+       "minutes": 5,
+       "activity": "Caminar para terminar."
+      }
+     ],
+     "deliverable": "Registro del tiempo y la distancia recorrida.",
+     "doneWhen": "Completa 60 minutos a ritmo fácil."
+    },
+    {
+     "id": "descarga",
+     "title": "Carrera fácil de descarga",
      "minutes": 20,
      "intensity": "easy",
      "role": "support",
      "blocks": [
       {
        "minutes": 5,
-       "activity": "Caminar"
+       "activity": "Caminar a paso ligero."
       },
       {
        "minutes": 10,
-       "activity": "Trote muy suave"
+       "activity": "Trotar muy suave o alternar con caminata."
       },
       {
        "minutes": 5,
-       "activity": "Estiramientos suaves"
+       "activity": "Caminar para terminar."
       }
      ],
-     "deliverable": "Registro de 20 minutos de activación.",
-     "doneWhen": "Completas el trote suave sin molestias."
+     "deliverable": "Registro breve de cómo se sintió la sesión.",
+     "doneWhen": "Completa 20 minutos sin apretar."
     }
    ],
    "weeks": [
     {
      "week": 1,
-     "sessions": [
-      "rodaje_suave"
-     ]
+     "sessions": []
     },
     {
      "week": 2,
      "sessions": [
-      "rodaje_suave",
-      "rodaje_medio"
+      "suave",
+      "larga"
      ]
     },
     {
      "week": 3,
      "sessions": [
-      "rodaje_suave",
-      "rodaje_medio"
+      "suave",
+      "larga",
+      "descarga"
      ]
     },
     {
      "week": 4,
      "sessions": [
-      "rodaje_suave",
-      "rodaje_medio",
-      "tirada_larga"
+      "suave",
+      "progresiva",
+      "larga"
      ]
     },
     {
      "week": 5,
      "sessions": [
-      "rodaje_suave",
-      "rodaje_medio",
-      "tirada_larga"
+      "suave",
+      "progresiva",
+      "larga_extendida"
      ]
     },
     {
      "week": 6,
      "sessions": [
-      "rodaje_suave",
-      "rodaje_medio",
-      "tirada_larga"
+      "suave",
+      "progresiva",
+      "larga_extendida"
      ]
     },
     {
      "week": 7,
      "sessions": [
-      "rodaje_suave",
-      "rodaje_medio",
-      "tirada_larga_progresiva"
+      "suave",
+      "progresiva",
+      "larga_maxima"
      ]
     },
     {
      "week": 8,
      "sessions": [
-      "rodaje_suave",
-      "rodaje_medio",
-      "tirada_larga_progresiva"
+      "suave",
+      "progresiva",
+      "larga_maxima"
      ]
     },
     {
      "week": 9,
      "sessions": [
-      "rodaje_suave",
-      "rodaje_medio",
-      "tirada_larga_progresiva"
+      "suave",
+      "progresiva",
+      "larga_maxima"
      ]
     },
     {
      "week": 10,
      "sessions": [
-      "rodaje_suave",
-      "simulacion_10k"
+      "suave",
+      "larga_maxima",
+      "descarga"
      ]
     },
     {
      "week": 11,
      "sessions": [
-      "activacion_suave"
+      "descarga",
+      "suave"
      ]
     }
    ],
    "templateId": null
   },
   "draftMeta": {
-   "model": "deepseek-flash",
+   "model": "gpt-6-luna",
    "promptVersion": "draft-6ea4a82036d6",
-   "requestId": "c15b7995-4b69-4f57-86cb-484046ddd2c3",
+   "requestId": "80ce2800-4325-481f-aaac-08a234303a9f",
    "attempt": 1
   },
   "recordedWeeks": 11
@@ -641,14 +612,14 @@ export const GOAL_SAMPLES: ReadonlyArray<Record<string, unknown>> = [
   "id": "guitar",
   "language": "en",
   "text": "Learn guitar: basic chords and three full songs by the end of the year, Tuesday and Thursday evenings.",
-  "recordedOn": "2026-09-24",
+  "recordedOn": "2026-09-25",
   "reading": {
    "decision": "plan",
-   "title": "Learn guitar: basic chords and three songs",
-   "summary": "Learn basic guitar chords and three full songs by the end of the year, practising Tuesday and Thursday evenings.",
-   "domain": "creative",
-   "level": "beginner",
-   "deadline": "2026-12-31",
+   "title": "Learn Basic Guitar and Three Songs",
+   "summary": "The person wants to learn basic guitar chords and three full songs by the end of the year, practicing Tuesday and Thursday evenings.",
+   "domain": "learning",
+   "level": "unknown",
+   "deadline": "2026-12-01",
    "deadline_basis": "inferred",
    "days": [
     1,
@@ -662,175 +633,197 @@ export const GOAL_SAMPLES: ReadonlyArray<Record<string, unknown>> = [
   },
   "scopeRefused": false,
   "readMeta": {
-   "model": "deepseek-flash",
+   "model": "gpt-6-luna",
    "promptVersion": "read-goal-f2bbb9b5a76f",
-   "requestId": "74ee6fa2-220c-4e90-b8c7-aea86e8b15ce"
+   "requestId": "f6c9a02b-1d06-4d38-b72f-5c27f5794691"
   },
   "draft": {
    "phases": [
     {
-     "title": "Foundation",
+     "title": "Guitar foundations",
      "fromWeek": 1,
-     "toWeek": 4,
-     "focus": "Learn open chords and clean changes"
+     "toWeek": 3,
+     "focus": "Learn instrument setup, basic chords, and steady strumming."
     },
     {
-     "title": "Song Building",
-     "fromWeek": 5,
-     "toWeek": 9,
-     "focus": "Apply chords to song sections and simple strums"
+     "title": "Build song skills",
+     "fromWeek": 4,
+     "toWeek": 7,
+     "focus": "Learn three songs in sections and improve chord changes."
     },
     {
-     "title": "Song Performance",
-     "fromWeek": 10,
-     "toWeek": 14,
-     "focus": "Play three songs from start to finish"
-    },
-    {
-     "title": "Polish and Review",
-     "fromWeek": 15,
-     "toWeek": 15,
-     "focus": "Record and review final performances"
+     "title": "Complete and polish",
+     "fromWeek": 8,
+     "toWeek": 11,
+     "focus": "Join song sections, practice full performances, and finish with a light review."
     }
    ],
    "sessionTypes": [
     {
      "id": "chord_foundations",
-     "title": "Chord Foundations",
-     "minutes": 30,
+     "title": "Chord foundations",
+     "minutes": 45,
      "intensity": "easy",
-     "role": "support",
+     "role": "key",
      "blocks": [
       {
        "minutes": 5,
-       "activity": "Warm up with finger stretches and slow chord shapes"
+       "activity": "Tune the guitar and check posture."
       },
       {
        "minutes": 15,
-       "activity": "Practice two open chords with clean fretting"
+       "activity": "Practice two basic chord shapes slowly."
+      },
+      {
+       "minutes": 15,
+       "activity": "Switch between the chords with a steady count."
       },
       {
        "minutes": 10,
-       "activity": "Change between the two chords slowly"
+       "activity": "Play a simple strumming pattern through the changes."
       }
      ],
-     "deliverable": "A list of chords practiced and one clean change",
-     "doneWhen": "You can play each chord and switch once without buzzing"
+     "deliverable": "A short recording of the practiced chord changes.",
+     "doneWhen": "Play each chord clearly and complete ten slow changes between them."
     },
     {
-     "id": "chord_changes",
-     "title": "Chord Changes",
-     "minutes": 30,
+     "id": "rhythm_and_changes",
+     "title": "Rhythm and chord changes",
+     "minutes": 45,
      "intensity": "moderate",
      "role": "support",
      "blocks": [
       {
        "minutes": 5,
-       "activity": "Warm up with finger stretches"
+       "activity": "Tune and review the chord shapes."
       },
       {
        "minutes": 15,
-       "activity": "Practice changing between three chords in time"
+       "activity": "Practice a steady down-up strumming pattern."
+      },
+      {
+       "minutes": 15,
+       "activity": "Change chords in time with a slow count."
       },
       {
        "minutes": 10,
-       "activity": "Play a simple downstrum pattern over the changes"
+       "activity": "Play a repeating chord progression without stopping."
       }
      ],
-     "deliverable": "A count of clean chord changes in one minute",
-     "doneWhen": "You can change chords 10 times in a minute without stopping"
+     "deliverable": "A recording of one uninterrupted chord progression.",
+     "doneWhen": "Keep the beat through the progression with no more than two pauses."
     },
     {
      "id": "song_section",
-     "title": "Song Section",
-     "minutes": 30,
+     "title": "Learn a song section",
+     "minutes": 60,
      "intensity": "moderate",
      "role": "key",
      "blocks": [
       {
        "minutes": 5,
-       "activity": "Warm up with chord changes"
+       "activity": "Tune and review the song's chords."
       },
       {
        "minutes": 15,
-       "activity": "Learn and loop one section of a chosen song"
+       "activity": "Practice the chord sequence slowly."
       },
       {
-       "minutes": 10,
-       "activity": "Play the section with a steady strum"
-      }
-     ],
-     "deliverable": "A recording or note of the section played",
-     "doneWhen": "You can play the section twice in a row without mistakes"
-    },
-    {
-     "id": "full_song_run",
-     "title": "Full Song Run",
-     "minutes": 45,
-     "intensity": "hard",
-     "role": "key",
-     "blocks": [
+       "minutes": 20,
+       "activity": "Learn one verse or chorus in short phrases."
+      },
+      {
+       "minutes": 15,
+       "activity": "Join the phrases and repeat with steady strumming."
+      },
       {
        "minutes": 5,
-       "activity": "Warm up with chord changes"
-      },
-      {
-       "minutes": 30,
-       "activity": "Play one full song from start to finish"
-      },
-      {
-       "minutes": 10,
-       "activity": "Repeat tricky transitions slowly"
+       "activity": "Record a take and note one improvement."
       }
      ],
-     "deliverable": "A full run-through of one song",
-     "doneWhen": "You complete the song without stopping"
+     "deliverable": "A recording of one verse or chorus from the current song.",
+     "doneWhen": "Play the section from start to finish, keeping the chord order and beat."
     },
     {
-     "id": "three_song_set",
-     "title": "Three-Song Set",
+     "id": "song_runthrough",
+     "title": "Song run-through",
      "minutes": 60,
-     "intensity": "hard",
+     "intensity": "moderate",
      "role": "key",
      "blocks": [
       {
        "minutes": 5,
-       "activity": "Warm up with chord changes"
+       "activity": "Tune and warm up with familiar chords."
       },
       {
-       "minutes": 45,
-       "activity": "Play all three songs back to back"
+       "minutes": 15,
+       "activity": "Review the song's chord changes."
+      },
+      {
+       "minutes": 25,
+       "activity": "Play the song from beginning to end, repeating difficult transitions."
       },
       {
        "minutes": 10,
-       "activity": "Review and repeat the weakest transition"
+       "activity": "Perform one uninterrupted full-song take."
+      },
+      {
+       "minutes": 5,
+       "activity": "Record what to polish next."
       }
      ],
-     "deliverable": "A recording of the three-song set",
-     "doneWhen": "You play all three songs in one sitting without long pauses"
+     "deliverable": "A full-song recording and one specific practice note.",
+     "doneWhen": "Complete one full take without stopping, even if a chord is imperfect."
     },
     {
-     "id": "review_record",
-     "title": "Review and Record",
-     "minutes": 30,
+     "id": "repertoire_review",
+     "title": "Repertoire review",
+     "minutes": 45,
      "intensity": "easy",
      "role": "support",
      "blocks": [
       {
        "minutes": 5,
-       "activity": "Warm up with finger stretches"
+       "activity": "Tune and choose a comfortable tempo."
       },
       {
-       "minutes": 15,
-       "activity": "Record one song or section"
+       "minutes": 30,
+       "activity": "Play familiar sections from all three songs."
       },
       {
        "minutes": 10,
-       "activity": "Listen back and note one improvement"
+       "activity": "Record the strongest section from each song."
       }
      ],
-     "deliverable": "A recording and one written note",
-     "doneWhen": "You have a recording and one clear next step"
+     "deliverable": "Three short recordings, one from each song.",
+     "doneWhen": "Play a recognizable section of each song and identify any remaining rough spot."
+    },
+    {
+     "id": "final_performance",
+     "title": "Three-song performance",
+     "minutes": 60,
+     "intensity": "moderate",
+     "role": "key",
+     "blocks": [
+      {
+       "minutes": 5,
+       "activity": "Tune and set a comfortable tempo."
+      },
+      {
+       "minutes": 15,
+       "activity": "Warm up with the three songs' chord changes."
+      },
+      {
+       "minutes": 30,
+       "activity": "Play all three songs in sequence, allowing brief resets between them."
+      },
+      {
+       "minutes": 10,
+       "activity": "Record the performance and note one next step."
+      }
+     ],
+     "deliverable": "A recording of all three songs played in sequence.",
+     "doneWhen": "Finish all three songs in order and save the recording."
     }
    ],
    "weeks": [
@@ -842,122 +835,94 @@ export const GOAL_SAMPLES: ReadonlyArray<Record<string, unknown>> = [
      "week": 2,
      "sessions": [
       "chord_foundations",
-      "chord_foundations"
+      "rhythm_and_changes"
      ]
     },
     {
      "week": 3,
      "sessions": [
       "chord_foundations",
-      "chord_changes"
+      "rhythm_and_changes"
      ]
     },
     {
      "week": 4,
      "sessions": [
       "chord_foundations",
-      "chord_changes"
+      "song_section"
      ]
     },
     {
      "week": 5,
      "sessions": [
-      "chord_changes",
-      "song_section"
+      "song_section",
+      "rhythm_and_changes"
      ]
     },
     {
      "week": 6,
      "sessions": [
-      "chord_changes",
+      "song_section",
       "song_section"
      ]
     },
     {
      "week": 7,
      "sessions": [
-      "chord_changes",
-      "song_section"
+      "song_section",
+      "song_runthrough"
      ]
     },
     {
      "week": 8,
      "sessions": [
-      "chord_changes",
-      "song_section"
+      "song_section",
+      "song_runthrough"
      ]
     },
     {
      "week": 9,
      "sessions": [
-      "chord_changes",
-      "song_section"
+      "song_runthrough",
+      "repertoire_review"
      ]
     },
     {
      "week": 10,
      "sessions": [
-      "song_section",
-      "full_song_run"
+      "song_runthrough",
+      "final_performance"
      ]
     },
     {
      "week": 11,
      "sessions": [
-      "song_section",
-      "full_song_run"
-     ]
-    },
-    {
-     "week": 12,
-     "sessions": [
-      "song_section",
-      "full_song_run"
-     ]
-    },
-    {
-     "week": 13,
-     "sessions": [
-      "song_section",
-      "full_song_run"
-     ]
-    },
-    {
-     "week": 14,
-     "sessions": [
-      "full_song_run",
-      "three_song_set"
-     ]
-    },
-    {
-     "week": 15,
-     "sessions": [
-      "review_record"
+      "final_performance"
      ]
     }
    ],
    "templateId": null
   },
   "draftMeta": {
-   "model": "deepseek-flash",
+   "model": "gpt-6-luna",
    "promptVersion": "draft-6ea4a82036d6",
-   "requestId": "03e79b4a-46e9-450e-8e88-194d32bc0719",
+   "requestId": "e369eead-48be-4af5-848f-03ccbeb74881",
    "attempt": 1
   },
-  "recordedWeeks": 15
+  "recordedWeeks": 11
  },
  {
   "id": "guitar",
   "language": "es",
   "text": "Aprender guitarra: acordes básicos y tres canciones completas para fin de año, martes y jueves en la noche.",
-  "recordedOn": "2026-09-24",
+  "recordedOn": "2026-09-25",
   "reading": {
    "decision": "plan",
-   "title": "Aprender guitarra: acordes básicos y tres canciones",
-   "summary": "Quiere aprender guitarra, con acordes básicos y tres canciones completas para fin de año, practicando martes y jueves por la noche.",
-   "domain": "creative",
-   "level": "beginner",
-   "deadline": "2026-12-31",
+   "title": "Aprender acordes y canciones en guitarra",
+   "summary": "Quiere aprender acordes básicos y tocar tres canciones completas para fin de año, practicando los martes y jueves por la noche.",
+   "domain": "learning",
+   "level": "unknown",
+   "deadline": "2026-12-01",
    "deadline_basis": "inferred",
    "days": [
     1,
@@ -971,201 +936,149 @@ export const GOAL_SAMPLES: ReadonlyArray<Record<string, unknown>> = [
   },
   "scopeRefused": false,
   "readMeta": {
-   "model": "deepseek-flash",
+   "model": "gpt-6-luna",
    "promptVersion": "read-goal-f2bbb9b5a76f",
-   "requestId": "cabcc363-87d8-4883-b6fd-4b69eb1331a3"
+   "requestId": "f418143c-4f45-4aeb-b705-a4ab05c45b93"
   },
   "draft": {
    "phases": [
     {
-     "title": "Fundamentos y primeros acordes",
+     "title": "Primeros acordes",
      "fromWeek": 1,
-     "toWeek": 5,
-     "focus": "Postura, afinación, ritmo básico y acordes abiertos esenciales."
+     "toWeek": 3,
+     "focus": "Aprender acordes básicos y cambiar entre ellos con limpieza."
     },
     {
-     "title": "Cambios de acorde y ritmos",
-     "fromWeek": 6,
-     "toWeek": 10,
-     "focus": "Transiciones fluidas, rasgueos y primeras canciones sencillas."
+     "title": "Ritmo y primera canción",
+     "fromWeek": 4,
+     "toWeek": 6,
+     "focus": "Practicar patrones de rasgueo y montar una canción completa."
     },
     {
-     "title": "Canciones completas y expresión",
-     "fromWeek": 11,
-     "toWeek": 15,
-     "focus": "Tocar tres canciones completas con dinámica y seguridad."
+     "title": "Ampliar repertorio",
+     "fromWeek": 7,
+     "toWeek": 9,
+     "focus": "Aprender dos canciones más y mejorar las transiciones."
+    },
+    {
+     "title": "Repaso y presentación",
+     "fromWeek": 10,
+     "toWeek": 11,
+     "focus": "Repasar las tres canciones y tocarlas de principio a fin."
     }
    ],
    "sessionTypes": [
     {
-     "id": "tecnica_base",
-     "title": "Técnica base",
+     "id": "acordes",
+     "title": "Acordes y cambios",
+     "minutes": 30,
+     "intensity": "easy",
+     "role": "key",
+     "blocks": [
+      {
+       "minutes": 5,
+       "activity": "Afinar y preparar la guitarra."
+      },
+      {
+       "minutes": 10,
+       "activity": "Practicar acordes básicos por separado."
+      },
+      {
+       "minutes": 10,
+       "activity": "Cambiar entre pares de acordes lentamente."
+      },
+      {
+       "minutes": 5,
+       "activity": "Repasar los cambios más difíciles."
+      }
+     ],
+     "deliverable": "Lista de acordes practicados y cambios más fluidos.",
+     "doneWhen": "Completa los bloques y cambia entre los acordes elegidos sin detenerse en tres intentos."
+    },
+    {
+     "id": "ritmo",
+     "title": "Ritmo y rasgueo",
      "minutes": 30,
      "intensity": "easy",
      "role": "support",
      "blocks": [
       {
        "minutes": 5,
-       "activity": "Calentamiento de dedos y muñeca"
+       "activity": "Afinar y marcar un pulso constante."
       },
       {
        "minutes": 10,
-       "activity": "Ejercicios de pulsación y coordinación"
+       "activity": "Practicar un patrón de rasgueo con cuerdas apagadas."
       },
       {
        "minutes": 10,
-       "activity": "Cambios lentos entre dos acordes"
+       "activity": "Aplicar el patrón a dos acordes."
       },
       {
        "minutes": 5,
-       "activity": "Estiramiento y relajación"
+       "activity": "Tocar el patrón sin parar."
       }
      ],
-     "deliverable": "Registro de ejercicios y acordes practicados",
-     "doneWhen": "Completar los bloques sin dolor y con ritmo constante"
+     "deliverable": "Un patrón de rasgueo practicado con pulso estable.",
+     "doneWhen": "Mantiene el patrón durante un minuto sin perder el pulso."
     },
     {
-     "id": "acordes_ritmo",
-     "title": "Acordes y ritmo",
+     "id": "cancion",
+     "title": "Montaje de canción",
      "minutes": 45,
      "intensity": "moderate",
      "role": "key",
      "blocks": [
       {
        "minutes": 5,
-       "activity": "Afinar y calentar"
-      },
-      {
-       "minutes": 15,
-       "activity": "Practicar acordes nuevos con metrónomo"
-      },
-      {
-       "minutes": 15,
-       "activity": "Cambios de acorde en progresión"
+       "activity": "Afinar y revisar los acordes de la canción."
       },
       {
        "minutes": 10,
-       "activity": "Rasgueo básico sobre progresión"
-      }
-     ],
-     "deliverable": "Grabación corta de la progresión con rasgueo",
-     "doneWhen": "Cambios limpios a tempo lento sin pausas largas"
-    },
-    {
-     "id": "cancion_guiada",
-     "title": "Canción guiada",
-     "minutes": 60,
-     "intensity": "moderate",
-     "role": "key",
-     "blocks": [
+       "activity": "Practicar por separado los cambios difíciles."
+      },
       {
-       "minutes": 5,
-       "activity": "Afinar y calentar"
+       "minutes": 15,
+       "activity": "Tocar secciones de la canción con el patrón elegido."
       },
       {
        "minutes": 10,
-       "activity": "Repasar acordes de la canción"
-      },
-      {
-       "minutes": 20,
-       "activity": "Trabajar secciones difíciles"
-      },
-      {
-       "minutes": 20,
-       "activity": "Tocar la canción completa a tempo lento"
+       "activity": "Unir las secciones y repetir los enlaces."
       },
       {
        "minutes": 5,
-       "activity": "Anotar mejoras y dificultades"
+       "activity": "Anotar el siguiente paso de práctica."
       }
      ],
-     "deliverable": "Grabación de la canción completa",
-     "doneWhen": "Tocar de principio a fin sin detenerse"
+     "deliverable": "Una sección nueva o revisada de la canción tocada con acordes y ritmo.",
+     "doneWhen": "Toca la sección elegida dos veces seguidas sin detenerse."
     },
     {
-     "id": "ensayo_cancion",
-     "title": "Ensayo de canción",
+     "id": "repaso",
+     "title": "Repaso de repertorio",
      "minutes": 45,
-     "intensity": "moderate",
-     "role": "support",
-     "blocks": [
-      {
-       "minutes": 5,
-       "activity": "Calentamiento y afinación"
-      },
-      {
-       "minutes": 15,
-       "activity": "Repasar transiciones y ritmo"
-      },
-      {
-       "minutes": 20,
-       "activity": "Tocar canción completa con metrónomo"
-      },
-      {
-       "minutes": 5,
-       "activity": "Autoevaluación breve"
-      }
-     ],
-     "deliverable": "Notas de ensayo con tiempos y fallos",
-     "doneWhen": "Canción tocada completa a tempo objetivo"
-    },
-    {
-     "id": "repaso_semanal",
-     "title": "Repaso semanal",
-     "minutes": 30,
      "intensity": "easy",
-     "role": "support",
-     "blocks": [
-      {
-       "minutes": 5,
-       "activity": "Calentamiento suave"
-      },
-      {
-       "minutes": 10,
-       "activity": "Repasar acordes y cambios"
-      },
-      {
-       "minutes": 10,
-       "activity": "Tocar canción en progreso"
-      },
-      {
-       "minutes": 5,
-       "activity": "Planificar siguiente práctica"
-      }
-     ],
-     "deliverable": "Lista de logros y objetivos para la próxima semana",
-     "doneWhen": "Repaso completado y objetivos anotados"
-    },
-    {
-     "id": "grabacion_final",
-     "title": "Grabación final",
-     "minutes": 60,
-     "intensity": "moderate",
      "role": "key",
      "blocks": [
       {
        "minutes": 5,
-       "activity": "Afinar y calentar"
+       "activity": "Afinar y elegir el orden de las canciones."
+      },
+      {
+       "minutes": 15,
+       "activity": "Repasar la canción más reciente."
+      },
+      {
+       "minutes": 15,
+       "activity": "Repasar las canciones anteriores."
       },
       {
        "minutes": 10,
-       "activity": "Repaso rápido de acordes"
-      },
-      {
-       "minutes": 30,
-       "activity": "Grabar las tres canciones completas"
-      },
-      {
-       "minutes": 10,
-       "activity": "Escuchar y anotar mejoras"
-      },
-      {
-       "minutes": 5,
-       "activity": "Cierre y celebración"
+       "activity": "Tocar una canción completa y anotar los puntos pendientes."
       }
      ],
-     "deliverable": "Grabación de las tres canciones completas",
-     "doneWhen": "Las tres canciones grabadas de principio a fin"
+     "deliverable": "Registro de canciones repasadas y pasajes por mejorar.",
+     "doneWhen": "Completa el repaso y toca una canción de principio a fin."
     }
    ],
    "weeks": [
@@ -1176,124 +1089,95 @@ export const GOAL_SAMPLES: ReadonlyArray<Record<string, unknown>> = [
     {
      "week": 2,
      "sessions": [
-      "tecnica_base",
-      "acordes_ritmo"
+      "acordes",
+      "ritmo"
      ]
     },
     {
      "week": 3,
      "sessions": [
-      "tecnica_base",
-      "acordes_ritmo"
+      "acordes",
+      "ritmo"
      ]
     },
     {
      "week": 4,
      "sessions": [
-      "tecnica_base",
-      "acordes_ritmo"
+      "acordes",
+      "cancion"
      ]
     },
     {
      "week": 5,
      "sessions": [
-      "tecnica_base",
-      "acordes_ritmo"
+      "acordes",
+      "cancion"
      ]
     },
     {
      "week": 6,
      "sessions": [
-      "acordes_ritmo",
-      "cancion_guiada"
+      "ritmo",
+      "cancion"
      ]
     },
     {
      "week": 7,
      "sessions": [
-      "acordes_ritmo",
-      "cancion_guiada"
+      "cancion",
+      "repaso"
      ]
     },
     {
      "week": 8,
      "sessions": [
-      "acordes_ritmo",
-      "cancion_guiada"
+      "cancion",
+      "repaso"
      ]
     },
     {
      "week": 9,
      "sessions": [
-      "acordes_ritmo",
-      "cancion_guiada"
+      "cancion",
+      "repaso"
      ]
     },
     {
      "week": 10,
      "sessions": [
-      "acordes_ritmo",
-      "cancion_guiada"
+      "cancion",
+      "repaso"
      ]
     },
     {
      "week": 11,
      "sessions": [
-      "cancion_guiada",
-      "ensayo_cancion"
-     ]
-    },
-    {
-     "week": 12,
-     "sessions": [
-      "cancion_guiada",
-      "ensayo_cancion"
-     ]
-    },
-    {
-     "week": 13,
-     "sessions": [
-      "cancion_guiada",
-      "ensayo_cancion"
-     ]
-    },
-    {
-     "week": 14,
-     "sessions": [
-      "cancion_guiada",
-      "ensayo_cancion"
-     ]
-    },
-    {
-     "week": 15,
-     "sessions": [
-      "grabacion_final",
-      "repaso_semanal"
+      "repaso"
      ]
     }
    ],
    "templateId": null
   },
   "draftMeta": {
-   "model": "deepseek-flash",
+   "model": "gpt-6-luna",
    "promptVersion": "draft-6ea4a82036d6",
-   "requestId": "eb751c65-e920-49d3-a205-7512dc14b007",
+   "requestId": "ae67ac0a-e259-4f8d-adbb-0182a4ff03f1",
    "attempt": 1
   },
-  "recordedWeeks": 15
+  "recordedWeeks": 11
  },
  {
   "id": "interview",
   "language": "en",
   "text": "Prepare for a software engineering interview in six weeks: data structures and system design, weekday evenings, 5 hours a week.",
-  "recordedOn": "2026-09-24",
+  "recordedOn": "2026-09-25",
   "reading": {
    "decision": "plan",
-   "title": "Software engineering interview prep",
-   "summary": "Prepare for a software engineering interview in six weeks, covering data structures and system design, on weekday evenings for 5 hours a week.",
+   "title": "Software Engineering Interview Prep",
+   "summary": "Prepare for a software engineering interview by studying data structures and system design over six weeks, using weekday evenings and up to five hours per week.",
    "domain": "learning",
    "level": "unknown",
-   "deadline": "2026-11-05",
+   "deadline": "2026-11-06",
    "deadline_basis": "inferred",
    "days": [
     0,
@@ -1310,234 +1194,255 @@ export const GOAL_SAMPLES: ReadonlyArray<Record<string, unknown>> = [
   },
   "scopeRefused": false,
   "readMeta": {
-   "model": "deepseek-flash",
+   "model": "gpt-6-luna",
    "promptVersion": "read-goal-f2bbb9b5a76f",
-   "requestId": "f5a732a9-bb91-423c-90a7-83d466e2bd10"
+   "requestId": "37cacdce-a915-48dc-af16-7ae097bd491c"
   },
   "draft": {
    "phases": [
     {
-     "title": "Foundations",
+     "title": "Core foundations",
      "fromWeek": 1,
      "toWeek": 2,
-     "focus": "Core data structures and problem patterns"
+     "focus": "Review essential data structures and establish a repeatable problem-solving approach."
     },
     {
-     "title": "Applied Practice",
+     "title": "Algorithms and design basics",
      "fromWeek": 3,
      "toWeek": 4,
-     "focus": "Timed problems and system design basics"
+     "focus": "Practice common algorithm patterns and learn core system design trade-offs."
     },
     {
-     "title": "Integration",
+     "title": "Interview practice",
      "fromWeek": 5,
      "toWeek": 6,
-     "focus": "Full mock interviews and design depth"
+     "focus": "Combine timed coding practice with structured system design exercises."
     },
     {
-     "title": "Taper",
+     "title": "Final review",
      "fromWeek": 7,
      "toWeek": 7,
-     "focus": "Light review and rest before interview"
+     "focus": "Consolidate notes and complete a lighter final practice session."
     }
    ],
    "sessionTypes": [
     {
-     "id": "dsa_learn",
-     "title": "DSA Concept Study",
+     "id": "coding_patterns",
+     "title": "Coding patterns practice",
      "minutes": 60,
      "intensity": "moderate",
-     "role": "support",
-     "blocks": [
-      {
-       "minutes": 10,
-       "activity": "Review notes on one data structure"
-      },
-      {
-       "minutes": 30,
-       "activity": "Study pattern examples and edge cases"
-      },
-      {
-       "minutes": 20,
-       "activity": "Write summary and key operations"
-      }
-     ],
-     "deliverable": "One-page summary of the data structure and its operations",
-     "doneWhen": "Summary written and two example problems understood"
-    },
-    {
-     "id": "dsa_practice",
-     "title": "DSA Problem Practice",
-     "minutes": 90,
-     "intensity": "hard",
      "role": "key",
      "blocks": [
       {
        "minutes": 10,
-       "activity": "Warm-up with one easy problem"
+       "activity": "Review one algorithm pattern and its use cases."
       },
       {
-       "minutes": 60,
-       "activity": "Solve two medium problems under time"
+       "minutes": 40,
+       "activity": "Solve one or two problems using the pattern; explain the approach aloud."
       },
-      {
-       "minutes": 20,
-       "activity": "Review solutions and note mistakes"
-      }
-     ],
-     "deliverable": "Two solved problems with written complexity analysis",
-     "doneWhen": "Both problems pass sample tests and review notes are complete"
-    },
-    {
-     "id": "sys_design_learn",
-     "title": "System Design Study",
-     "minutes": 60,
-     "intensity": "moderate",
-     "role": "support",
-     "blocks": [
-      {
-       "minutes": 15,
-       "activity": "Read one system design concept"
-      },
-      {
-       "minutes": 30,
-       "activity": "Sketch architecture for a known system"
-      },
-      {
-       "minutes": 15,
-       "activity": "List trade-offs and bottlenecks"
-      }
-     ],
-     "deliverable": "Architecture sketch with trade-off notes",
-     "doneWhen": "Sketch includes components, data flow, and two trade-offs"
-    },
-    {
-     "id": "sys_design_practice",
-     "title": "System Design Practice",
-     "minutes": 90,
-     "intensity": "hard",
-     "role": "key",
-     "blocks": [
       {
        "minutes": 10,
-       "activity": "Pick a design prompt and clarify requirements"
-      },
-      {
-       "minutes": 60,
-       "activity": "Design the system end-to-end"
-      },
-      {
-       "minutes": 20,
-       "activity": "Review against a reference and note gaps"
+       "activity": "Record complexity, mistakes, and a takeaway."
       }
      ],
-     "deliverable": "Full design document with requirements, components, and scaling notes",
-     "doneWhen": "Design covers requirements, API, data model, and scaling"
+     "deliverable": "Written solutions with complexity notes and one takeaway.",
+     "doneWhen": "You can explain the approach and verify the solution with test cases."
     },
     {
-     "id": "mock_interview",
-     "title": "Mock Interview",
-     "minutes": 90,
-     "intensity": "hard",
-     "role": "key",
-     "blocks": [
-      {
-       "minutes": 10,
-       "activity": "Set up and review interview format"
-      },
-      {
-       "minutes": 60,
-       "activity": "Complete one coding and one design question"
-      },
-      {
-       "minutes": 20,
-       "activity": "Self-assess and write improvement notes"
-      }
-     ],
-     "deliverable": "Recorded or written mock interview with feedback notes",
-     "doneWhen": "Both questions attempted and feedback notes written"
-    },
-    {
-     "id": "review_light",
-     "title": "Light Review",
-     "minutes": 30,
+     "id": "data_structures",
+     "title": "Data structures review",
+     "minutes": 45,
      "intensity": "easy",
      "role": "support",
      "blocks": [
       {
        "minutes": 10,
-       "activity": "Review flashcards or notes"
+       "activity": "Recall operations and complexity for the week's structures."
+      },
+      {
+       "minutes": 25,
+       "activity": "Implement or trace representative operations."
+      },
+      {
+       "minutes": 10,
+       "activity": "Write a concise comparison and note open questions."
+      }
+     ],
+     "deliverable": "A comparison sheet with operation costs and examples.",
+     "doneWhen": "You can choose an appropriate structure and justify the choice."
+    },
+    {
+     "id": "system_design",
+     "title": "System design exercise",
+     "minutes": 60,
+     "intensity": "moderate",
+     "role": "key",
+     "blocks": [
+      {
+       "minutes": 10,
+       "activity": "Clarify requirements and define scope."
+      },
+      {
+       "minutes": 15,
+       "activity": "Estimate scale and sketch the main components."
+      },
+      {
+       "minutes": 25,
+       "activity": "Trace data flow and discuss storage, APIs, and trade-offs."
+      },
+      {
+       "minutes": 10,
+       "activity": "Summarize bottlenecks and possible improvements."
+      }
+     ],
+     "deliverable": "A system diagram with requirements, trade-offs, and bottlenecks.",
+     "doneWhen": "You can walk through the design and defend its main trade-offs."
+    },
+    {
+     "id": "timed_mock",
+     "title": "Timed coding mock",
+     "minutes": 75,
+     "intensity": "hard",
+     "role": "key",
+     "blocks": [
+      {
+       "minutes": 5,
+       "activity": "Read the prompt and clarify assumptions."
+      },
+      {
+       "minutes": 45,
+       "activity": "Solve under interview conditions while narrating decisions."
+      },
+      {
+       "minutes": 15,
+       "activity": "Test edge cases and refine the solution."
+      },
+      {
+       "minutes": 10,
+       "activity": "Review performance and list specific improvements."
+      }
+     ],
+     "deliverable": "A timed solution and a short review of strengths and gaps.",
+     "doneWhen": "You finish with a tested solution and identify one concrete improvement."
+    },
+    {
+     "id": "design_review",
+     "title": "System design review",
+     "minutes": 45,
+     "intensity": "easy",
+     "role": "support",
+     "blocks": [
+      {
+       "minutes": 10,
+       "activity": "Recall a design from notes without looking."
+      },
+      {
+       "minutes": 25,
+       "activity": "Recreate its diagram and explain key decisions."
+      },
+      {
+       "minutes": 10,
+       "activity": "Check gaps against notes and record one improvement."
+      }
+     ],
+     "deliverable": "A recreated design sketch and a list of corrected gaps.",
+     "doneWhen": "You can explain the design's components and trade-offs from memory."
+    },
+    {
+     "id": "final_recap",
+     "title": "Final interview recap",
+     "minutes": 45,
+     "intensity": "easy",
+     "role": "support",
+     "blocks": [
+      {
+       "minutes": 10,
+       "activity": "Review the problem-solving checklist."
       },
       {
        "minutes": 20,
-       "activity": "Re-solve one previously missed problem"
+       "activity": "Explain one familiar coding solution and one design aloud."
+      },
+      {
+       "minutes": 15,
+       "activity": "Organize final notes and choose next practice priorities."
       }
      ],
-     "deliverable": "List of reviewed topics and one corrected solution",
-     "doneWhen": "Review list complete and problem re-solved correctly"
+     "deliverable": "A concise interview checklist and prioritized follow-up list.",
+     "doneWhen": "Your checklist is ready and you can clearly explain both examples."
     }
    ],
    "weeks": [
     {
      "week": 1,
-     "sessions": [
-      "dsa_learn"
-     ]
+     "sessions": []
     },
     {
      "week": 2,
      "sessions": [
-      "dsa_learn",
-      "dsa_practice",
-      "sys_design_learn"
+      "data_structures",
+      "coding_patterns",
+      "system_design",
+      "coding_patterns",
+      "design_review"
      ]
     },
     {
      "week": 3,
      "sessions": [
-      "dsa_practice",
-      "sys_design_learn",
-      "review_light"
+      "data_structures",
+      "coding_patterns",
+      "system_design",
+      "coding_patterns",
+      "design_review"
      ]
     },
     {
      "week": 4,
      "sessions": [
-      "dsa_practice",
-      "sys_design_practice",
-      "review_light"
+      "data_structures",
+      "coding_patterns",
+      "system_design",
+      "timed_mock",
+      "design_review"
      ]
     },
     {
      "week": 5,
      "sessions": [
-      "dsa_practice",
-      "sys_design_practice",
-      "mock_interview"
+      "data_structures",
+      "coding_patterns",
+      "system_design",
+      "timed_mock",
+      "design_review"
      ]
     },
     {
      "week": 6,
      "sessions": [
-      "dsa_practice",
-      "sys_design_practice",
-      "mock_interview"
+      "data_structures",
+      "coding_patterns",
+      "system_design",
+      "timed_mock",
+      "design_review"
      ]
     },
     {
      "week": 7,
      "sessions": [
-      "review_light",
-      "mock_interview"
+      "coding_patterns",
+      "system_design",
+      "final_recap"
      ]
     }
    ],
    "templateId": null
   },
   "draftMeta": {
-   "model": "deepseek-flash",
+   "model": "gpt-6-luna",
    "promptVersion": "draft-6ea4a82036d6",
-   "requestId": "119967d2-e598-49cc-9de3-74f43ee0d646",
+   "requestId": "f72dc343-090d-450a-a41d-67625a1a99e8",
    "attempt": 1
   },
   "recordedWeeks": 7
@@ -1546,14 +1451,14 @@ export const GOAL_SAMPLES: ReadonlyArray<Record<string, unknown>> = [
   "id": "interview",
   "language": "es",
   "text": "Prepararme para una entrevista de ingeniería de software en seis semanas: estructuras de datos y diseño de sistemas, entre semana en la noche, 5 horas por semana.",
-  "recordedOn": "2026-09-24",
+  "recordedOn": "2026-09-25",
   "reading": {
    "decision": "plan",
    "title": "Preparación para entrevista de ingeniería de software",
-   "summary": "Quiere prepararse para una entrevista de ingeniería de software en seis semanas, estudiando estructuras de datos y diseño de sistemas, entre semana por la noche, con 5 horas por semana.",
+   "summary": "Quiere prepararse para una entrevista de ingeniería de software practicando estructuras de datos y diseño de sistemas, entre semana por la noche, con un máximo de 5 horas semanales.",
    "domain": "learning",
    "level": "unknown",
-   "deadline": "2026-11-05",
+   "deadline": "2026-11-06",
    "deadline_basis": "inferred",
    "days": [
     0,
@@ -1562,7 +1467,7 @@ export const GOAL_SAMPLES: ReadonlyArray<Record<string, unknown>> = [
     3,
     4
    ],
-   "window": "night",
+   "window": "evening",
    "weekly_minutes": 300,
    "session_minutes": null,
    "question": null,
@@ -1570,106 +1475,77 @@ export const GOAL_SAMPLES: ReadonlyArray<Record<string, unknown>> = [
   },
   "scopeRefused": false,
   "readMeta": {
-   "model": "deepseek-flash",
+   "model": "gpt-6-luna",
    "promptVersion": "read-goal-f2bbb9b5a76f",
-   "requestId": "236367f8-1ea5-4ce9-8d61-5ca1d571d4ac"
+   "requestId": "dd02d919-b8b5-474a-ae05-862bb69db839"
   },
   "draft": {
    "phases": [
     {
-     "title": "Fundamentos de estructuras de datos",
+     "title": "Fundamentos",
      "fromWeek": 1,
      "toWeek": 2,
-     "focus": "Repaso de arrays, strings, hash maps y complejidad básica"
+     "focus": "Repasar estructuras de datos y practicar explicaciones claras."
     },
     {
-     "title": "Patrones de resolución",
+     "title": "Práctica aplicada",
      "fromWeek": 3,
      "toWeek": 4,
-     "focus": "Dos punteros, ventanas, recursión y árboles"
+     "focus": "Resolver problemas variados y estructurar diseños de sistemas."
     },
     {
-     "title": "Diseño de sistemas y simulacros",
+     "title": "Simulación y repaso",
      "fromWeek": 5,
-     "toWeek": 6,
-     "focus": "Diseño de sistemas y entrevistas simuladas completas"
-    },
-    {
-     "title": "Repaso final y descanso",
-     "fromWeek": 7,
      "toWeek": 7,
-     "focus": "Repaso ligero y descanso antes de la entrevista"
+     "focus": "Practicar entrevistas completas, revisar errores y reducir carga al final."
     }
    ],
    "sessionTypes": [
     {
-     "id": "repaso_conceptos",
-     "title": "Repaso de conceptos",
+     "id": "repaso_estructuras",
+     "title": "Repaso de estructuras de datos",
      "minutes": 45,
      "intensity": "easy",
      "role": "support",
      "blocks": [
       {
        "minutes": 10,
-       "activity": "Leer apuntes de estructuras de datos"
+       "activity": "Repasar conceptos y operaciones clave."
       },
       {
        "minutes": 25,
-       "activity": "Resolver 2 problemas fáciles"
+       "activity": "Resolver ejercicios breves de una estructura."
       },
       {
        "minutes": 10,
-       "activity": "Anotar dudas y errores"
+       "activity": "Anotar errores y aprendizajes."
       }
      ],
-     "deliverable": "Notas con 2 soluciones y dudas",
-     "doneWhen": "Dos problemas resueltos y dudas anotadas"
+     "deliverable": "Notas breves con conceptos y errores frecuentes.",
+     "doneWhen": "Has explicado una estructura y resuelto dos ejercicios."
     },
     {
-     "id": "practica_media",
-     "title": "Práctica de problemas medios",
+     "id": "problemas_algoritmicos",
+     "title": "Problemas de algoritmos",
      "minutes": 60,
      "intensity": "moderate",
      "role": "key",
      "blocks": [
       {
        "minutes": 10,
-       "activity": "Elegir 2 problemas de patrón conocido"
+       "activity": "Elegir un problema y aclarar sus requisitos."
       },
       {
-       "minutes": 40,
-       "activity": "Resolver sin mirar soluciones"
+       "minutes": 35,
+       "activity": "Diseñar, implementar y probar una solución."
       },
       {
-       "minutes": 10,
-       "activity": "Comparar con solución óptima"
+       "minutes": 15,
+       "activity": "Analizar complejidad y revisar alternativas."
       }
      ],
-     "deliverable": "Código de 2 problemas medios",
-     "doneWhen": "Ambos problemas pasan los casos de prueba"
-    },
-    {
-     "id": "simulacro_tecnico",
-     "title": "Simulacro técnico cronometrado",
-     "minutes": 90,
-     "intensity": "hard",
-     "role": "key",
-     "blocks": [
-      {
-       "minutes": 10,
-       "activity": "Preparar entorno y cronómetro"
-      },
-      {
-       "minutes": 70,
-       "activity": "Resolver 2 problemas cronometrados"
-      },
-      {
-       "minutes": 10,
-       "activity": "Autoevaluar claridad y tiempo"
-      }
-     ],
-     "deliverable": "Registro de tiempos y errores",
-     "doneWhen": "Simulacro completado en el tiempo previsto"
+     "deliverable": "Solución probada con análisis de complejidad.",
+     "doneWhen": "La solución pasa casos de prueba y puedes explicar sus decisiones."
     },
     {
      "id": "diseno_sistemas",
@@ -1680,131 +1556,136 @@ export const GOAL_SAMPLES: ReadonlyArray<Record<string, unknown>> = [
      "blocks": [
       {
        "minutes": 10,
-       "activity": "Leer un caso de diseño"
+       "activity": "Definir requisitos funcionales y restricciones."
       },
       {
-       "minutes": 35,
-       "activity": "Dibujar arquitectura y justificar decisiones"
+       "minutes": 30,
+       "activity": "Dibujar componentes, datos y flujos principales."
       },
       {
-       "minutes": 15,
-       "activity": "Revisar cuellos de botella"
+       "minutes": 20,
+       "activity": "Revisar escalabilidad, fallos y compromisos."
       }
      ],
-     "deliverable": "Diagrama de arquitectura comentado",
-     "doneWhen": "Diagrama con requisitos y trade-offs explicados"
+     "deliverable": "Diagrama con requisitos y decisiones principales.",
+     "doneWhen": "Puedes presentar el diseño y justificar dos compromisos."
     },
     {
-     "id": "simulacro_completo",
-     "title": "Simulacro completo de entrevista",
-     "minutes": 120,
+     "id": "simulacion_tecnica",
+     "title": "Simulación de entrevista técnica",
+     "minutes": 75,
      "intensity": "hard",
      "role": "key",
      "blocks": [
       {
-       "minutes": 15,
-       "activity": "Calentamiento y preparación"
+       "minutes": 5,
+       "activity": "Leer el enunciado y aclarar requisitos."
       },
       {
        "minutes": 45,
-       "activity": "Problema técnico cronometrado"
-      },
-      {
-       "minutes": 45,
-       "activity": "Diseño de sistemas cronometrado"
+       "activity": "Resolver un problema en voz alta y probarlo."
       },
       {
        "minutes": 15,
-       "activity": "Autoevaluación y notas"
+       "activity": "Explicar complejidad y alternativas."
+      },
+      {
+       "minutes": 10,
+       "activity": "Registrar observaciones y próximos pasos."
       }
      ],
-     "deliverable": "Informe de la entrevista simulada",
-     "doneWhen": "Ambas partes completadas y evaluadas"
+     "deliverable": "Grabación o notas de la simulación y una lista de mejoras.",
+     "doneWhen": "Has completado la resolución y anotado dos mejoras concretas."
     },
     {
-     "id": "repaso_ligero",
-     "title": "Repaso ligero",
+     "id": "repaso_errores",
+     "title": "Repaso de errores",
      "minutes": 30,
      "intensity": "easy",
      "role": "support",
      "blocks": [
       {
        "minutes": 10,
-       "activity": "Repasar notas de errores"
+       "activity": "Revisar errores de sesiones anteriores."
       },
       {
        "minutes": 15,
-       "activity": "Resolver 1 problema fácil"
+       "activity": "Rehacer un ejercicio sin consultar la solución."
       },
       {
        "minutes": 5,
-       "activity": "Anotar puntos a reforzar"
+       "activity": "Anotar una regla para evitar repetir el error."
       }
      ],
-     "deliverable": "Lista de puntos a reforzar",
-     "doneWhen": "Un problema resuelto y lista anotada"
+     "deliverable": "Una corrección explicada y una regla de repaso.",
+     "doneWhen": "Resuelves de nuevo el ejercicio y explicas qué cambió."
     }
    ],
    "weeks": [
     {
      "week": 1,
-     "sessions": [
-      "repaso_conceptos"
-     ]
+     "sessions": []
     },
     {
      "week": 2,
      "sessions": [
-      "repaso_conceptos",
-      "practica_media",
-      "repaso_ligero"
+      "repaso_estructuras",
+      "problemas_algoritmicos",
+      "diseno_sistemas",
+      "repaso_errores"
      ]
     },
     {
      "week": 3,
      "sessions": [
-      "practica_media",
-      "practica_media",
-      "repaso_ligero"
+      "repaso_estructuras",
+      "problemas_algoritmicos",
+      "diseno_sistemas",
+      "repaso_errores"
      ]
     },
     {
      "week": 4,
      "sessions": [
-      "practica_media",
-      "simulacro_tecnico",
-      "repaso_ligero"
+      "repaso_estructuras",
+      "problemas_algoritmicos",
+      "diseno_sistemas",
+      "simulacion_tecnica"
      ]
     },
     {
      "week": 5,
      "sessions": [
-      "practica_media",
+      "repaso_estructuras",
+      "problemas_algoritmicos",
       "diseno_sistemas",
-      "simulacro_tecnico"
+      "simulacion_tecnica"
      ]
     },
     {
      "week": 6,
      "sessions": [
+      "repaso_estructuras",
+      "problemas_algoritmicos",
       "diseno_sistemas",
-      "simulacro_completo"
+      "simulacion_tecnica"
      ]
     },
     {
      "week": 7,
      "sessions": [
-      "repaso_ligero",
-      "repaso_ligero"
+      "repaso_estructuras",
+      "problemas_algoritmicos",
+      "diseno_sistemas"
      ]
     }
    ],
    "templateId": null
   },
   "draftMeta": {
-   "model": "deepseek-flash",
+   "model": "gpt-6-luna",
    "promptVersion": "draft-6ea4a82036d6",
-   "requestId": "7e6ca00d-34ea-4bfd-ba6b-e097c3886530",
+   "requestId": "b6738b79-80c4-4659-9eda-35a3ca7af41a",
    "attempt": 1
   },
   "recordedWeeks": 7
@@ -1813,11 +1694,11 @@ export const GOAL_SAMPLES: ReadonlyArray<Record<string, unknown>> = [
   "id": "vague",
   "language": "en",
   "text": "I want to get better.",
-  "recordedOn": "2026-09-24",
+  "recordedOn": "2026-09-25",
   "reading": {
    "decision": "clarify",
-   "title": "Get better",
-   "summary": "The person wants to get better but has not said at what.",
+   "title": "Get Better",
+   "summary": "You want to get better, but haven’t said what you want to improve.",
    "domain": "general",
    "level": "unknown",
    "deadline": null,
@@ -1826,25 +1707,25 @@ export const GOAL_SAMPLES: ReadonlyArray<Record<string, unknown>> = [
    "window": null,
    "weekly_minutes": null,
    "session_minutes": null,
-   "question": "What do you want to get better at?",
+   "question": "What would you like to get better at?",
    "abstain": null
   },
   "scopeRefused": false,
   "readMeta": {
-   "model": "deepseek-flash",
+   "model": "gpt-6-luna",
    "promptVersion": "read-goal-f2bbb9b5a76f",
-   "requestId": "b47d808a-748e-4b23-a4b6-b91f5c0f38d9"
+   "requestId": "dba80328-2f3f-480c-b206-5ee7326a3ba0"
   }
  },
  {
   "id": "vague",
   "language": "es",
   "text": "Quiero mejorar.",
-  "recordedOn": "2026-09-24",
+  "recordedOn": "2026-09-25",
   "reading": {
    "decision": "clarify",
    "title": "Mejorar",
-   "summary": "La persona quiere mejorar, pero no indica en qué área ni qué habilidad desea practicar.",
+   "summary": "Quieres mejorar, pero no especificaste qué habilidad o aspecto quieres desarrollar.",
    "domain": "general",
    "level": "unknown",
    "deadline": null,
@@ -1853,28 +1734,28 @@ export const GOAL_SAMPLES: ReadonlyArray<Record<string, unknown>> = [
    "window": null,
    "weekly_minutes": null,
    "session_minutes": null,
-   "question": "¿Qué te gustaría mejorar exactamente?",
+   "question": "¿Qué habilidad o aspecto quieres mejorar?",
    "abstain": null
   },
   "scopeRefused": false,
   "readMeta": {
-   "model": "deepseek-flash",
+   "model": "gpt-6-luna",
    "promptVersion": "read-goal-f2bbb9b5a76f",
-   "requestId": "44582299-e82e-4b7c-9913-b42b98cf0e72"
+   "requestId": "2bc8f9f9-18a9-42f6-93bb-69222f2851a4"
   }
  },
  {
   "id": "marathon",
   "language": "en",
   "text": "Run a full marathon in two weeks. I have never run before.",
-  "recordedOn": "2026-09-24",
+  "recordedOn": "2026-09-25",
   "reading": {
    "decision": "abstain",
-   "title": "Run a full marathon in two weeks",
-   "summary": "The person wants to run a full marathon in two weeks despite never having run before.",
+   "title": "Run a Full Marathon",
+   "summary": "You want to run a full marathon in two weeks and have never run before.",
    "domain": "fitness",
-   "level": "beginner",
-   "deadline": "2026-10-08",
+   "level": "unknown",
+   "deadline": "2026-10-09",
    "deadline_basis": "inferred",
    "days": null,
    "window": null,
@@ -1883,28 +1764,28 @@ export const GOAL_SAMPLES: ReadonlyArray<Record<string, unknown>> = [
    "question": null,
    "abstain": {
     "category": "extreme_timeline",
-    "reason": "Training for a full marathon in two weeks from no running experience risks serious injury."
+    "reason": "Attempting a full marathon in two weeks with no running experience could cause serious harm."
    }
   },
   "scopeRefused": false,
   "readMeta": {
-   "model": "deepseek-flash",
+   "model": "gpt-6-luna",
    "promptVersion": "read-goal-f2bbb9b5a76f",
-   "requestId": "99cbf1d9-c428-4b83-bcf1-b1e0f81fcbbd"
+   "requestId": "2b8e92bd-41ba-4659-9acc-57f25bcd5315"
   }
  },
  {
   "id": "marathon",
   "language": "es",
   "text": "Correr un maratón completo en dos semanas. Nunca he corrido.",
-  "recordedOn": "2026-09-24",
+  "recordedOn": "2026-09-25",
   "reading": {
    "decision": "abstain",
-   "title": "Maratón completo en dos semanas",
-   "summary": "Quiere correr un maratón completo en dos semanas, sin haber corrido nunca.",
+   "title": "Prepararse para un maratón",
+   "summary": "Quiere correr un maratón completo en dos semanas y nunca ha corrido.",
    "domain": "fitness",
    "level": "beginner",
-   "deadline": "2026-10-08",
+   "deadline": "2026-10-09",
    "deadline_basis": "inferred",
    "days": null,
    "window": null,
@@ -1913,14 +1794,14 @@ export const GOAL_SAMPLES: ReadonlyArray<Record<string, unknown>> = [
    "question": null,
    "abstain": {
     "category": "extreme_timeline",
-    "reason": "Correr un maratón en dos semanas sin experiencia previa supone un riesgo grave para la salud."
+    "reason": "Preparar un maratón en dos semanas sin experiencia previa podría causar daño."
    }
   },
   "scopeRefused": false,
   "readMeta": {
-   "model": "deepseek-flash",
+   "model": "gpt-6-luna",
    "promptVersion": "read-goal-f2bbb9b5a76f",
-   "requestId": "b3bad091-52a5-4ff6-b431-bd1a183148e8"
+   "requestId": "784cd2ed-5223-4829-8825-ada92e1b986f"
   }
  }
 ];

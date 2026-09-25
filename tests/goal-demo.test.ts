@@ -63,9 +63,11 @@ void test('the demo plans around busy times imported from a calendar', async () 
     ...Array.from({ length: 12 }, (_, week) => addDays('2026-10-01', week * 7)),
   ].map((date) => ({ start: `${date}T05:00`, end: `${date}T11:00` }));
   const events: StageEvent[] = [];
+  // Planned on the day the sample was recorded, so its deadline isn't shifted.
+  const today = sample.recordedOn;
   const outcome = await runGoalPipeline(
-    { text: sample.text, language: 'en', today: '2026-09-24', busy },
-    { mode: 'demo', now: () => 0, emit: (event) => events.push(event), ...sampleDeps(sample, '2026-09-24') },
+    { text: sample.text, language: 'en', today, busy },
+    { mode: 'demo', now: () => 0, emit: (event) => events.push(event), ...sampleDeps(sample, today) },
   );
   assert.equal(outcome.outcome, 'ready');
   if (outcome.outcome !== 'ready') return;
