@@ -1,7 +1,9 @@
 // Demo samples: real outputs recorded from GPT-6 Luna through the Cadencia
 // service on 2026-09-25, with the production settings (reasoning off,
 // temperature 0.2), for fixed example texts written by the developer. They
-// drive the model-free demo only; they are not evaluation data.
+// drive the model-free demo only; they are not evaluation data. The readings
+// predate the narrower decline rules of read-goal-319f4ce09354 (evals section
+// 11); none of these examples is a borderline case those rules change.
 
 export const GOAL_SAMPLES: ReadonlyArray<Record<string, unknown>> = [
  {
