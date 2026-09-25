@@ -19,7 +19,7 @@ export const DRAFT_LIMITS = {
   maxSessionsPerWeek: 7,
 } as const;
 
-const TYPE_ID = /^[a-z][a-z0-9_]{1,31}$/u;
+const TYPE_ID = /^[a-z0-9][a-z0-9_]{1,31}$/u;
 const INTENSITIES: readonly Intensity[] = ['easy', 'moderate', 'hard'];
 const ROLES: readonly Role[] = ['key', 'support'];
 

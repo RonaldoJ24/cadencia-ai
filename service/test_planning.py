@@ -7,6 +7,7 @@ from typing import Any
 
 import httpx
 import pytest
+from pydantic import ValidationError
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -200,6 +201,16 @@ def test_malformed_drafts_are_rejected_with_their_spend(monkeypatch: pytest.Monk
     response = run(post("/v1/draft", DRAFT_REQUEST))
     assert response.status_code == 502
     assert response.json()["usage"]["completion_tokens"] == 120
+
+
+def test_session_type_ids_may_start_with_a_digit_but_stay_snake_case() -> None:
+    # GPT-6 Luna names sessions like "10k_finish"; those ids used to fail the schema.
+    renamed = json.loads(json.dumps(DRAFT).replace('"easy_run"', '"10k_easy"'))
+    assert planning.DraftOutput.model_validate(renamed, strict=True).sessionTypes[0].id == "10k_easy"
+    for bad in ("Easy_run", "easy-run", "_easy", "e", "x" * 33):
+        broken = json.loads(json.dumps(DRAFT).replace('"easy_run"', json.dumps(bad)))
+        with pytest.raises(ValidationError):
+            planning.DraftOutput.model_validate(broken, strict=True)
 
 
 def test_the_image_and_the_build_context_ship_every_service_module() -> None:
@@ -463,7 +474,8 @@ def test_the_largest_valid_replan_request_fits_its_ceiling() -> None:
 
 
 def test_adding_a_task_leaves_the_other_prompts_as_they_were() -> None:
-    # The evaluation's systems.json and the demo's recorded samples name these versions.
-    assert planning.READ_GOAL_VERSION == "read-goal-f2bbb9b5a76f"
+    # The evaluation's systems files name these versions: read-goal v1 in
+    # systems.json, and read-goal-319f4ce09354 in systems-v2.json (section 11).
+    assert planning.READ_GOAL_VERSION == "read-goal-319f4ce09354"
     assert planning.DRAFT_VERSION == "draft-6ea4a82036d6"
     assert planning.REPLAN_VERSION == "replan-aff51c833ae2"
