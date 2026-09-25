@@ -67,7 +67,7 @@ Rules that hold across both runtimes:
 | Worker | `CADENCIA_INTENT_SERVICE_URL` | `wrangler.jsonc` | Cloud Run base URL |
 | Worker | `CADENCIA_SERVICE_TOKEN` | Worker secret | Bearer token for Cloud Run; also keys the visitor hash (§8) |
 | D1 | `app_settings` | Table (migration `0005`) | Kill switch and dollar caps, read on every live request (§7, §8) |
-| D1 | `public_limits_config` | Table (migration `0003`) | Request limits per visitor and overall (§8) |
+| D1 | `public_limits_config` | Table (migrations `0003`, `0006`) | Request limits per visitor and overall (§8) |
 | Cloud Run | `CADENCIA_SERVICE_DAILY_ATTEMPT_CAP` | Env var (optional) | Provider attempts allowed per UTC day in the running instance; default 400 |
 | Cloud Run | `CADENCIA_SERVICE_TOKEN` | Secret Manager `cadencia-service-token` | Token checked on every request |
 | Cloud Run | `OPENAI_API_KEY` | Secret Manager `openai-api-key` | Provider key |
@@ -230,7 +230,7 @@ curl -sN -X POST "$W/api/routine" -H "origin: $W" -H 'content-type: application/
 ```
 
 A live goal run makes two or three model calls and settles at a few tenths of a
-cent; it counts toward the caller's five live runs a day.
+cent; it counts toward the caller's 25 live runs a day.
 
 ---
 
@@ -315,8 +315,8 @@ A live run on `/api/routine` also reserves a visitor slot in one D1 batch:
 | Control | Default | Source |
 |---|---|---|
 | Per-visitor rate | 2 per minute | `public_limits_config` |
-| Per-visitor daily quota | 5 | `public_limits_config` |
-| Global daily cap | 50 | `public_limits_config` |
+| Per-visitor daily quota | 25 | `public_limits_config` |
+| Global daily cap | 150 | `public_limits_config` |
 | Global in flight | 10 | `public_limits_config` |
 | Per-visitor in flight | 1 | unique index on `public_concurrency` |
 | Lease for a goal run | 180 s | `GOAL_LEASE_SEC` in `lib/server/goal-run.ts` |
@@ -324,6 +324,27 @@ A live run on `/api/routine` also reserves a visitor slot in one D1 batch:
 
 Goal runs and replans share the quota, and failed runs still count against it.
 Quotas reset at 00:00 UTC.
+
+Migration `0006` raised the quota from 5 to 25 and the global cap from 50 to 150
+once production ran on GPT-6 Luna. A goal run settles at about $0.002, so the old
+counts stopped visitors long before the dollar caps would; 150 runs is about
+$0.30 a day, under the daily cap. The global cap also keeps a typical day under
+the service's 400 provider attempts (a goal run usually makes two calls), so
+raising it much further needs a higher `CADENCIA_SERVICE_DAILY_ATTEMPT_CAP` too,
+or the service starts refusing calls before the Worker's limits do.
+
+```bash
+# Today's live runs, per visitor and overall
+npx wrangler d1 execute cadencia_beta --remote --command \
+  "SELECT scope, count FROM public_daily_usage WHERE day = strftime('%Y-%m-%d','now') ORDER BY count DESC"
+
+# Change the per-visitor quota to 30 until the next migration says otherwise
+npx wrangler d1 execute cadencia_beta --remote --command \
+  "UPDATE public_limits_config SET value = 30 WHERE key = 'visitor_daily_quota'"
+```
+
+A change meant to last belongs in a new migration, like `0006`, so a new
+database starts with it too.
 
 Visitors are identified by `HMAC-SHA256(CADENCIA_SERVICE_TOKEN, day + IP)` from
 the `cf-connecting-ip` header; raw IPs are not stored. Rotating the service token
@@ -362,3 +383,5 @@ therefore also resets every visitor's quota for the day.
   check. A live goal run afterwards, a goal the earlier prompt declined, was
   planned and logged the new prompt. The DeepSeek secret is disabled, so
   revision 00008 is no longer a working rollback; revision 00009 is.
+- **2026-09-25**: migration `0006` raised the live limits to 25 runs per visitor
+  and 150 overall per day (§8).

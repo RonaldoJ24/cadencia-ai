@@ -9,9 +9,9 @@ import { checkRateLimit, trustedIp } from './ratelimit.ts';
 export type PublicLimitsConfig = {
   /** Max live generation requests per minute per visitor (default: 2). */
   minuteLimit: number;
-  /** Max live generations per visitor per UTC day (default: 5). */
+  /** Max live generations per visitor per UTC day (default: 25). */
   visitorDailyQuota: number;
-  /** Max live generations globally per UTC day (default: 50). */
+  /** Max live generations globally per UTC day (default: 150). */
   globalDailyCap: number;
   /** Max concurrent in-flight requests per visitor (default: 1). */
   visitorConcurrency: number;
@@ -23,8 +23,8 @@ export type PublicLimitsConfig = {
 
 export const DEFAULT_PUBLIC_LIMITS: PublicLimitsConfig = {
   minuteLimit: 2,
-  visitorDailyQuota: 5,
-  globalDailyCap: 50,
+  visitorDailyQuota: 25,
+  globalDailyCap: 150,
   visitorConcurrency: 1,
   globalConcurrency: 10,
   concurrencyLeaseSec: 40,
@@ -32,7 +32,7 @@ export const DEFAULT_PUBLIC_LIMITS: PublicLimitsConfig = {
 
 /**
  * The count limits live in D1 (public_limits_config, seeded by migration
- * 0003) so they can change without a deploy. The atomic reservation below
+ * 0003 and raised by 0006) so they can change without a deploy. The atomic reservation below
  * reads the same rows; missing rows fall back to the defaults.
  */
 export async function loadPublicLimits(db: Db): Promise<PublicLimitsConfig> {
@@ -186,9 +186,9 @@ export async function checkAndReservePublicLiveSlot(
            WHERE
              (SELECT COUNT(*) FROM public_concurrency WHERE expires_at > ?) < (SELECT COALESCE((SELECT value FROM public_limits_config WHERE key = 'global_concurrency'), 10))
              AND
-             (SELECT COALESCE((SELECT count FROM public_daily_usage WHERE scope = 'global' AND day = ?), 0)) < (SELECT COALESCE((SELECT value FROM public_limits_config WHERE key = 'global_daily_cap'), 50))
+             (SELECT COALESCE((SELECT count FROM public_daily_usage WHERE scope = 'global' AND day = ?), 0)) < (SELECT COALESCE((SELECT value FROM public_limits_config WHERE key = 'global_daily_cap'), 150))
              AND
-             (SELECT COALESCE((SELECT count FROM public_daily_usage WHERE scope = ? AND day = ?), 0)) < (SELECT COALESCE((SELECT value FROM public_limits_config WHERE key = 'visitor_daily_quota'), 5))`,
+             (SELECT COALESCE((SELECT count FROM public_daily_usage WHERE scope = ? AND day = ?), 0)) < (SELECT COALESCE((SELECT value FROM public_limits_config WHERE key = 'visitor_daily_quota'), 25))`,
         )
         .bind(
           reservationId,

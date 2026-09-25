@@ -85,7 +85,12 @@ export function ReplanCard({
     try {
       setOutcome(await work((event) => setSteps((current) => (current ? applyStageEvent(current, event) : current))));
     } catch (cause) {
-      setError(cause instanceof GoalRunError ? cause.message : copy.errors.generic);
+      if (cause instanceof GoalRunError) {
+        const wait = cause.retryAfterSec ? ` (${copy.errors.wait(cause.retryAfterSec)})` : '';
+        setError(`${cause.message}${wait}`);
+      } else {
+        setError(copy.errors.generic);
+      }
     } finally {
       setRunning(false);
     }

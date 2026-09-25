@@ -16,7 +16,7 @@ import { migratedDb } from './helpers/sqlite-d1.ts';
 
 const NOW_ISO = '2026-10-11T12:00:00.000Z';
 const NOW_MS = Date.parse(NOW_ISO);
-const MIGRATIONS = ['0001_beta_loop.sql', '0002_rate_limits.sql', '0003_public_limits.sql', '0005_spend_controls.sql'];
+const MIGRATIONS = ['0001_beta_loop.sql', '0002_rate_limits.sql', '0003_public_limits.sql', '0005_spend_controls.sql', '0006_live_limits.sql'];
 const liveEnv = {
   CADENCIA_ENABLE_LIVE: 'true',
   CADENCIA_INTENT_SERVICE_URL: 'https://intents.example',

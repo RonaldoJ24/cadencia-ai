@@ -13,7 +13,7 @@ const NOW_MS = Date.parse(NOW_ISO);
 const PRODUCTION_URL = 'https://cadencia-intents-675488596560.us-central1.run.app';
 const TOKEN = 'server-secret';
 const REQUEST_ID = '123e4567-e89b-12d3-a456-426614174000';
-const MIGRATIONS = ['0001_beta_loop.sql', '0002_rate_limits.sql', '0003_public_limits.sql', '0005_spend_controls.sql'];
+const MIGRATIONS = ['0001_beta_loop.sql', '0002_rate_limits.sql', '0003_public_limits.sql', '0005_spend_controls.sql', '0006_live_limits.sql'];
 const env = { CADENCIA_ENABLE_LIVE: 'true', CADENCIA_INTENT_SERVICE_URL: PRODUCTION_URL, CADENCIA_SERVICE_TOKEN: TOKEN };
 const input = { text: 'Learn TypeScript on Monday and Wednesday evenings', language: 'en', today: '2026-09-24' };
 

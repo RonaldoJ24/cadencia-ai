@@ -39,7 +39,7 @@ export type Copy = {
     invalidMode: string;
     notConfigured: string;
     providerError: string;
-    rateLimited: (retryAfterSec?: number) => string;
+    rateLimited: string;
     visitorQuotaExceeded: string;
     globalQuotaExceeded: string;
     visitorConcurrentLimit: string;
@@ -211,12 +211,9 @@ const english: Copy = {
     invalidMode: 'The routine mode is invalid.',
     notConfigured: 'Live AI is not configured.',
     providerError: 'The AI provider is not available.',
-    rateLimited: (retryAfterSec?: number) =>
-      retryAfterSec
-        ? `Too many requests. Please wait ${retryAfterSec} second${retryAfterSec === 1 ? '' : 's'} before trying again.`
-        : 'Too many requests. Please wait a moment before trying again.',
-    visitorQuotaExceeded: 'Daily Connected AI limit reached (5 routines/day). You can continue using Local Demo mode.',
-    globalQuotaExceeded: 'Daily global capacity reached for Connected AI. Please try again tomorrow or use Local Demo mode.',
+    rateLimited: 'Too many live runs in the last minute.',
+    visitorQuotaExceeded: 'You’ve used all of today’s live runs. The demo still works.',
+    globalQuotaExceeded: 'Live AI has reached today’s limit for all visitors. The demo still works.',
     visitorConcurrentLimit: 'A generation is already in progress for your connection. Please wait for it to finish.',
     globalConcurrentLimit: 'Service is temporarily busy with too many requests. Please try again shortly.',
     limitsNotConfigured: 'Service rate limits are not configured.',
@@ -386,12 +383,9 @@ const spanish: Copy = {
     invalidMode: 'El modo de rutina no es válido.',
     notConfigured: 'La IA real no está configurada.',
     providerError: 'El proveedor de IA no está disponible.',
-    rateLimited: (retryAfterSec?: number) =>
-      retryAfterSec
-        ? `Demasiadas solicitudes. Espera ${retryAfterSec} segundo${retryAfterSec === 1 ? '' : 's'} antes de volver a intentar.`
-        : 'Demasiadas solicitudes. Espera un momento antes de volver a intentar.',
-    visitorQuotaExceeded: 'Límite diario de IA conectada alcanzado (5 rutinas/día). Puedes seguir usando el modo Demo local.',
-    globalQuotaExceeded: 'Capacidad global diaria alcanzada para IA conectada. Vuelve a intentar mañana o usa el modo Demo local.',
+    rateLimited: 'Demasiadas ejecuciones en vivo en el último minuto.',
+    visitorQuotaExceeded: 'Ya usaste todas tus ejecuciones en vivo de hoy. La demo sigue funcionando.',
+    globalQuotaExceeded: 'La IA en vivo llegó al límite de hoy para todos los visitantes. La demo sigue funcionando.',
     visitorConcurrentLimit: 'Ya hay una generación en curso para tu conexión. Espera a que termine.',
     globalConcurrentLimit: 'El servicio está ocupado con demasiadas solicitudes. Vuelve a intentar en un momento.',
     limitsNotConfigured: 'Los límites de tasa del servicio no están configurados.',
