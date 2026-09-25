@@ -42,7 +42,22 @@ else
 fi
 
 echo "==> Checking production D1 migrations..."
-if migrations="$(npx wrangler d1 migrations list cadencia_beta --remote 2>&1)"; then
+# The first Cloudflare call after a quiet spell can fail with code 7403 while
+# Wrangler refreshes its login; a second try has passed every time so far.
+listed=0
+for attempt in 1 2; do
+  if migrations="$(npx wrangler d1 migrations list cadencia_beta --remote 2>&1)"; then
+    listed=1
+    break
+  fi
+  if [[ $attempt -eq 1 ]] && grep -q "code: 7403" <<<"$migrations"; then
+    echo "    Cloudflare answered 7403 while Wrangler refreshed its login; trying once more..." >&2
+    sleep 3
+  else
+    break
+  fi
+done
+if [[ $listed -eq 1 ]]; then
   if grep -q "Migrations to be applied" <<<"$migrations"; then
     echo "$migrations" >&2
     check "production D1 has pending migrations. Apply them first: npx wrangler d1 migrations apply cadencia_beta --remote"
