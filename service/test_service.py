@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import random
 import sys
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -516,6 +517,250 @@ def test_provider_retries_429_and_5xx_only_once(monkeypatch: pytest.MonkeyPatch,
     assert calls == 2
 
 
+def test_provider_backoff_uses_seeded_full_jitter_bounds(monkeypatch: pytest.MonkeyPatch) -> None:
+    configure(monkeypatch)
+    monkeypatch.setattr(provider, "MAX_ATTEMPTS", 5)
+    randomizer = random.Random(7)
+    samples: list[tuple[float, float, float]] = []
+    sleeps: list[float] = []
+
+    def uniform(low: float, high: float) -> float:
+        sample = randomizer.uniform(low, high)
+        samples.append((low, high, sample))
+        return sample
+
+    async def sleep(delay: float) -> None:
+        sleeps.append(delay)
+
+    monkeypatch.setattr(provider, "_random_uniform", uniform)
+    monkeypatch.setattr(provider, "_sleep", sleep)
+    client = mock_client(lambda request: envelope(status=503))
+    for _ in range(25):
+        with pytest.raises(provider.ProviderError):
+            run(read_goal_result(client))
+    run(client.aclose())
+    assert [(low, high) for low, high, _ in samples] == [
+        (0.0, 0.25),
+        (0.0, 0.5),
+        (0.0, 1.0),
+        (0.0, 2.0),
+    ] * 25
+    assert all(low <= sample <= high for low, high, sample in samples)
+    assert sleeps == [sample for _, _, sample in samples]
+
+
+def test_provider_backoff_orders_jitter_sleep_and_second_attempt(monkeypatch: pytest.MonkeyPatch) -> None:
+    configure(monkeypatch)
+    events: list[str] = []
+
+    def uniform(low: float, high: float) -> float:
+        events.append(f"jitter:{low}:{high}")
+        return 0.125
+
+    async def sleep(delay: float) -> None:
+        events.append(f"sleep:{delay}")
+
+    def before_attempt() -> None:
+        events.append("before")
+
+    monkeypatch.setattr(provider, "_random_uniform", uniform)
+    monkeypatch.setattr(provider, "_sleep", sleep)
+    responses = iter([envelope(status=503), envelope(READING)])
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        events.append("attempt")
+        return next(responses)
+
+    client = mock_client(handler)
+    result = run(read_goal_result(client, before_attempt=before_attempt))
+    run(client.aclose())
+    assert result.attempts == 2
+    assert events == ["before", "attempt", "jitter:0.0:0.25", "sleep:0.125", "before", "attempt"]
+
+
+def test_provider_does_not_sleep_after_first_attempt_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    configure(monkeypatch)
+    sleeps: list[float] = []
+
+    async def sleep(delay: float) -> None:
+        sleeps.append(delay)
+
+    monkeypatch.setattr(provider, "_sleep", sleep)
+    client = mock_client(lambda request: envelope(READING))
+    result = run(read_goal_result(client))
+    run(client.aclose())
+    assert result.attempts == 1
+    assert sleeps == []
+
+
+@pytest.mark.parametrize("response", [envelope(status=400), envelope(finish_reason="length")])
+def test_provider_does_not_sleep_after_nonretryable_failure(
+    monkeypatch: pytest.MonkeyPatch, response: httpx.Response
+) -> None:
+    configure(monkeypatch)
+    sleeps: list[float] = []
+
+    async def sleep(delay: float) -> None:
+        sleeps.append(delay)
+
+    monkeypatch.setattr(provider, "_sleep", sleep)
+    client = mock_client(lambda request: response)
+    with pytest.raises(provider.ProviderError):
+        run(read_goal_result(client))
+    run(client.aclose())
+    assert sleeps == []
+
+
+@pytest.mark.parametrize(
+    ("retry_after", "expected"),
+    [("1.5", 1.5), ("99", 5.0), ("not-a-number", 0.125), ("-1", 0.125)],
+)
+def test_retry_after_is_numeric_capped_and_private(
+    monkeypatch: pytest.MonkeyPatch, retry_after: str, expected: float
+) -> None:
+    configure(monkeypatch)
+    sleeps: list[float] = []
+
+    async def sleep(delay: float) -> None:
+        sleeps.append(delay)
+
+    monkeypatch.setattr(provider, "_random_uniform", lambda low, high: 0.125)
+    monkeypatch.setattr(provider, "_sleep", sleep)
+    responses = iter(
+        [
+            envelope(status=429, headers={"retry-after": retry_after}),
+            envelope(status=400),
+        ]
+    )
+    client = mock_client(lambda request: next(responses))
+    with pytest.raises(provider.ProviderError) as raised:
+        run(read_goal_result(client))
+    run(client.aclose())
+    assert sleeps == [expected]
+    assert not hasattr(raised.value, "retry_after")
+
+
+def test_provider_preserves_first_retryable_failure_when_deadline_leaves_no_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configure(monkeypatch)
+    clock_values = iter([100.0, 100.96])
+    sleeps: list[float] = []
+    calls = 0
+
+    def clock() -> float:
+        return next(clock_values)
+
+    async def sleep(delay: float) -> None:
+        sleeps.append(delay)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return envelope(status=429, headers={"retry-after": "5"})
+
+    monkeypatch.setattr(provider, "_random_uniform", lambda low, high: 0.25)
+    client = mock_client(handler)
+    with pytest.raises(provider.ProviderError) as raised:
+        run(
+            provider._call_provider(
+                client,
+                payload={},
+                api_key=API_KEY,
+                url=provider.DEEPSEEK_URL,
+                model=MODEL,
+                request_id=REQUEST_ID,
+                started=0.0,
+                model_cls=planning.GoalReading,
+                total_timeout=1.0,
+                clock=clock,
+                sleep=sleep,
+            )
+        )
+    run(client.aclose())
+    assert raised.value.outcome == "rate_limited"
+    assert raised.value.status_category == "4xx"
+    assert raised.value.attempts == 1
+    assert calls == 1
+    assert sleeps == []
+
+
+def test_provider_preserves_failure_when_retry_sleep_times_out(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configure(monkeypatch)
+    sleeps: list[float] = []
+    calls = 0
+
+    async def sleep(delay: float) -> None:
+        sleeps.append(delay)
+        raise TimeoutError
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return envelope(status=429)
+
+    client = mock_client(handler)
+    with pytest.raises(provider.ProviderError) as raised:
+        run(
+            provider._call_provider(
+                client,
+                payload={},
+                api_key=API_KEY,
+                url=provider.DEEPSEEK_URL,
+                model=MODEL,
+                request_id=REQUEST_ID,
+                started=0.0,
+                model_cls=planning.GoalReading,
+                total_timeout=5.0,
+                random_uniform=lambda low, high: 0.125,
+                sleep=sleep,
+            )
+        )
+    run(client.aclose())
+    assert raised.value.outcome == "rate_limited"
+    assert raised.value.status_category == "4xx"
+    assert raised.value.attempts == 1
+    assert calls == 1
+    assert sleeps == [0.125]
+
+
+def test_provider_backoff_clamps_sleep_and_reserves_second_attempt_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configure(monkeypatch)
+    clock_values = iter([100.0, 100.8])
+    sleeps: list[float] = []
+    responses = iter([envelope(status=429, headers={"retry-after": "5"}), envelope(status=400)])
+
+    async def sleep(delay: float) -> None:
+        sleeps.append(delay)
+
+    client = mock_client(lambda request: next(responses))
+    with pytest.raises(provider.ProviderError) as raised:
+        run(
+            provider._call_provider(
+                client,
+                payload={},
+                api_key=API_KEY,
+                url=provider.DEEPSEEK_URL,
+                model=MODEL,
+                request_id=REQUEST_ID,
+                started=0.0,
+                model_cls=planning.GoalReading,
+                total_timeout=3.0,
+                clock=lambda: next(clock_values),
+                random_uniform=lambda low, high: 0.25,
+                sleep=sleep,
+            )
+        )
+    run(client.aclose())
+    assert raised.value.outcome == "provider_error"
+    assert raised.value.attempts == 2
+    assert sleeps == pytest.approx([1.2])
+
+
 def test_provider_retries_a_bad_answer_once_but_not_other_failures(monkeypatch: pytest.MonkeyPatch) -> None:
     configure(monkeypatch)
     # A 400 and a truncated answer are final; malformed output gets the second attempt.
@@ -639,7 +884,7 @@ def test_provider_timeout_has_no_retry(monkeypatch: pytest.MonkeyPatch) -> None:
     assert calls == 1
 
 
-def test_total_deadline_covers_the_retry_attempt(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_total_deadline_skips_retry_without_useful_budget(monkeypatch: pytest.MonkeyPatch) -> None:
     configure(monkeypatch)
     monkeypatch.setitem(planning.READ_TIMEOUTS, "request", 0.5)
     monkeypatch.setitem(planning.READ_TIMEOUTS, "total", 0.03)
@@ -656,9 +901,9 @@ def test_total_deadline_covers_the_retry_attempt(monkeypatch: pytest.MonkeyPatch
     with pytest.raises(provider.ProviderError) as raised:
         run(read_goal_result(client))
     run(client.aclose())
-    assert raised.value.outcome == "timeout"
-    assert raised.value.attempts == 2
-    assert calls == 2
+    assert raised.value.outcome == "rate_limited"
+    assert raised.value.attempts == 1
+    assert calls == 1
 
 
 def test_generic_provider_errors_redact_details_from_response_and_logs(
