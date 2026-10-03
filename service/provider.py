@@ -5,12 +5,14 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import os
+import random
 import re
 import sys
 import time
 import unicodedata
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Literal
@@ -30,6 +32,21 @@ TOTAL_TIMEOUT_SECONDS = 20.0
 # Provider attempts per call; the Worker's spend reservation counts on it.
 MAX_ATTEMPTS = 2
 MAX_RESPONSE_BYTES = 32_768
+# Keep retry delays small beside the service's 20-second and 45-second budgets.
+RETRY_BACKOFF_BASE_SECONDS = 0.25
+RETRY_BACKOFF_CAP_SECONDS = 2.0
+RETRY_AFTER_CAP_SECONDS = 5.0
+# A provider call cannot finish in less than this, so a shorter retry is not worth its spend.
+MIN_USEFUL_RETRY_SECONDS = 1.0
+
+
+def _random_uniform(low: float, high: float) -> float:
+    return random.uniform(low, high)
+
+
+async def _sleep(delay: float) -> None:
+    await asyncio.sleep(delay)
+
 
 _SAFE_MODEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
 _SAFE_PROVIDER_METADATA = _SAFE_MODEL
@@ -237,6 +254,7 @@ class _Failure(Exception):
         usage: dict[str, int] | None = None,
         observed_model: str | None = None,
         system_fingerprint: str | None = None,
+        retry_after: float | None = None,
     ) -> None:
         super().__init__()
         self.outcome = outcome
@@ -247,6 +265,7 @@ class _Failure(Exception):
         self.usage = usage
         self.observed_model = observed_model
         self.system_fingerprint = system_fingerprint
+        self.retry_after = retry_after
 
 
 def restricted_request(request: str, *, fitness_in_scope: bool = False) -> bool:
@@ -381,6 +400,18 @@ def _status_category(status_code: int) -> str:
     if 500 <= status_code <= 599:
         return "5xx"
     return "unknown"
+
+
+def _retry_after(value: str | None) -> float | None:
+    if value is None:
+        return None
+    try:
+        seconds = float(value.strip())
+    except (AttributeError, TypeError, ValueError):
+        return None
+    if not math.isfinite(seconds) or seconds < 0:
+        return None
+    return min(seconds, RETRY_AFTER_CAP_SECONDS)
 
 
 def _usage(value: Any) -> dict[str, int] | None:
@@ -672,6 +703,7 @@ async def _attempt(
                         outcome="rate_limited",
                         status_category=category,
                         retryable=True,
+                        retry_after=_retry_after(response.headers.get("retry-after")),
                     )
                 if 500 <= response.status_code <= 599:
                     raise _Failure(
@@ -709,11 +741,19 @@ async def _call_provider(
     request_timeout: float | None = None,
     total_timeout: float | None = None,
     max_bytes: int | None = None,
+    random_uniform: Callable[[float, float], float] | None = None,
+    sleep: Callable[[float], Awaitable[None]] | None = None,
+    clock: Callable[[], float] | None = None,
 ) -> IntentResult:
     attempts = 0
     total_timeout = TOTAL_TIMEOUT_SECONDS if total_timeout is None else total_timeout
+    random_uniform = _random_uniform if random_uniform is None else random_uniform
+    sleep = _sleep if sleep is None else sleep
+    clock = time.monotonic if clock is None else clock
+    pending_sleep_failure: _Failure | None = None
     try:
         async with asyncio.timeout(total_timeout):
+            deadline = clock() + total_timeout
             while attempts < MAX_ATTEMPTS:
                 try:
                     if before_attempt is not None:
@@ -741,8 +781,20 @@ async def _call_provider(
                         language=language,
                     ) from None
                 except _Failure as failure:
-                    if failure.retryable and attempts == 1:
-                        continue
+                    if failure.retryable and attempts < MAX_ATTEMPTS:
+                        retry_number = attempts - 1  # The first retry is number 0.
+                        jitter = random_uniform(
+                            0.0,
+                            min(RETRY_BACKOFF_CAP_SECONDS, RETRY_BACKOFF_BASE_SECONDS * 2**retry_number),
+                        )
+                        delay = max(jitter, failure.retry_after or 0.0)
+                        remaining = deadline - clock()
+                        if remaining > MIN_USEFUL_RETRY_SECONDS:
+                            delay = min(delay, remaining - MIN_USEFUL_RETRY_SECONDS)
+                            pending_sleep_failure = failure
+                            await sleep(delay)
+                            pending_sleep_failure = None
+                            continue
                     raise _provider_error(
                         request_id=request_id,
                         model=model,
@@ -768,6 +820,15 @@ async def _call_provider(
     except ProviderError:
         raise
     except TimeoutError:
+        if pending_sleep_failure is not None:
+            raise _provider_error(
+                request_id=request_id,
+                model=model,
+                attempts=attempts,
+                started=started,
+                failure=pending_sleep_failure,
+                language=language,
+            ) from None
         raise ProviderError(
             request_id=request_id,
             model=model,

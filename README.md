@@ -193,7 +193,8 @@ Browser ──SSE── Worker /api/routine ──bearer── Python service �
   live runs and the demo.
 - `lib/server/`: the service client, spend reservations and request limits.
 - `service/`: FastAPI with strict Pydantic models, prompt byte ceilings,
-  JSON-escaped untrusted text and bounded provider retries.
+  JSON-escaped untrusted text and bounded provider retries with jitter and a
+  five-second cap on numeric `Retry-After` values.
 - `evals/`: the pre-registered evaluation, its runner and the blind rating page.
 
 ## Run it locally
